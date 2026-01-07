@@ -1,0 +1,441 @@
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.linalg import pinv
+import mujoco
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+
+def constraint_jacobian(jac, pos, cylinder_center):
+    """
+    jacobian_func: function that returns geometric Jacobian J(q) [3×n]
+    """
+    J = jac[:3]  # [3×n] for position
+
+    y, z = pos[1], pos[2]
+    y0, z0 = cylinder_center[1], cylinder_center[2]
+
+    # Gradient in task space
+    grad_phi = np.array([0, 2 * (y - y0), 2 * (z - z0)])
+
+    # Constraint Jacobian: J_Φ = ∇_x Φ^T · J(q)
+    J_phi = grad_phi @ J  # [1×n]
+
+    return J_phi
+
+def get_unconstrained_jacobian(J_task, pos, cylinder_center, cylinder_radius):
+    """
+    J_task: full task Jacobian [m×n], e.g., [6×n] for position + orientation
+    J_phi: constraint Jacobian [c×n], e.g., [1×n]
+
+    Returns: J_x [m-c×n]
+    """
+
+    # Method 1: Use cylindrical coordinates
+    # Extract position Jacobian
+    J_pos = J_task[0:3, :]  # [x, y, z] part
+    J_ori = J_task[3:6, :]  # orientation part
+
+    # Get current position
+    y, z = pos[1], pos[2]
+    y0, z0 = cylinder_center[1], cylinder_center[2]
+    r = cylinder_radius
+
+    # Jacobian for x-coordinate (unconstrained)
+    J_x_coord = J_pos[0, :]  # [1×n]
+
+    # Jacobian for angle θ around cylinder
+    # θ = atan2(z - z0, y - y0)
+    # ∂θ/∂q = -(z-z0)/r² · ∂y/∂q + (y-y0)/r² · ∂z/∂q
+    J_theta = (-(z - z0) * J_pos[1, :] + (y - y0) * J_pos[2, :]) / r ** 2  # [1×n]
+
+    # Stack unconstrained Jacobians
+    if J_ori is not None:
+        J_x = np.vstack([J_x_coord, J_theta, J_ori])  # [5×n]
+    else:
+        J_x = np.vstack([J_x_coord, J_theta])  # [2×n]
+
+    return J_x
+
+def generate_start_position(r, body_pos, size_z, R):
+    theta = 0
+    circle_local = np.zeros(3)
+    circle_local[0] = r * np.cos(theta)  # x
+    circle_local[1] = r * np.sin(theta)  # y
+    circle_local[2] = size_z  # z
+    return body_pos + (R @ circle_local.T).T
+
+def generate_trajectory_marks(r, size_z, R, body_pos):
+    angular_speed = np.pi / 2
+    delta_t = 0.2
+    T = (2 * np.pi) / angular_speed
+    time = np.arange(0, T, delta_t)
+    circle_points = []
+    for i, elapsed_time in enumerate(time):
+        theta = angular_speed * elapsed_time
+        circle_local = np.zeros(3)
+        circle_local[0] = r * np.cos(theta)  # x
+        circle_local[1] = r * np.sin(theta)  # y
+        circle_local[2] = size_z  # z
+        circle_points.append(circle_local)
+
+    circle_local_array = np.array(circle_points)
+    # --- Step 3: Transform to world frame ---
+    circle_world = body_pos + (R @ circle_local_array.T).T
+    circle_sites = "<sites>\n"
+    for i, point in enumerate(circle_world):
+        circle_sites += (
+            f'<site name="circle_{i}" '
+            f'pos="{point[0]:.4f} {point[1]:.4f} {point[2]:.4f}" '
+            f'size="0.003" rgba="0 0 1 1"/>\n'
+        )
+    circle_sites += "</sites>\n"
+    return circle_sites
+
+def add_slope_xml(xml_path, euler, size_z, r, body_pos):
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+    worldbody = root.find("worldbody")
+    slope_body = ET.fromstring(f"""
+    <body name="slope_body" pos="{body_pos[0]} {body_pos[1]} {body_pos[2]}" euler="{euler[0]} {euler[1]} {euler[2]}">
+      <geom name="slope_geom"
+            type="box"
+            size="0.20 0.20 {size_z}"
+            rgba="0.8 0.2 0.2 0.5"
+            contype="1"
+            conaffinity="1"/>
+    </body>
+    """)
+    worldbody.append(slope_body)
+    R = euler_to_rot_matrix(euler)
+    sites_xml = generate_trajectory_marks(r, size_z, R, body_pos)
+    sites_root = ET.fromstring(sites_xml)
+    for site in sites_root:
+        worldbody.append(site)
+
+    # WRITE to file for debug
+    new_xml_path = Path(xml_path).with_name("table_slope_auto.xml")
+    tree.write(new_xml_path, encoding="utf-8", xml_declaration=True)
+    return str(new_xml_path)
+
+def add_cylinder_xml(xml_path, euler, size, body_pos):
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+    worldbody = root.find("worldbody")
+    cylinder_body = ET.fromstring(f"""
+        <body name="cylinder_body" pos="{body_pos[0]} {body_pos[1]} {body_pos[2]}" euler="{euler[0]} {euler[1]} {euler[2]}">
+            <geom name="cylinder_geom"
+                type="cylinder"
+                size="{size[0]} {size[1]}"
+                rgba="0.8 0.2 0.2 1"
+                contype="1" conaffinity="1"/>
+        </body>
+        """)
+    worldbody.append(cylinder_body)
+    R = euler_to_rot_matrix(euler)
+    sites_xml = generate_trajectory_marks(size[0], 0, R, body_pos)
+    sites_root = ET.fromstring(sites_xml)
+    for site in sites_root:
+        worldbody.append(site)
+
+    # WRITE to file for debug
+    new_xml_path = "./kuka_iiwa_14/cylinder_auto.xml"
+    tree.write(new_xml_path, encoding="utf-8", xml_declaration=True)
+    return new_xml_path
+
+def task_space_inertiaM(M_inv, jac):
+    """
+    Compute the task-space inertia matrix from the joint-space inverse inertia matrix.
+    """
+    Mx_inv = jac @ M_inv @ jac.T
+    if abs(np.linalg.det(Mx_inv)) >= 1e-2:
+        Mx = np.linalg.inv(Mx_inv)
+    else:
+        Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
+    return Mx
+
+def task_space_inertiaM_fromM(M, jac, regularization = 1e-6):
+    """
+    Compute the task-space inertia matrix from the joint-space inertia matrix.
+    Mx_inv = J * (M^-1 * J^T)
+    X = M^-1 * J^T
+    """
+    M_reg = M + regularization * np.eye(M.shape[0])
+
+    try:
+        # Solve M * X = J^T for X
+        X = np.linalg.solve(M_reg, jac.T)
+    except np.linalg.LinAlgError:
+        # Fallback to pseudoinverse if still singular
+        print("Warning: Using pseudoinverse for M")
+        X = np.linalg.pinv(M_reg, rcond=1e-4) @ jac.T
+
+    Mx_inv = jac @ X
+    if abs(np.linalg.det(Mx_inv)) >= 1e-2:
+        Mx = np.linalg.inv(Mx_inv)
+    else:
+        Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
+    return Mx
+
+# def null_space_tau(data, q0, dof_ids, Kp_null, Kd_null):
+#     """
+#     Compute the null-space torque to drive joints to a desired configuration q0 with PD control.
+#     """
+#     return Kp_null * (q0 - data.qpos[dof_ids]) - Kd_null * data.qvel[dof_ids]
+
+def null_space_tau(q, dq, q0, Kp_null, Kd_null):
+    """
+    Compute the null-space torque to drive joints to a desired configuration q0 with PD control.
+    """
+    return Kp_null * (q0 - q) - Kd_null * dq
+
+def bruno_motion_space_control_force(x_ddot_desired, x_dot_desired, x_tilde, x_dot_tilde, M_x, C_x, K_x, D_x):
+    # Cx is hard to compute, ignore it for now
+    if C_x is None:
+        C_x = np.zeros_like(M_x)
+    return (M_x @ x_ddot_desired + 
+                C_x @ x_dot_desired - 
+                K_x @ x_tilde - 
+                D_x @ x_dot_tilde)
+
+
+def feedforward_PD(x_acc_desired, x_delta, x_dot_delta, Kp, Kd):
+    """
+    Compute the feedforward PD control torque for the end-effector.
+    Tracking desired acceleration.
+    """
+    # a_v = np.concatenate([x_ddot_desired, [0,0,0]]) @ S_v + Kp @ S_v * x_tilde + Kd @ S_v * x_dot_tilde
+    # F_ctrl_x = Mx_motion @ a_v
+    # tau_ctrl_x = J_motion.T @ F_ctrl_x
+    a_v = x_acc_desired + Kp * x_delta + Kd * x_dot_delta
+    return a_v
+    
+def PI_term(F_ext, F_desired, dt, integral_force_error):
+    """
+    F_PI = -k_P(F_ext_Φ˙ - F_des(t)) - k_I ∫(F_ext_Φ˙ - F_des(t)) dt
+    """
+    f_error = F_ext - F_desired
+    integral_force_error += f_error * dt
+    Kp_f = 2 * np.ones_like(f_error)
+    Ki_f = 2 * np.ones_like(f_error)
+    return - Kp_f * f_error - Ki_f * integral_force_error, integral_force_error
+
+def force_dot(S_f, Compliance_matrix, jac, data, dof_ids):
+    """
+    λ˙ = Sf† K'J(q)q̇
+    """
+    inner = S_f.T @ Compliance_matrix @ S_f  # Scalar: compliance in force direction
+    K_effective = S_f @ np.linalg.inv(inner) @ S_f.T
+    Sf_pinv = np.linalg.pinv(S_f, rcond=1e-6)
+    F_dot = Sf_pinv @ K_effective @ jac @ data.qvel[dof_ids]
+    return F_dot
+
+def compute_ee_pose_error(target_pos, current_pos, target_quat, current_mat, Kpos=0.95):
+    twist = np.zeros(6)
+    site_quat = np.zeros(4)
+    site_quat_conj = np.zeros(4)
+    error_quat = np.zeros(4)
+    # Kpos Gains for the twist computation. These should be between 0 and 1. 0 means no
+    # movement, 1 means move the end-effector to the target in one integration step.
+    # Gain for the orientation component of the twist computation. This should be
+    # between 0 and 1. 0 means no movement, 1 means move the end-effector to the target
+    # orientation in one integrati on step.
+    Kori: float = 0.95
+
+    dx = target_pos - current_pos
+    twist[:3] = Kpos * dx
+    mujoco.mju_mat2Quat(site_quat, current_mat)
+    mujoco.mju_negQuat(site_quat_conj, site_quat)
+    mujoco.mju_mulQuat(error_quat, target_quat, site_quat_conj)
+    mujoco.mju_quat2Vel(twist[3:], error_quat, 1.0)
+    # twist[3:] *= Kori
+    return twist
+
+
+def check_world_ee_contact_force(data, model, obj_name='board'):
+    current_force_world = np.zeros(6)
+    current_force_local = np.zeros(6)
+    contact_pos = None
+    if data.ncon > 0:
+        # Compute the contact forces.
+        contact_force_local = np.zeros(6)
+        for i in range(data.ncon):
+            contact = data.contact[i]
+            if contact.geom1 == model.geom(obj_name).id or contact.geom2 == model.geom(obj_name).id:
+                mujoco.mj_contactForce(model, data, i, contact_force_local)
+                break
+        # Contact frame x-axis (normal) points FROM geom2 To geom1
+        # from slope to ee
+        contact_rot = contact.frame.reshape(3, 3).T # from local to world
+        contact_rot_local = np.array([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]) # move normal force from x to z
+        contact_pos = contact.pos.copy()
+        force_local = contact_force_local[:3]
+        moment_local = contact_force_local[3:]
+        force_world = contact_rot @ force_local
+        # answer: moment_world = R @ moment_local + p × force_world
+        moment_rotated = contact_rot @ moment_local
+        position_cross_force = np.cross(contact_pos, force_world)
+        moment_world = moment_rotated + position_cross_force
+        current_force_world[:3] = force_world
+        current_force_world[3:] = moment_world
+        # local force
+        current_force_local[:3] = contact_rot_local @ force_local
+        current_force_local[3:] = contact_force_local[3:]
+    return current_force_world, current_force_local, contact_pos
+
+def dynamically_consistent_inv(jac, M_inv):
+    """
+    Compute dynamically consistent pseudoinverse of jac
+    J^{M+} = M^{-1} J^T (J M^{-1} J^T)^{-1}
+    """
+    Mx_inv = jac @ M_inv @ jac.T
+    if abs(np.linalg.det(Mx_inv)) >= 1e-2:
+        Mx = np.linalg.inv(Mx_inv)
+    else:
+        Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
+    return M_inv @ jac.T @ Mx
+
+def quick_plot(model, data):
+    mujoco.mj_forward(model, data)
+    
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Get all body positions
+    positions = []
+    for i in range(model.nbody):
+        body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i)
+        if body_name and body_name != 'world':
+            positions.append(data.xpos[i])
+    
+    positions = np.array(positions)
+    
+    # Plot robot skeleton
+    ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2], c='red', s=100)
+    for i in range(len(positions) - 1):
+        ax.plot([positions[i, 0], positions[i+1, 0]],
+                [positions[i, 1], positions[i+1, 1]], 
+                [positions[i, 2], positions[i+1, 2]], 'b-', linewidth=3)
+    
+    # End-effector
+    if model.nsite > 0:
+        ee_pos = data.site_xpos[0]
+        ax.scatter(ee_pos[0], ee_pos[1], ee_pos[2], c='green', s=200, marker='*')
+    
+    ax.set_xlabel('X (m)')
+    ax.set_ylabel('Y (m)')
+    ax.set_zlabel('Z (m)')
+    ax.set_title('KUKA iiwa14 in Home Position')
+    plt.show()
+
+def format_vector_to_latex(arr, label):
+    elements_str = ", ".join([f"{x:.2f}" for x in arr])
+    return f"${label} = \\begin{{bmatrix}} {elements_str} \\end{{bmatrix}}^T$"
+
+def format_matrix_to_latex(matrix_arr: np.ndarray, label: str) -> str:
+
+    """
+    Formats a 2D NumPy array (matrix) into a LaTeX bmatrix string.
+
+    Args:
+        matrix_arr (np.ndarray): The 2D NumPy array (matrix) to format.
+        label (str): The label for the matrix (e.g., "J").
+
+    Returns:
+        str: A LaTeX string representing the matrix.
+    """
+    if matrix_arr.ndim != 2:
+        raise ValueError("Input array must be 2-dimensional for matrix formatting.")
+
+    rows_latex = []
+    for row in matrix_arr:
+        # For each row, format its elements with 2 decimal places
+        elements_str = " & ".join([f"{x:.2f}" for x in row])
+        rows_latex.append(elements_str)
+
+    # Join rows with double backslash (\\) for new line in LaTeX matrix
+    matrix_str = " \\\\ ".join(rows_latex)
+
+    return f"${label} = \\begin{{bmatrix}} {matrix_str} \\end{{bmatrix}}$"
+
+def hierarchical_impedance_jacob(jac_list: list, dim):
+    # draw circle: only 2 subspace jac can be defined,
+    # last one - null space, there is no jac, it has to be calculated
+    # if give full M, dynamical consistant inverse can be found - J_inv
+    # M_inv = dynamically_consistent_pinv(J_aug, M)
+    Ns = []
+    I = np.eye(dim)
+    J_aug = np.empty((0, dim))
+    Ns.append(I)
+    for i, jac in enumerate(jac_list):
+        J_aug = np.vstack([J_aug, jac_list[i]])
+        J_aug_inv = np.linalg.pinv(J_aug)
+        N = I - J_aug_inv @ J_aug
+        Ns.append(N)
+    # find null space J_null
+    U, s, Vt = np.linalg.svd(J_aug)
+    rank = np.sum(s > 1e-10)
+    J_null = Vt[rank:, :]
+    jac_list.append(J_null)
+    
+    J_bars = []
+    for N, jac in zip(Ns, jac_list):
+        J_bar = jac @ N.T
+        J_bars.append(J_bar)
+    return Ns, J_bars
+
+def euler_to_rot_matrix(euler):
+    """
+    Convert Euler angles (roll, pitch, yaw) to a rotation matrix.
+    The input euler angles are in radians.
+    The output rotation matrix is a 3x3 numpy array.
+    """
+    roll, pitch, yaw = euler
+    R_x = np.array([[1, 0, 0],
+                    [0, np.cos(roll), -np.sin(roll)],
+                    [0, np.sin(roll), np.cos(roll)]])
+    
+    R_y = np.array([[np.cos(pitch), 0, np.sin(pitch)],
+                    [0, 1, 0],
+                    [-np.sin(pitch), 0, np.cos(pitch)]])
+    
+    R_z = np.array([[np.cos(yaw), -np.sin(yaw), 0],
+                    [np.sin(yaw), np.cos(yaw), 0],
+                    [0, 0, 1]])
+    
+    return R_z @ R_y @ R_x
+# def PDI_term():
+#     contact_force_local = np.zeros(6)
+#     for i in range(data.ncon):
+#         contact = data.contact[i]
+#         if contact.geom1 == model.geom("board").id or contact.geom2 == model.geom("board").id:
+#             mujoco.mj_contactForce(model, data, i, contact_force_local)
+#             break
+#     contact_pos = contact.pos
+#     contact_rot = contact.frame.reshape(3, 3) # from local to world
+#     contact_force_local = contact_force_local[:3]
+#     contact_force_world = contact_rot @ contact_force_local
+#     contact_force_world = contact_force_world[2]
+#     force_error = desired_force - contact_force_world
+#     force = (Kp_force * force_error + Kd_force * (force_error - force_error_prev) / dt)
+#     force += desired_force 
+    
+#     if len(force_errors) > 0:
+#         force_error_sum = np.sum(force_errors, axis=0)
+#         force_error_sum *= dt
+#         force += Ki_force * force_error_sum                      
+    
+#     tau_force = jac.T[:, 2:3] @ force
+#     tau -= tau_force
+#     force_error_prev = force_error
+#     contact_forces.append(contact_force_world)
+#     force_errors.append(force_error)
+#     desired_forces.append(desired_force)
+#     tau_forces.append(tau_force)
+
+# Mx_inv = jac @ M_inv @ jac.T
+# if abs(np.linalg.det(Mx_inv)) >= 1e-2:
+#     Mx = np.linalg.inv(Mx_inv)
+# else:
+#     Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
+# Mxy = S_v.T @ Mx @ S_v

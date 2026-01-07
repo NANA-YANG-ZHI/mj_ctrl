@@ -22,7 +22,7 @@ except ImportError:
     print("Please install with: pip install libfranka-python")
     exit(1)
 
-from utils_temp import *
+from utils import *
 import matplotlib.pyplot as plt
 
 
