@@ -117,6 +117,10 @@ class CartesianSpacePDControlConfig:
     impedance_pos: np.ndarray = None
     impedance_ori: np.ndarray = None
 
+    # Torque ramping parameters
+    ramp_duration: float = 2.0  # Duration to ramp up torques (seconds)
+    max_torque_rate: float = 50.0  # Max torque change per second (Nm/s)
+
     def __post_init__(self):
         if self.impedance_pos is None:
             self.impedance_pos = np.asarray([100.0, 100.0, 100.0])
@@ -154,6 +158,10 @@ class HybridControllerConfig:
     Kd_force: float = 0.002
     Ki_force: float = 0.4
     F_desired_contact: np.ndarray = None
+
+    # Torque ramping parameters
+    ramp_duration: float = 1.0  # Duration to ramp up torques (seconds)
+    max_torque_rate: float = 50.0  # Max torque change per second (Nm/s)
 
     def __post_init__(self):
         if self.impedance_pos is None:
@@ -196,38 +204,64 @@ class CartesianSpacePDController:
 
         # Control output
         self.tau: np.ndarray = np.zeros(7)
+        self.tau_prev: np.ndarray = np.zeros(7)  # Previous torque for rate limiting
+
+        # Torque ramping
+        self.start_time: float = 0.0
+        self.initial_gravity_torque: Optional[np.ndarray] = None
 
         # Data logging
         self.ee_positions: list = []
         self.target_positions: list = []
 
-    def starting(self, target_pos: np.ndarray, target_quat: np.ndarray, q0: np.ndarray, pino_model: pino.Model, pino_data: pino.Data) -> None:
+    def starting(self, target_pos: np.ndarray, target_quat: np.ndarray, q0: np.ndarray, pino_model: pino.Model, pino_data: pino.Data, robot_state, start_time: float) -> None:
         """
         Reset controller state.
 
         Args:
             target_pos: Target end-effector position
             target_quat: Target end-effector quaternion
+            q0: Home configuration
+            pino_model: Pinocchio model
+            pino_data: Pinocchio data
+            robot_state: Initial robot state
+            start_time: Start time for ramping
         """
         self.pino_model = pino_model
         self.pino_data = pino_data
         self.target_pos = target_pos.copy()
         self.target_quat = target_quat.copy()
         self.q0 = q0.copy()
+        self.start_time = start_time
 
         # Clear logging
         self.ee_positions = []
         self.target_positions = []
 
-        # Zero control
-        self.tau[:] = 0.0
+        # Initialize with gravity compensation torques
+        q = np.array(robot_state.q)
+        self.initial_gravity_torque = pino.computeGeneralizedGravity(self.pino_model, self.pino_data, q)
+        self.tau[:] = self.initial_gravity_torque.copy()
+        self.tau_prev[:] = self.tau.copy()
 
+        # Print initial state
+        O_T_EE = np.array(robot_state.O_T_EE).reshape(4, 4).T
+        current_pos = O_T_EE[:3, 3]
+        initial_distance = np.linalg.norm(current_pos - self.target_pos)
+
+        print(f"[APPROACH START] Current position: {current_pos}")
         print(f"[APPROACH START] Target position: {self.target_pos}")
+        print(f"[APPROACH START] Initial distance: {initial_distance:.3f}m")
         print(f"[APPROACH START] Target quaternion: {self.target_quat}")
+        print(f"[APPROACH START] Ramping torques over {self.config.ramp_duration:.1f}s")
 
-    def update(self, robot_state) -> np.ndarray:
+    def update(self, robot_state, current_time: float) -> np.ndarray:
         """
         Compute control torques for approaching target.
+
+        Args:
+            robot_state: Current robot state
+            current_time: Current time for ramping
 
         Returns:
             Control torques
@@ -271,7 +305,7 @@ class CartesianSpacePDController:
         # ============================================================
         # 4. Compute Task-Space Control
         # ============================================================
-        self.tau[:] = jac.T @ Mx @ (
+        tau_control = jac.T @ Mx @ (
                 self.config.Kp * twist - self.config.Kd * (jac @ dq)
         )
 
@@ -286,17 +320,50 @@ class CartesianSpacePDController:
             self.config.Kp_null,
             self.config.Kd_null
         )
-        self.tau += (np.eye(7)- jac.T @ Jbar.T) @ ddq
+        tau_control += (np.eye(7)- jac.T @ Jbar.T) @ ddq
 
         # ============================================================
         # 6. Add Gravity Compensation
         # ============================================================
         # Use Pinocchio to compute gravity
+        gravity_torque = np.zeros(7)
         if self.common_config.gravity_compensation:
-            self.tau += pino.computeGeneralizedGravity(self.pino_model, self.pino_data, q)
+            gravity_torque = pino.computeGeneralizedGravity(self.pino_model, self.pino_data, q)
+            tau_control += gravity_torque
 
         # ============================================================
-        # 7. Log Data
+        # 7. Apply Torque Ramping
+        # ============================================================
+        elapsed = current_time - self.start_time
+        if elapsed < self.config.ramp_duration:
+            # Ramp from initial gravity torque to full control
+            ramp_factor = elapsed / self.config.ramp_duration
+            # Smooth ramp using cubic function
+            ramp_factor = ramp_factor * ramp_factor * (3.0 - 2.0 * ramp_factor)
+
+            tau_target = self.initial_gravity_torque + ramp_factor * (tau_control - self.initial_gravity_torque)
+        else:
+            tau_target = tau_control
+
+        # ============================================================
+        # 8. Apply Torque Rate Limiting
+        # ============================================================
+        # Get time delta (assume ~1ms control loop)
+        dt = 0.001
+        max_delta = self.config.max_torque_rate * dt
+
+        tau_delta = tau_target - self.tau_prev
+        tau_delta_norm = np.linalg.norm(tau_delta)
+
+        if tau_delta_norm > max_delta:
+            # Limit the change
+            tau_delta = tau_delta * (max_delta / tau_delta_norm)
+
+        self.tau[:] = self.tau_prev + tau_delta
+        self.tau_prev[:] = self.tau.copy()
+
+        # ============================================================
+        # 9. Log Data
         # ============================================================
         self.ee_positions.append(current_pos.copy())
         self.target_positions.append(self.target_pos.copy())
@@ -381,6 +448,8 @@ class HybridController:
 
         # Preallocated workspace
         self.tau = np.zeros(7)
+        self.tau_prev: np.ndarray = np.zeros(7)  # Previous torque for rate limiting
+        self.transition_torque: Optional[np.ndarray] = None  # Torque at transition
 
         # Data logging
         self.contact_forces: list = []
@@ -392,7 +461,7 @@ class HybridController:
         self.velocity_term_arr: list = []
         self.F_ctrl_constraint_arr: list = []
 
-    def starting(self, current_time: float, target_pos: np.ndarray, target_quat: np.ndarray, q0: np.ndarray, pino_model: pino.Model, pino_data: pino.Data) -> None:
+    def starting(self, current_time: float, target_pos: np.ndarray, target_quat: np.ndarray, q0: np.ndarray, pino_model: pino.Model, pino_data: pino.Data, previous_tau: np.ndarray) -> None:
         """
         Reset controller state when starting circle drawing.
 
@@ -400,6 +469,10 @@ class HybridController:
             current_time: Current simulation time
             target_pos: Starting position for circle
             target_quat: Target orientation
+            q0: Home configuration
+            pino_model: Pinocchio model
+            pino_data: Pinocchio data
+            previous_tau: Torque from previous controller for smooth transition
         """
         self.q0 = q0.copy()
         self.pino_model = pino_model
@@ -411,6 +484,11 @@ class HybridController:
         self.target_pos = target_pos.copy()
         self.target_quat = target_quat.copy()
 
+        # Store transition torque for smooth ramping
+        self.transition_torque = previous_tau.copy()
+        self.tau[:] = previous_tau.copy()
+        self.tau_prev[:] = previous_tau.copy()
+
         # Clear logging
         self.contact_forces = []
         self.desired_forces = []
@@ -421,14 +499,12 @@ class HybridController:
         self.velocity_term_arr = []
         self.F_ctrl_constraint_arr = []
 
-        # Zero control
-        self.tau[:] = 0.0
-
         print(f"[CIRCLE START] Circle drawing started at t={current_time:.2f}s")
         print(f"[CIRCLE START] Center: {self.common_config.circle_center}")
         print(f"[CIRCLE START] Radius: {self.common_config.circle_radius}")
         print(f"[CIRCLE START] Force control: F_desired={self.config.F_desired_contact}")
         print(f"[CIRCLE START] target quat = {self.target_quat}")
+        print(f"[CIRCLE START] Ramping torques over {self.config.ramp_duration:.1f}s")
 
     def update(self, current_time: float, robot_state) -> np.ndarray:
         """
@@ -560,8 +636,8 @@ class HybridController:
         #------------------------------------------------------
         # Sum up torques
         #------------------------------------------------------
-        self.tau[:] = J_phi.T @ F_ctrl_constraint + tau_ctrl_x + tau_ctrl_v
-        # self.tau[:] = tau_ctrl_x + tau_ctrl_v
+        tau_control = J_phi.T @ F_ctrl_constraint + tau_ctrl_x + tau_ctrl_v
+        # tau_control = tau_ctrl_x + tau_ctrl_v
 
         # Store for logging
         self._last_control_compensation = control_force_compensation
@@ -574,9 +650,41 @@ class HybridController:
         # ============================================================
         # Use Pinocchio to compute gravity
         if self.common_config.gravity_compensation:
-            self.tau += pino.computeGeneralizedGravity(self.pino_model, self.pino_data, q)
+            tau_control += pino.computeGeneralizedGravity(self.pino_model, self.pino_data, q)
+
         # ============================================================
-        # 7. Log Data
+        # 7. Apply Torque Ramping
+        # ============================================================
+        elapsed = current_time - self.start_time
+        if elapsed < self.config.ramp_duration:
+            # Ramp from transition torque to full control
+            ramp_factor = elapsed / self.config.ramp_duration
+            # Smooth ramp using cubic function
+            ramp_factor = ramp_factor * ramp_factor * (3.0 - 2.0 * ramp_factor)
+
+            tau_target = self.transition_torque + ramp_factor * (tau_control - self.transition_torque)
+        else:
+            tau_target = tau_control
+
+        # ============================================================
+        # 8. Apply Torque Rate Limiting
+        # ============================================================
+        # Get time delta (assume ~1ms control loop)
+        dt = 0.001
+        max_delta = self.config.max_torque_rate * dt
+
+        tau_delta = tau_target - self.tau_prev
+        tau_delta_norm = np.linalg.norm(tau_delta)
+
+        if tau_delta_norm > max_delta:
+            # Limit the change
+            tau_delta = tau_delta * (max_delta / tau_delta_norm)
+
+        self.tau[:] = self.tau_prev + tau_delta
+        self.tau_prev[:] = self.tau.copy()
+
+        # ============================================================
+        # 9. Log Data
         # ============================================================
         self._log_data(current_force_local, current_pos)
 
@@ -752,11 +860,20 @@ def main() -> None:
         # this function doesn't work, get rid of it
         # model = robot.load_model()
 
+        # Read initial state
+        initial_robot_state, _ = active_control.readOnce()
+
         # ============================================================
         # 5. Start Approach Phase
         # ============================================================
         control_phase = ControlPhase.APPROACHING
-        approach_controller.starting(target_pos, target_quat, q0, pino_model, pino_data)
+        sim_time = 0.0
+        approach_controller.starting(target_pos, target_quat, q0, pino_model, pino_data, initial_robot_state, sim_time)
+
+        # Send initial gravity torque immediately to ensure smooth start
+        initial_torque = approach_controller.tau.copy()
+        torque_cmd = Torques(initial_torque.tolist())
+        active_control.writeOnce(torque_cmd)
 
         print("\n" + "=" * 60)
         print("PHASE 1: APPROACHING TARGET POSITION")
@@ -766,7 +883,6 @@ def main() -> None:
         # ============================================================
         # 6. Run Control Loop
         # ============================================================
-        sim_time = 0.0
         transition_time = 0.0
         try:
             while True:
@@ -779,7 +895,7 @@ def main() -> None:
                 # ============================================================
                 if control_phase == ControlPhase.APPROACHING:
                     # Use approach controller
-                    tau = approach_controller.update(robot_state)
+                    tau = approach_controller.update(robot_state, sim_time)
                     # Check if target reached
                     if approach_controller.is_target_reached(robot_state):
                         print("\n" + "=" * 60)
@@ -795,7 +911,7 @@ def main() -> None:
                             print("="*60)
                             control_phase = ControlPhase.CIRCLE_DRAWING
                             transition_time = sim_time
-                            circle_controller.starting(sim_time, target_pos, target_quat, q0, pino_model, pino_data)
+                            circle_controller.starting(sim_time, target_pos, target_quat, q0, pino_model, pino_data, tau)
 
                 elif control_phase == ControlPhase.CIRCLE_DRAWING:
                     # Use circle drawing controller
