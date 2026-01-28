@@ -27,6 +27,251 @@ logging.basicConfig(
     filemode="w"
 )
 
+
+class TrajectoryPlanner:
+    """
+    Quintic polynomial trajectory planner for smooth motion.
+
+    Plans trajectories with continuous position, velocity, and acceleration.
+    Re-plans every specified interval (default 1 second) to handle disturbances.
+    """
+
+    def __init__(self, planning_horizon: float = 1.0):
+        """
+        Initialize trajectory planner.
+
+        Args:
+            planning_horizon: Time duration for each trajectory segment (seconds)
+        """
+        self.planning_horizon = planning_horizon
+
+        # Trajectory coefficients for each dimension (x, y, z)
+        # Quintic: p(t) = a0 + a1*t + a2*t^2 + a3*t^3 + a4*t^4 + a5*t^5
+        self.coeffs_pos = None  # Shape: (3, 6)
+        self.coeffs_quat = None  # For orientation (simplified SLERP)
+
+        # Trajectory state
+        self.start_time = 0.0
+        self.trajectory_duration = 0.0
+        self.is_planned = False
+
+        # Start and end states
+        self.start_pos = None
+        self.start_vel = None
+        self.start_acc = None
+        self.end_pos = None
+        self.end_vel = None
+        self.end_acc = None
+
+        # Orientation (using SLERP)
+        self.start_quat = None
+        self.end_quat = None
+
+    def plan(self,
+             current_time: float,
+             start_pos: np.ndarray,
+             start_vel: np.ndarray,
+             end_pos: np.ndarray,
+             end_vel: np.ndarray = None,
+             start_acc: np.ndarray = None,
+             end_acc: np.ndarray = None,
+             duration: float = None,
+             start_quat: np.ndarray = None,
+             end_quat: np.ndarray = None) -> None:
+        """
+        Plan a quintic polynomial trajectory from start to end.
+
+        Args:
+            current_time: Current time (seconds)
+            start_pos: Starting position (3,)
+            start_vel: Starting velocity (3,)
+            end_pos: End position (3,)
+            end_vel: End velocity (3,), defaults to zero
+            start_acc: Starting acceleration (3,), defaults to zero
+            end_acc: End acceleration (3,), defaults to zero
+            duration: Trajectory duration, defaults to planning_horizon
+            start_quat: Starting quaternion (w, x, y, z)
+            end_quat: Ending quaternion (w, x, y, z)
+        """
+        if end_vel is None:
+            end_vel = np.zeros(3)
+        if start_acc is None:
+            start_acc = np.zeros(3)
+        if end_acc is None:
+            end_acc = np.zeros(3)
+        if duration is None:
+            duration = self.planning_horizon
+
+        self.start_time = current_time
+        self.trajectory_duration = duration
+
+        self.start_pos = start_pos.copy()
+        self.start_vel = start_vel.copy()
+        self.start_acc = start_acc.copy()
+        self.end_pos = end_pos.copy()
+        self.end_vel = end_vel.copy()
+        self.end_acc = end_acc.copy()
+
+        # Store orientation for SLERP
+        if start_quat is not None:
+            self.start_quat = start_quat.copy()
+        if end_quat is not None:
+            self.end_quat = end_quat.copy()
+
+        # Compute quintic polynomial coefficients for each dimension
+        # p(t) = a0 + a1*t + a2*t^2 + a3*t^3 + a4*t^4 + a5*t^5
+        # v(t) = a1 + 2*a2*t + 3*a3*t^2 + 4*a4*t^3 + 5*a5*t^4
+        # a(t) = 2*a2 + 6*a3*t + 12*a4*t^2 + 20*a5*t^3
+
+        T = duration
+        self.coeffs_pos = np.zeros((3, 6))
+
+        for i in range(3):
+            p0, v0, a0 = start_pos[i], start_vel[i], start_acc[i]
+            pf, vf, af = end_pos[i], end_vel[i], end_acc[i]
+
+            # Boundary conditions give us the coefficients
+            # a0 = p0
+            # a1 = v0
+            # a2 = a0/2
+            # Solve for a3, a4, a5 using end conditions
+
+            self.coeffs_pos[i, 0] = p0
+            self.coeffs_pos[i, 1] = v0
+            self.coeffs_pos[i, 2] = a0 / 2.0
+
+            # Solve the 3x3 system for a3, a4, a5
+            T2 = T * T
+            T3 = T2 * T
+            T4 = T3 * T
+            T5 = T4 * T
+
+            # From position equation at T: pf = a0 + a1*T + a2*T^2 + a3*T^3 + a4*T^4 + a5*T^5
+            # From velocity equation at T: vf = a1 + 2*a2*T + 3*a3*T^2 + 4*a4*T^3 + 5*a5*T^4
+            # From acceleration equation at T: af = 2*a2 + 6*a3*T + 12*a4*T^2 + 20*a5*T^3
+
+            # Rearrange to solve for a3, a4, a5
+            b1 = pf - p0 - v0*T - (a0/2.0)*T2
+            b2 = vf - v0 - a0*T
+            b3 = af - a0
+
+            # Matrix equation: A * [a3, a4, a5]^T = [b1, b2, b3]^T
+            A = np.array([
+                [T3, T4, T5],
+                [3*T2, 4*T3, 5*T4],
+                [6*T, 12*T2, 20*T3]
+            ])
+
+            b = np.array([b1, b2, b3])
+            coeffs = np.linalg.solve(A, b)
+
+            self.coeffs_pos[i, 3] = coeffs[0]
+            self.coeffs_pos[i, 4] = coeffs[1]
+            self.coeffs_pos[i, 5] = coeffs[2]
+
+        self.is_planned = True
+
+    def evaluate(self, current_time: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Evaluate the trajectory at the given time.
+
+        Args:
+            current_time: Current time (seconds)
+
+        Returns:
+            Tuple of (position, velocity, acceleration)
+        """
+        if not self.is_planned:
+            raise RuntimeError("Trajectory not planned. Call plan() first.")
+
+        # Compute normalized time
+        t = current_time - self.start_time
+
+        # Clamp to trajectory duration
+        if t < 0:
+            t = 0
+        elif t > self.trajectory_duration:
+            t = self.trajectory_duration
+
+        # Evaluate quintic polynomial
+        t2 = t * t
+        t3 = t2 * t
+        t4 = t3 * t
+        t5 = t4 * t
+
+        pos = np.zeros(3)
+        vel = np.zeros(3)
+        acc = np.zeros(3)
+
+        for i in range(3):
+            a = self.coeffs_pos[i]
+            pos[i] = a[0] + a[1]*t + a[2]*t2 + a[3]*t3 + a[4]*t4 + a[5]*t5
+            vel[i] = a[1] + 2*a[2]*t + 3*a[3]*t2 + 4*a[4]*t3 + 5*a[5]*t4
+            acc[i] = 2*a[2] + 6*a[3]*t + 12*a[4]*t2 + 20*a[5]*t3
+
+        return pos, vel, acc
+
+    def evaluate_orientation(self, current_time: float) -> np.ndarray:
+        """
+        Evaluate orientation using SLERP.
+
+        Args:
+            current_time: Current time (seconds)
+
+        Returns:
+            Interpolated quaternion (w, x, y, z)
+        """
+        if self.start_quat is None or self.end_quat is None:
+            return None
+
+        t = current_time - self.start_time
+
+        # Clamp and normalize
+        if t < 0:
+            t = 0
+        elif t > self.trajectory_duration:
+            t = self.trajectory_duration
+
+        s = t / self.trajectory_duration if self.trajectory_duration > 0 else 1.0
+
+        # Convert from (w, x, y, z) to scipy format (x, y, z, w)
+        start_scipy = np.roll(self.start_quat, -1)
+        end_scipy = np.roll(self.end_quat, -1)
+
+        # SLERP using scipy
+        from scipy.spatial.transform import Slerp, Rotation
+        key_rots = Rotation.from_quat([start_scipy, end_scipy])
+        slerp = Slerp([0, 1], key_rots)
+        interp_rot = slerp(s)
+
+        # Convert back to (w, x, y, z)
+        return np.roll(interp_rot.as_quat(), 1)
+
+    def needs_replan(self, current_time: float, replan_threshold: float = 0.1) -> bool:
+        """
+        Check if trajectory needs to be re-planned.
+
+        Args:
+            current_time: Current time (seconds)
+            replan_threshold: Time before end to trigger replan (seconds)
+
+        Returns:
+            True if replan is needed
+        """
+        if not self.is_planned:
+            return True
+
+        elapsed = current_time - self.start_time
+        return elapsed >= (self.trajectory_duration - replan_threshold)
+
+    def get_remaining_time(self, current_time: float) -> float:
+        """Get remaining time in current trajectory segment."""
+        if not self.is_planned:
+            return 0.0
+        elapsed = current_time - self.start_time
+        return max(0.0, self.trajectory_duration - elapsed)
+
+
 def generate_circle_trajectory(elapsed_time: float,
                                circle_center: np.ndarray,
                                circle_radius: float,
@@ -119,6 +364,10 @@ class CartesianSpacePDControlConfig:
     impedance_pos: np.ndarray = None
     impedance_ori: np.ndarray = None
 
+    # Trajectory planning parameters
+    planning_horizon: float = 1.0  # Re-plan trajectory every this many seconds
+    use_trajectory_planner: bool = True  # Enable/disable trajectory planning
+
     def __post_init__(self):
         if self.impedance_pos is None:
             self.impedance_pos = np.asarray([50.0, 50.0, 50.0]) * 0.2
@@ -174,6 +423,7 @@ class CartesianSpacePDController:
     Controller for moving end-effector to desired position.
 
     Uses task-space impedance control with nullspace joint control.
+    Includes trajectory planning that re-plans every planning_horizon seconds.
     Transitions to circle drawing when target is reached.
     """
 
@@ -191,10 +441,28 @@ class CartesianSpacePDController:
         self.pino_model: Optional[pino.Model] = None
         self.pino_data: Optional[pino.Data] = None
 
-        # Target pose
+        # Target pose (final goal)
         self.target_pos: Optional[np.ndarray] = None
         self.target_quat: Optional[np.ndarray] = None
         self.q0: Optional[np.ndarray] = None  # Home configuration
+
+        # Trajectory planner
+        self.trajectory_planner: Optional[TrajectoryPlanner] = None
+        if self.config.use_trajectory_planner:
+            self.trajectory_planner = TrajectoryPlanner(
+                planning_horizon=self.config.planning_horizon
+            )
+
+        # Current desired state from trajectory
+        self.desired_pos: Optional[np.ndarray] = None
+        self.desired_vel: Optional[np.ndarray] = None
+        self.desired_acc: Optional[np.ndarray] = None
+        self.desired_quat: Optional[np.ndarray] = None
+
+        # Timing
+        self.start_time: float = 0.0
+        self.current_time: float = 0.0
+        self.last_replan_time: float = 0.0
 
         # Control output
         self.tau: np.ndarray = np.zeros(7)
@@ -202,6 +470,7 @@ class CartesianSpacePDController:
         # Data logging
         self.ee_positions: list = []
         self.target_positions: list = []
+        self.desired_positions: list = []  # Trajectory-planned desired positions
         self.joint_torques: list = []
 
     def starting(self, target_pos: np.ndarray, target_quat: np.ndarray, q0: np.ndarray, pino_model: pino.Model, pino_data: pino.Data) -> None:
@@ -218,70 +487,146 @@ class CartesianSpacePDController:
         self.target_quat = target_quat.copy()
         self.q0 = q0.copy()
 
+        # Reset timing
+        self.start_time = 0.0
+        self.current_time = 0.0
+        self.last_replan_time = -float('inf')  # Force initial planning
+
         # Clear logging
         self.ee_positions = []
         self.target_positions = []
+        self.desired_positions = []
         self.joint_torques = []
 
         # Zero control
         self.tau[:] = 0.0
 
+        # Reset trajectory planner
+        if self.trajectory_planner is not None:
+            self.trajectory_planner.is_planned = False
+
         print(f"[APPROACH START] Target position: {self.target_pos}")
         print(f"[APPROACH START] Target quaternion: {self.target_quat}")
+        print(f"[APPROACH START] Trajectory planning enabled: {self.config.use_trajectory_planner}")
+        print(f"[APPROACH START] Planning horizon: {self.config.planning_horizon}s")
 
-    def update(self, robot_state) -> np.ndarray:
+    def update(self, robot_state, current_time: float = 0.0) -> np.ndarray:
         """
         Compute control torques for approaching target.
+
+        Args:
+            robot_state: Current robot state
+            current_time: Current time in seconds (used for trajectory planning)
 
         Returns:
             Control torques
         """
+        self.current_time = current_time
+
         # Get current state
         q = np.array(robot_state.q)
         dq = np.array(robot_state.dq)
 
         # ============================================================
-        # 1. Compute End-Effector Pose Error
+        # 0. Get End-Effector Pose
         # ============================================================
         O_T_EE = np.array(robot_state.O_T_EE).reshape(4, 4).T
         current_pos = O_T_EE[:3, 3]
         current_mat = O_T_EE[:3, :3]
-        twist = compute_ee_pose_error(
-            self.target_pos,
-            current_pos,
-            self.target_quat,
-            current_mat.flatten(),
-            Kpos=self.config.Kpos
-        )
-
 
         # ============================================================
-        # 2. Compute Jacobian
+        # 1. Compute Jacobian (needed for velocity)
         # ============================================================
-        # Use Pinocchio to compute Jacobian
         pino.forwardKinematics(self.pino_model, self.pino_data, q, dq)
         pino.computeJointJacobians(self.pino_model, self.pino_data)
         pino.updateFramePlacements(self.pino_model, self.pino_data)
         pino_frame_id = self.pino_model.getFrameId("attachment")
         jac = pino.getFrameJacobian(self.pino_model, self.pino_data, pino_frame_id, pino.LOCAL_WORLD_ALIGNED)
 
+        # Current end-effector velocity
+        current_vel = (jac @ dq)[:3]  # Only position velocity
+
         # ============================================================
-        # 3. Compute Task-Space Inertia Matrix
+        # 2. Trajectory Planning (re-plan every planning_horizon seconds)
         # ============================================================
-        # Use Pinocchio to compute inverse mass matrix
+        if self.config.use_trajectory_planner and self.trajectory_planner is not None:
+            # Check if we need to (re-)plan
+            time_since_last_replan = current_time - self.last_replan_time
+            needs_replan = (
+                not self.trajectory_planner.is_planned or
+                time_since_last_replan >= self.config.planning_horizon
+            )
+
+            if needs_replan:
+                # Get current orientation as quaternion
+                current_rot = Rotation.from_matrix(current_mat)
+                current_quat = np.roll(current_rot.as_quat(), 1)  # Convert to (w, x, y, z)
+
+                # Plan trajectory from current state to target
+                self.trajectory_planner.plan(
+                    current_time=current_time,
+                    start_pos=current_pos,
+                    start_vel=current_vel,
+                    end_pos=self.target_pos,
+                    end_vel=np.zeros(3),  # Zero velocity at target
+                    start_acc=np.zeros(3),  # Assume zero acceleration
+                    end_acc=np.zeros(3),
+                    duration=self.config.planning_horizon,
+                    start_quat=current_quat,
+                    end_quat=self.target_quat
+                )
+                self.last_replan_time = current_time
+                logging.info("[TRAJECTORY] Re-planned at t=%.3f, distance to target: %.4f",
+                           current_time, np.linalg.norm(self.target_pos - current_pos))
+
+            # Evaluate trajectory at current time
+            self.desired_pos, self.desired_vel, self.desired_acc = \
+                self.trajectory_planner.evaluate(current_time)
+            self.desired_quat = self.trajectory_planner.evaluate_orientation(current_time)
+            if self.desired_quat is None:
+                self.desired_quat = self.target_quat
+
+        else:
+            # No trajectory planning - go directly to target
+            self.desired_pos = self.target_pos
+            self.desired_vel = np.zeros(3)
+            self.desired_acc = np.zeros(3)
+            self.desired_quat = self.target_quat
+
+        # ============================================================
+        # 3. Compute End-Effector Pose Error (using desired from trajectory)
+        # ============================================================
+        twist = compute_ee_pose_error(
+            self.desired_pos,
+            current_pos,
+            self.desired_quat,
+            current_mat.flatten(),
+            Kpos=self.config.Kpos
+        )
+
+        # ============================================================
+        # 4. Compute Task-Space Inertia Matrix
+        # ============================================================
         M_inv = pino.computeMinverse(self.pino_model, self.pino_data, q)
         Mx = task_space_inertiaM(M_inv, jac)
 
         # ============================================================
-        # 4. Compute Task-Space Control
+        # 5. Compute Task-Space Control with Feedforward
         # ============================================================
+        # Velocity error (only for position, not orientation)
+        vel_error = np.concatenate([self.desired_vel - current_vel, np.zeros(3)])
+
+        # Feedforward acceleration (only for position)
+        x_ddot_ff = np.concatenate([self.desired_acc, np.zeros(3)])
+
+        # Control law: tau = J^T * Mx * (x_ddot_ff + Kp * twist + Kd * vel_error)
         self.tau[:] = jac.T @ Mx @ (
-                self.config.Kp * twist - self.config.Kd * (jac @ dq)
+            x_ddot_ff + self.config.Kp * twist + self.config.Kd * vel_error
         )
         logging.info("position control: %s", np.round(self.tau, 4))
 
         # ============================================================
-        # 5. Add Nullspace Control
+        # 6. Add Nullspace Control
         # ============================================================
         Jbar = M_inv @ jac.T @ Mx
         ddq = null_space_tau(
@@ -291,23 +636,21 @@ class CartesianSpacePDController:
             self.config.Kp_null,
             self.config.Kd_null
         )
-        self.tau += (np.eye(7)- jac.T @ Jbar.T) @ ddq
-        # print(f"null control: {np.round(self.tau, 4)}")
+        self.tau += (np.eye(7) - jac.T @ Jbar.T) @ ddq
 
         # ============================================================
-        # 6. Add Gravity Compensation
+        # 7. Add Gravity Compensation
         # ============================================================
-        # Use Pinocchio to compute gravity
         if self.common_config.gravity_compensation:
             g_ctrl = pino.computeGeneralizedGravity(self.pino_model, self.pino_data, q)
             self.tau += g_ctrl
-            # print(f"g control: {np.round(g_ctrl, 4)}")
 
         # ============================================================
-        # 7. Log Data
+        # 8. Log Data
         # ============================================================
         self.ee_positions.append(current_pos.copy())
         self.target_positions.append(self.target_pos.copy())
+        self.desired_positions.append(self.desired_pos.copy())
         self.joint_torques.append(self.tau.copy())
 
         return self.tau
@@ -840,7 +1183,7 @@ def main() -> None:
                 # ============================================================
                 if control_phase == ControlPhase.APPROACHING:
                     # Use approach controller
-                    tau = approach_controller.update(robot_state)
+                    tau = approach_controller.update(robot_state, sim_time)
                     # Check if target reached
                     if approach_controller.is_target_reached(robot_state):
                         print("\n" + "=" * 60)
