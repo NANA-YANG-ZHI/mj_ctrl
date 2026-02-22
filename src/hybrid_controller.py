@@ -396,6 +396,14 @@ class HybridController:
                 R_slope=self.R_slope,
                 size_z=0.0
             )
+            # Ramp velocity and acceleration from zero at startup.
+            # sin(ωt) has velocity amplitude*ω at t=0; this zero-crossing at maximum
+            # speed drives a large velocity error on the first step, which propagates
+            # into control_force_compensation and causes the force spike.
+            startup_ramp_duration = 1.0  # seconds
+            startup_ramp = min(1.0, elapsed / startup_ramp_duration)
+            self.x_dot_desired = self.x_dot_desired * startup_ramp
+            self.x_ddot_desired = self.x_ddot_desired * startup_ramp
         else:
             # Stop after duration
             self.x_dot_desired[:] = 0.0
@@ -483,8 +491,12 @@ class HybridController:
         control_force_compensation = 1 * (-Mx_constraint @ J_phi @ M_inv @ (tau_ctrl_x + tau_ctrl_v))
         contact_force_compensation = 1 * (Mx_constraint @ J_phi @ M_inv @ (J_motion.T @ F_ext_x_new))
         velocity_term = 1 * Mx_constraint @ (J_phi @ M_inv @ C - J_phi_dot) @ dq
+        # Ramp the desired contact force from 0 at startup to prevent a
+        # step input in the force channel compounding with the compensation terms.
+        force_ramp_duration = 1.0  # seconds
+        force_ramp = min(1.0, elapsed / force_ramp_duration)
         F_ctrl_constraint = (
-            self.config.F_desired_contact +
+            force_ramp * self.config.F_desired_contact +
             control_force_compensation +
             contact_force_compensation + velocity_term
         )
