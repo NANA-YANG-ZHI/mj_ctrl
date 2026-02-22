@@ -140,6 +140,12 @@ def main() -> None:
             # mujoco_interface.reset_to_keyframe()
             mujoco_interface.data.qpos[:len(q0)] = q0
             mujoco_interface.data.qvel[:] = 0
+            # Pre-seed data.ctrl with gravity torques for q0.
+            # tau_J_d is read from data.ctrl; without this it starts at zero,
+            # causing the torque rate-limiter to spike the contact force on step 1.
+            tau_gravity_q0 = pino.computeGeneralizedGravity(pino_model, pino_data, q0)
+            print(f"[INIT] Gravity torques at q0: {np.round(tau_gravity_q0, 4)}")
+            mujoco_interface.data.ctrl[mujoco_interface.actuator_ids] = tau_gravity_q0
             mujoco.mj_forward(mujoco_interface.model, mujoco_interface.data)
             # mujoco.mj_step(mujoco_interface.model, mujoco_interface.data)
             robot_state, duration = mujoco_interface.readOnce()
