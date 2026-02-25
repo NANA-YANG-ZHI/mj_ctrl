@@ -17,7 +17,7 @@ class RobotConfig:
     n_joints: int
     q0: np.ndarray  # Default home configuration
     target_quat: np.ndarray  # Default target quaternion (w, x, y, z)
-    ee_frame_name: str = "attachment_site"  # Frame name in Pinocchio model
+    ee_frame_name: str = "attachment"  # Frame name in Pinocchio model
 
 
 # FR3 Robot Configuration
@@ -32,7 +32,7 @@ FR3_CONFIG = RobotConfig(
     n_joints=7,
     q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853]),
     target_quat=np.array([0., 0.7071, 0.7071, 0.]),
-    ee_frame_name="attachment_site"
+    ee_frame_name="attachment"
 )
 
 
@@ -48,7 +48,7 @@ KUKA_CONFIG = RobotConfig(
     n_joints=7,
     q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853]),
     target_quat=np.array([0., 0.7071, 0.7071, 0.]),
-    ee_frame_name="attachment_site"
+    ee_frame_name="attachment"
 )
 
 
@@ -64,7 +64,7 @@ PANDA_CONFIG = RobotConfig(
     n_joints=7,
     q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853]),
     target_quat=np.array([0., 0.7071, 0.7071, 0.]),
-    ee_frame_name="attachment_site"
+    ee_frame_name="attachment"
 )
 
 

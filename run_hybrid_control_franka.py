@@ -160,6 +160,12 @@ def main() -> None:
         _wq  = np.array(q0)
         _wdq = np.zeros(7)
         _wfid = pino_model.getFrameId(robot_cfg.ee_frame_name)
+        if _wfid >= pino_model.nframes:
+            available = [pino_model.frames[i].name for i in range(pino_model.nframes)]
+            raise ValueError(
+                f"Frame '{robot_cfg.ee_frame_name}' not found in Pinocchio model. "
+                f"Available frames: {available}"
+            )
         pino.forwardKinematics(pino_model, pino_data, _wq, _wdq)
         pino.computeJointJacobians(pino_model, pino_data)
         pino.updateFramePlacements(pino_model, pino_data)
