@@ -216,7 +216,7 @@ class HybridController:
         config: HybridControllerConfig,
         common_config: ControllerConfig,
         n_joints: int = 7,
-        ee_frame_name: str = "attachment"
+        ee_frame_name: str = "attachment_site"
     ):
         """
         Initialize hybrid controller.

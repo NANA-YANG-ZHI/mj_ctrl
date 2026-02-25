@@ -131,7 +131,7 @@ def main() -> None:
         pino.forwardKinematics(pino_model, pino_data, _warmup_q, _warmup_dq)
         pino.computeJointJacobians(pino_model, pino_data)
         pino.updateFramePlacements(pino_model, pino_data)
-        _warmup_frame_id = pino_model.getFrameId("attachment")
+        _warmup_frame_id = pino_model.getFrameId("attachment_site")
         pino.getFrameJacobian(pino_model, pino_data, _warmup_frame_id, pino.LOCAL_WORLD_ALIGNED)
         pino.computeMinverse(pino_model, pino_data, _warmup_q)
         pino.crba(pino_model, pino_data, _warmup_q)
