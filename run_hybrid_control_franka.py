@@ -114,6 +114,8 @@ def main() -> None:
     # =========================================================================
     pino_model = pino.buildModelFromMJCF(robot_cfg.pinocchio_xml_path)
     pino_data  = pino_model.createData()
+    print(f"[PINO] Frame index range: 0 – {pino_model.nframes - 1} ({pino_model.nframes} frames)")
+    print(f"[PINO] Frames: {[pino_model.frames[i].name for i in range(pino_model.nframes)]}")
 
     robot = None
     hybrid_controller = None
