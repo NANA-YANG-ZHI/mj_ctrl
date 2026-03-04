@@ -58,6 +58,7 @@ def main() -> None:
         help="Path to a unified experiment config YAML. "
              "When provided all controller/trajectory parameters come from the file.",
     )
+    parser.add_argument("--robot", default="fr3", choices=["fr3", "kuka", "panda"])
     parser.add_argument(
         "--motion-duration", type=float, default=10.0,
         help="How long to run the trajectory [s] (default: 10.0)",
