@@ -248,11 +248,7 @@ class HybridControlEnv:
             xml_path=self.robot_cfg.mujoco_scene_xml_path,
         )
 
-        # Fix slope friction coefficient for this training run
-        try:
-            self.mj.model.geom("slope_geom").friction[0] = 1.0
-        except Exception:
-            pass   # geom may not exist for all scenes; non-fatal
+        # Slope geom friction is fixed; attachment friction is randomised per episode
 
         # ----------------------------------------------------------------
         # Controllers
@@ -303,6 +299,13 @@ class HybridControlEnv:
         # ---- 1. Sample trajectory / force for this episode ------------------
         if self.randomize_trajectory:
             self._sample_trajectory()
+
+        # ---- 1b. Randomise surface friction (attachment tip vs. surface) -----
+        mu = random.uniform(0.3, 1.0)
+        try:
+            self.mj.model.geom("attachment_collision").friction[0] = mu
+        except Exception:
+            pass   # non-fatal if geom name differs
 
         # ---- 2. Reset to home -----------------------------------------------
         self._reset_to_home()
@@ -420,7 +423,7 @@ class HybridControlEnv:
         R_slope   = euler_to_rot_matrix(self.common_config.euler)
         size_z    = self.common_config.size_z
 
-        traj_type = random.choice(_TRAJ_TYPES)
+        traj_type = "sinusoidal"
         self._traj_tag = traj_type
 
         if traj_type == "circle":
