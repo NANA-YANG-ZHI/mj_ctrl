@@ -39,13 +39,13 @@ from utils_plot import (
 )
 
 
-def _save_plots(hybrid_controller, common_config, plot_dir: str) -> None:
+def _save_plots(hybrid_controller, common_config, plot_dir: str, robot_name: str = "fr3") -> None:
     """Helper to avoid repeating the four plot calls."""
     plot_joint_torques(hybrid_controller, "joint_torques",   common_config.dt, plot_dir=plot_dir)
     plot_joint_torques(hybrid_controller, "joint_g_torques", common_config.dt, plot_dir=plot_dir)
     plot_ee_positions(hybrid_controller, common_config.dt, plot_dir=plot_dir)
     plot_control_torques(hybrid_controller, common_config.dt, plot_dir=plot_dir)
-    plot_hybrid_results(hybrid_controller, common_config.dt, robot_name="fr3", plot_dir=plot_dir)
+    plot_hybrid_results(hybrid_controller, common_config.dt, robot_name, plot_dir=plot_dir)
 
 
 def main() -> None:
@@ -111,7 +111,7 @@ def main() -> None:
     q0 = np.array([0.1376, 0.5954, -0.0836, -2.3269, 0.1185, 2.9249, 0.7046])
 
     # =========================================================================
-    # 2. Load Pinocchio model
+    # 3. Load Pinocchio model
     # =========================================================================
     pino_model = pino.buildModelFromMJCF(robot_cfg.pinocchio_xml_path)
     pino_data  = pino_model.createData()
@@ -221,7 +221,7 @@ def main() -> None:
         # 6. Plots
         # =====================================================================
         print("\n[MAIN] Control complete. Generating plots...")
-        _save_plots(hybrid_controller, common_config, plot_dir)
+        _save_plots(hybrid_controller, common_config, plot_dir, robot_cfg.name)
 
         print(f"\n[MAIN] Control finished. Total time: {sim_time:.2f}s")
 
@@ -230,7 +230,7 @@ def main() -> None:
         import traceback
         traceback.print_exc()
         if hybrid_controller is not None:
-            _save_plots(hybrid_controller, common_config, plot_dir)
+            _save_plots(hybrid_controller, common_config, plot_dir, robot_cfg.name)
         return -1
 
     finally:
