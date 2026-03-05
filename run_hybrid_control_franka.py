@@ -264,33 +264,24 @@ def main() -> None:
             ee_frame_name=robot_cfg.ee_frame_name,
         )
 
-        # =====================================================================
-        # 4. Start torque control and initialise
-        # =====================================================================
-        print("\nStarting torque control...")
-        active_control = robot.start_torque_control()
-        robot_state, _ = active_control.readOnce()
-        O_T_EE     = np.array(robot_state.O_T_EE).reshape(4, 4).T
-        target_rot = O_T_EE[:3, :3]
-
-        # Warm up Pinocchio before entering the real-time loop
+        # Warm up Pinocchio JIT compilation so it doesn't cost time in the RT loop.
+        # Must be done BEFORE start_torque_control() — the robot expects 1 kHz
+        # responses the instant the session opens.
         _wq  = np.array(q0)
         _wdq = np.zeros(7)
-        _wfid = pino_model.getFrameId(robot_cfg.ee_frame_name)
         pino.forwardKinematics(pino_model, pino_data, _wq, _wdq)
         pino.computeJointJacobians(pino_model, pino_data)
         pino.updateFramePlacements(pino_model, pino_data)
-        pino.getFrameJacobian(pino_model, pino_data, _wfid, pino.LOCAL_WORLD_ALIGNED)
+        pino.getFrameJacobian(pino_model, pino_data, pino_frame_id, pino.LOCAL_WORLD_ALIGNED)
         pino.computeMinverse(pino_model, pino_data, _wq)
         pino.crba(pino_model, pino_data, _wq)
         pino.computeGeneralizedGravity(pino_model, pino_data, _wq)
         pino.computeCoriolisMatrix(pino_model, pino_data, _wq, _wdq)
-        pino.getFrameJacobianTimeVariation(pino_model, pino_data, _wfid, pino.LOCAL_WORLD_ALIGNED)
-        del _wq, _wdq, _wfid
+        pino.getFrameJacobianTimeVariation(pino_model, pino_data, pino_frame_id, pino.LOCAL_WORLD_ALIGNED)
+        del _wq, _wdq
 
-        gc.collect()
-        gc.disable()
-
+        # Pre-allocate all RT-loop state and logging buffers before entering
+        # the control session to avoid malloc inside the 1 ms deadline.
         control_phase     = ControlPhase.CIRCLE_DRAWING
         sim_time          = 0.0
         physics_step      = 0
@@ -300,6 +291,17 @@ def main() -> None:
         log_force_actual  = []
         log_delta_taus    = []
 
+        gc.collect()
+
+        # =====================================================================
+        # 4. Start torque control and initialise
+        # =====================================================================
+        print("\nStarting torque control...")
+        gc.disable()
+        active_control = robot.start_torque_control()
+        robot_state, _ = active_control.readOnce()
+        O_T_EE     = np.array(robot_state.O_T_EE).reshape(4, 4).T
+        target_rot = O_T_EE[:3, :3]
         hybrid_controller.starting(sim_time, target_rot, q0, pino_model, pino_data)
 
         print("\n" + "=" * 60)
