@@ -22,7 +22,6 @@ import gc
 
 import numpy as np
 import pinocchio as pino
-import torch
 from pylibfranka import Robot, Torques
 
 from src import (
@@ -48,33 +47,17 @@ from utils_plot import (
     plot_joint_torques,
 )
 
-# Import PPO modules directly from their files to avoid triggering
-# ppo_friction_compensation/__init__.py → env_wrapper.py → import mujoco,
-# which is not available on the real-robot host.
-import importlib.util as _ilu
-from pathlib import Path as _Path
-
-def _load_ppo_module(stem: str):
-    path = _Path(__file__).parent / "ppo_friction_compensation" / f"{stem}.py"
-    spec = _ilu.spec_from_file_location(f"_ppo_{stem}", path)
-    mod  = _ilu.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-PPOAgent         = _load_ppo_module("ppo_agent").PPOAgent
-WelfordNormalizer = _load_ppo_module("normalizer").WelfordNormalizer
-
-
 # ---------------------------------------------------------------------------
 # PPO helpers (identical logic to run_ppo_eval.py)
 # ---------------------------------------------------------------------------
 
-@torch.no_grad()
 def get_ppo_action(actor, obs_np: np.ndarray, act_limit: float = 5.0) -> np.ndarray:
     """Deterministic (mean) action — no sampling noise for deployment."""
-    obs  = torch.as_tensor(obs_np, dtype=torch.float32)
-    dist = actor(obs)
-    return dist.mean.clamp(-act_limit, act_limit).numpy()
+    import torch
+    with torch.no_grad():
+        obs  = torch.as_tensor(obs_np, dtype=torch.float32)
+        dist = actor(obs)
+        return dist.mean.clamp(-act_limit, act_limit).numpy()
 
 
 def build_obs_raw(
@@ -219,15 +202,38 @@ def main() -> None:
     # =========================================================================
     # 4. Load PPO agent + normalizer (skipped in --no-ppo mode)
     # =========================================================================
+    # torch and PPO modules are imported HERE, not at module level, so that
+    # --no-ppo runs never import torch at all.  PyTorch's first import spawns
+    # background thread pools that interfere with the Franka 1 ms RT loop.
     dt_action = 20 * common_config.dt   # 20 ms — action_repeat=20, same as training
 
     if not no_ppo:
+        import importlib.util as _ilu
+        from pathlib import Path as _Path
+
+        def _load_ppo_module(stem: str):
+            path = _Path(__file__).parent / "ppo_friction_compensation" / f"{stem}.py"
+            spec = _ilu.spec_from_file_location(f"_ppo_{stem}", path)
+            mod  = _ilu.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+
+        PPOAgent          = _load_ppo_module("ppo_agent").PPOAgent
+        WelfordNormalizer = _load_ppo_module("normalizer").WelfordNormalizer
+
         agent = PPOAgent(obs_dim=25, act_dim=7)
         agent.load(checkpoint)
         agent.actor.eval()
         normalizer = WelfordNormalizer(25)
         normalizer.load(f"{checkpoint}_normalizer.npz")
         print(f"[PPO]   Checkpoint loaded ({normalizer.n} normalizer samples)")
+
+        # Warm up PyTorch before the RT loop: first inference triggers lazy JIT
+        # compilation / CUDA kernel init which takes 10–100 ms — fatal inside 1 ms loop.
+        _dummy = np.zeros(25, dtype=np.float32)
+        get_ppo_action(agent.actor, _dummy)
+        del _dummy
+        print("[PPO]   PyTorch warmup complete")
     else:
         agent = normalizer = None
         print("[PPO]   Baseline mode — no PPO correction")
