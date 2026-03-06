@@ -163,7 +163,14 @@ class HybridController:
         # Preallocated workspace
         self.tau = np.zeros(n_joints)
 
-        # Data logging
+        # Reusable state buffers (avoid per-iteration heap allocation)
+        self._q           = np.zeros(n_joints)
+        self._dq          = np.zeros(n_joints)
+        self._O_T_EE_flat = np.zeros(16)
+        self._F_ext_buf   = np.zeros(6)
+        self._log_idx     = 0
+
+        # Data logging (populated by finalize() after the loop)
         self.contact_forces:                 list = []
         self.desired_forces:                 list = []
         self.ee_positions:                   list = []
@@ -223,6 +230,26 @@ class HybridController:
 
         self.tau[:] = 0.0
 
+        # Pre-allocate log buffers — avoids heap allocation in the 1 ms RT loop.
+        # Buffer rows = upper bound on iterations; trimmed to actual count by finalize().
+        _n  = int(np.ceil(self.common_config.motion_duration / self.common_config.dt)) + 200
+        nj  = self.n_joints
+        nf  = len(self.config.F_desired_contact)
+        self._contact_force_buf = np.empty((_n, 3))
+        self._desired_force_buf = np.empty((_n, nf))
+        self._ctrl_comp_buf     = np.empty(_n)
+        self._ctct_comp_buf     = np.empty(_n)
+        self._vel_term_buf      = np.empty(_n)
+        self._F_ctrl_buf        = np.empty(_n)
+        self._joint_tau_buf     = np.empty((_n, nj))
+        self._joint_g_tau_buf   = np.empty((_n, nj))
+        self._ee_pos_buf        = np.empty((_n, 3))
+        self._target_pos_buf    = np.empty((_n, 3))
+        self._tau_phi_buf       = np.empty((_n, nj))
+        self._tau_x_buf         = np.empty((_n, nj))
+        self._tau_v_buf         = np.empty((_n, nj))
+        self._log_idx           = 0
+
         print(f"[HYBRID START] Surface motion started at t={current_time:.2f}s")
         print(f"[HYBRID START] Trajectory: {type(self.trajectory).__name__}")
         print(f"[HYBRID START] Motion duration: {self.common_config.motion_duration}s")
@@ -252,12 +279,15 @@ class HybridController:
             self.x_ddot_desired[:] = 0.0
             self.is_drawing        = False
 
-        # Get current state
-        q  = np.array(robot_state.q)
-        dq = np.array(robot_state.dq)
+        # Get current state — reuse pre-allocated buffers (no heap allocation)
+        self._q[:] = robot_state.q
+        self._dq[:] = robot_state.dq
+        q  = self._q
+        dq = self._dq
 
         # Get end-effector pose
-        O_T_EE      = np.array(robot_state.O_T_EE).reshape(4, 4).T
+        self._O_T_EE_flat[:] = robot_state.O_T_EE
+        O_T_EE      = self._O_T_EE_flat.reshape(4, 4).T
         current_pos = O_T_EE[:3, 3]
         current_mat = O_T_EE[:3, :3]
 
@@ -284,7 +314,8 @@ class HybridController:
         # ============================================================
         # 3. Get Contact Information
         # ============================================================
-        F_ext_world         = np.array(robot_state.O_F_ext_hat_K)
+        self._F_ext_buf[:]  = robot_state.O_F_ext_hat_K
+        F_ext_world         = self._F_ext_buf
         current_force_local = F_ext_world
         F_ext_phi = current_force_local @ self.S_fc
         F_ext_x   = current_force_local @ self.S_vc
@@ -350,7 +381,10 @@ class HybridController:
         self._last_contact_compensation = contact_force_compensation
         self._last_velocity_term        = velocity_term
         self._last_F_ctrl_constraint    = F_ctrl_constraint
-        self.joint_torques.append(self.tau.copy())
+
+        # Log pre-gravity tau
+        i = self._log_idx
+        self._joint_tau_buf[i] = self.tau
 
         # ============================================================
         # 8. Add Gravity Compensation
@@ -368,32 +402,51 @@ class HybridController:
         self.tau[:]      = last_command_tau + delta_tau
 
         # ============================================================
-        # 9. Log Data
+        # 9. Log Data — write to pre-allocated buffers (zero heap allocation)
         # ============================================================
         self._log_force_data(current_force_local)
-        self.ee_positions.append(current_pos.copy())
-        self.target_positions.append(self.target_pos.copy())
-        self.joint_g_torques.append(self.tau.copy())
-        self.tau_ctrl_phi_log.append(tau_ctrl_phi.copy())
-        self.tau_ctrl_x_log.append(tau_ctrl_x.copy())
-        self.tau_ctrl_v_log.append(tau_ctrl_v.copy())
+        self._ee_pos_buf[i]      = current_pos
+        self._target_pos_buf[i]  = self.target_pos
+        self._joint_g_tau_buf[i] = self.tau
+        self._tau_phi_buf[i]     = tau_ctrl_phi
+        self._tau_x_buf[i]       = tau_ctrl_x
+        self._tau_v_buf[i]       = tau_ctrl_v
+        self._log_idx += 1
 
         return self.tau
 
     def _log_force_data(self, F_ext_local: np.ndarray) -> None:
-        """Log data for plotting."""
-        self.contact_forces.append(F_ext_local[:3].copy())
-        self.desired_forces.append(self.config.F_desired_contact.copy())
-        if hasattr(self, '_last_control_compensation'):
-            self.control_force_compensation_arr.append(self._last_control_compensation.copy())
-            self.contact_force_compensation_arr.append(self._last_contact_compensation.copy())
-            self.velocity_term_arr.append(self._last_velocity_term.copy())
-            self.F_ctrl_constraint_arr.append(self._last_F_ctrl_constraint.copy())
-        else:
-            self.control_force_compensation_arr.append(np.zeros(1))
-            self.contact_force_compensation_arr.append(np.zeros(1))
-            self.velocity_term_arr.append(np.zeros(1))
-            self.F_ctrl_constraint_arr.append(np.zeros(1))
+        """Write force log data to pre-allocated buffers (no heap allocation)."""
+        i = self._log_idx
+        self._contact_force_buf[i] = F_ext_local[:3]
+        self._desired_force_buf[i] = self.config.F_desired_contact
+        self._ctrl_comp_buf[i]     = self._last_control_compensation.flat[0]
+        self._ctct_comp_buf[i]     = self._last_contact_compensation.flat[0]
+        self._vel_term_buf[i]      = self._last_velocity_term.flat[0]
+        self._F_ctrl_buf[i]        = self._last_F_ctrl_constraint.flat[0]
+
+    def finalize(self) -> None:
+        """Trim pre-allocated log buffers to actual length and expose as public attributes.
+
+        Call this once after the real-time loop exits so that plotting code can
+        access the logged data via the standard attribute names.
+        """
+        if not hasattr(self, '_ee_pos_buf'):
+            return  # starting() was never called
+        n = self._log_idx
+        self.contact_forces                 = self._contact_force_buf[:n]
+        self.desired_forces                 = self._desired_force_buf[:n]
+        self.control_force_compensation_arr = self._ctrl_comp_buf[:n]
+        self.contact_force_compensation_arr = self._ctct_comp_buf[:n]
+        self.velocity_term_arr              = self._vel_term_buf[:n]
+        self.F_ctrl_constraint_arr          = self._F_ctrl_buf[:n]
+        self.joint_torques                  = self._joint_tau_buf[:n]
+        self.joint_g_torques                = self._joint_g_tau_buf[:n]
+        self.ee_positions                   = self._ee_pos_buf[:n]
+        self.target_positions               = self._target_pos_buf[:n]
+        self.tau_ctrl_phi_log               = self._tau_phi_buf[:n]
+        self.tau_ctrl_x_log                 = self._tau_x_buf[:n]
+        self.tau_ctrl_v_log                 = self._tau_v_buf[:n]
 
     def is_finished(self) -> bool:
         """Return True once the motion duration has elapsed."""

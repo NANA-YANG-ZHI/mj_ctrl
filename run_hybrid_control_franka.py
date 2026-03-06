@@ -367,6 +367,8 @@ def main() -> None:
 
         finally:
             gc.enable()
+            if hybrid_controller is not None:
+                hybrid_controller.finalize()
 
         # =====================================================================
         # 6. Force-tracking summary

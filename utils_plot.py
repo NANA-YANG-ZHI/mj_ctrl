@@ -13,8 +13,8 @@ def plot_ee_positions(
     import matplotlib.pyplot as plt
     os.makedirs(plot_dir, exist_ok=True)
 
-    ee_pos = np.array(controller.ee_positions) if controller.ee_positions else np.empty((0, 3))
-    tgt_pos = np.array(controller.target_positions) if controller.target_positions else np.empty((0, 3))
+    ee_pos = np.array(controller.ee_positions) if len(controller.ee_positions) > 0 else np.empty((0, 3))
+    tgt_pos = np.array(controller.target_positions) if len(controller.target_positions) > 0 else np.empty((0, 3))
 
     if ee_pos.size == 0:
         print("[PLOT] No EE position data to plot")
@@ -78,7 +78,7 @@ def plot_joint_torques(
         return
     
     # Convert to numpy array
-    joint_data = np.array(data) if data else np.empty((0, 7))
+    joint_data = np.array(data) if len(data) > 0 else np.empty((0, 7))
     
     if joint_data.size == 0:
         print(f"[PLOT] No data to plot for '{attribute_name}'")
@@ -111,9 +111,9 @@ def plot_control_torques(
 
     os.makedirs(plot_dir, exist_ok=True)
 
-    tau_phi = np.array(controller.tau_ctrl_phi_log) if controller.tau_ctrl_phi_log else np.empty((0, 7))
-    tau_x = np.array(controller.tau_ctrl_x_log) if controller.tau_ctrl_x_log else np.empty((0, 7))
-    tau_v = np.array(controller.tau_ctrl_v_log) if controller.tau_ctrl_v_log else np.empty((0, 7))
+    tau_phi = np.array(controller.tau_ctrl_phi_log) if len(controller.tau_ctrl_phi_log) > 0 else np.empty((0, 7))
+    tau_x = np.array(controller.tau_ctrl_x_log) if len(controller.tau_ctrl_x_log) > 0 else np.empty((0, 7))
+    tau_v = np.array(controller.tau_ctrl_v_log) if len(controller.tau_ctrl_v_log) > 0 else np.empty((0, 7))
 
     if tau_phi.size == 0:
         print("[PLOT] No control torque data to plot")
