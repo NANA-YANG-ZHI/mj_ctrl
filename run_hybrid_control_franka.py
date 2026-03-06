@@ -268,6 +268,14 @@ def main() -> None:
         # 4. Start torque control and initialise
         # =====================================================================
 
+        # Start torque control and immediately call readOnce to establish the
+        # RT link — this must happen before any other setup work.
+        print("\nStarting torque control...")
+        active_control  = robot.start_torque_control()
+        robot_state, _  = active_control.readOnce()
+        O_T_EE          = np.array(robot_state.O_T_EE).reshape(4, 4).T
+        target_rot      = O_T_EE[:3, :3]
+
         # Warm up Pinocchio before entering the real-time loop
         _wq  = np.array(q0)
         _wdq = np.zeros(7)
@@ -295,21 +303,11 @@ def main() -> None:
         log_force_actual  = []
         log_delta_taus    = []
 
-        # Read initial pose BEFORE entering active control — robot.read_once()
-        # does not start the 1 ms real-time clock, so all setup can happen here.
-        init_state = robot.read_once()
-        O_T_EE     = np.array(init_state.O_T_EE).reshape(4, 4).T
-        target_rot = O_T_EE[:3, :3]
-
         hybrid_controller.starting(sim_time, target_rot, q0, pino_model, pino_data)
 
         print("\n" + "=" * 60)
         print("HYBRID FORCE-IMPEDANCE CONTROL RUNNING")
         print("=" * 60)
-
-        # Start active control last — loop must call readOnce→writeOnce immediately
-        print("\nStarting torque control...")
-        active_control = robot.start_torque_control()
 
         # =====================================================================
         # 5. Real-time control loop
