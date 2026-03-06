@@ -210,6 +210,14 @@ def main() -> None:
     if not no_ppo:
         import importlib.util as _ilu
         from pathlib import Path as _Path
+        import torch
+
+        # Minimize PyTorch's persistent background thread count before any
+        # computation.  These threads live for the process lifetime and can
+        # preempt the Franka 1 ms RT loop.  Must be called before the first
+        # tensor operation.
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
 
         def _load_ppo_module(stem: str):
             path = _Path(__file__).parent / "ppo_friction_compensation" / f"{stem}.py"
