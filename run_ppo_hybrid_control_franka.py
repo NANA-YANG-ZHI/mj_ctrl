@@ -30,17 +30,21 @@
 # callback exceeds the 1 ms hard deadline set by libfranka.  This script
 # avoids that by:
 #
-#   1. Running PPO inference at 50 Hz (every 20 ms), NOT at 1 kHz.
+#   1. NEVER importing torch.nn — even importing torch.nn at module level
+#      (outside the real-time loop) spawns a pool of persistent OS-level
+#      C++ threads (pthreadpool / OpenMP) that compete with the libfranka
+#      control thread for CPU time.  PPOActorInference uses pure NumPy
+#      inference; torch is used ONLY for checkpoint loading (torch.load,
+#      without torch.nn) and only when --no-ppo is not set.
+#
+#   2. Running PPO inference at 50 Hz (every 20 ms), NOT at 1 kHz.
 #      Between updates, the last delta_tau is reused unchanged.
 #
-#   2. Keeping all tensors on CPU.  CUDA device-transfer latency is
-#      unpredictable and can easily exceed 1 ms.
+#   3. Pre-allocating all buffers (observation array, intermediate
+#      activations, output array) before the loop so no heap allocation
+#      occurs in the hot path.
 #
-#   3. Pre-allocating all buffers (observation array, torch input tensor,
-#      output array) before the loop so no heap allocation occurs at 1 kHz.
-#
-#   4. Pre-warming the actor network (warmup()) before gc.disable() so
-#      BLAS kernel-launch overhead is paid up front.
+#   4. Pre-warming NumPy/BLAS caches (warmup()) before gc.disable().
 #
 #   5. Disabling the Python garbage collector inside the real-time loop,
 #      exactly as in the original run_hybrid_control_franka.py.
@@ -81,8 +85,9 @@ from utils_plot import (
     plot_joint_torques,
 )
 
-# PPO evaluation utilities (separate from ppo_friction_compensation/)
-from ppo_franka_eval import PPOFrankaEvaluator
+# NOTE: ppo_franka_eval is imported lazily inside main(), gated on --no-ppo,
+# so that torch is never loaded (and its thread pool never spawned) when
+# running in baseline mode.
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +190,12 @@ def main() -> None:
     parser.add_argument("--action-repeat", type=int, default=20,
                         help="PPO update cadence in 1 ms control cycles (default 20 → 50 Hz).")
     args = parser.parse_args()
+
+    # Import PPOFrankaEvaluator only when PPO is actually needed.
+    # This keeps torch (and its thread pool) completely out of the process
+    # when running --no-ppo baseline mode.
+    if not args.no_ppo:
+        from ppo_franka_eval import PPOFrankaEvaluator  # noqa: PLC0415
 
     # =========================================================================
     # 1. Build configs and trajectory
