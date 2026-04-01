@@ -17,7 +17,10 @@ from utils_libfranka import (
     null_space_tau,
     euler_to_rot_matrix,
     dynamically_consistent_inv,
-    feedforward_PD
+    feedforward_PD,
+    compute_force_dot,
+    force_ctrl_feedforward,
+    force_ctrl_pd,
 )
 from src.controller_config import ControllerConfig
 
