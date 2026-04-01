@@ -182,13 +182,32 @@ def force_ctrl_feedforward(F_desired: np.ndarray) -> np.ndarray:
     return F_desired.copy()
 
 
+def _build_compliance_matrix(k_normal: float) -> np.ndarray:
+    """
+    Build the 6x6 compliance matrix from a single normal stiffness value.
+
+    Tangential stiffness = 0.1 * k_normal
+    Rotational stiffness = 0.01 * k_normal
+    Compliance = inv(K_material)
+    """
+    K_material = np.diag([
+        k_normal * 0.1,   # x tangential
+        k_normal * 0.1,   # y tangential
+        k_normal * 0.1,   # z normal
+        k_normal * 0.01,  # rx rotational
+        k_normal * 0.01,  # ry rotational
+        k_normal * 0.01,  # rz rotational
+    ])
+    return np.linalg.inv(K_material)
+
+
 def force_ctrl_pd(
     F_desired: np.ndarray,
     F_ext_phi: np.ndarray,
     S_f: np.ndarray,
-    Compliance_matrix: np.ndarray,
     jac: np.ndarray,
     dq: np.ndarray,
+    k_normal: float = 5000.0,
     kp: float = 3.0,
     kd: float = 3.0
 ) -> np.ndarray:
@@ -199,19 +218,24 @@ def force_ctrl_pd(
     With λ¨d = 0, λ˙d = 0:
     F_ctrl_constraint = -Kd @ λ˙ - Kp @ (|F_desired| - |F_ext_phi|)
 
+    The compliance matrix is built from k_normal:
+        K_material = diag([0.1, 0.1, 0.1, 0.01, 0.01, 0.01]) * k_normal
+        Compliance_matrix = inv(K_material)
+
     Args:
         F_desired: Desired contact force in constraint space
         F_ext_phi: Measured external force projected onto constraint space
         S_f: Force selection matrix (6 x n_constraint)
-        Compliance_matrix: Material compliance matrix (6 x 6)
         jac: End-effector Jacobian (6 x n_joints)
         dq: Joint velocities (n_joints,)
+        k_normal: Normal stiffness of the contact material (default 5000.0)
         kp: Proportional gain (default 3.0)
         kd: Derivative gain (default 3.0)
 
     Returns:
         F_ctrl_constraint
     """
+    Compliance_matrix = _build_compliance_matrix(k_normal)
     F_dot = compute_force_dot(S_f, Compliance_matrix, jac, dq)
     n = F_dot.shape[0]
     Kd_force = np.eye(n) * kd
