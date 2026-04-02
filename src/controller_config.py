@@ -24,7 +24,7 @@ class ControllerConfig:
     # Circle drawing parameters
     circle_center: np.ndarray = None
     circle_radius: float = 0.1
-    circle_duration: float = 10.0
+    circle_duration: float = 5.0
     angular_speed: float = np.pi * 2
 
     # Contact detection thresholds
