@@ -143,6 +143,106 @@ def feedforward_PD(x_acc_desired, x_delta, x_dot_delta, Kp, Kd):
     a_v = x_acc_desired + Kp * x_delta + Kd * x_dot_delta
     return a_v
 
+def compute_force_dot(
+    S_f: np.ndarray,
+    Compliance_matrix: np.ndarray,
+    jac: np.ndarray,
+    dq: np.ndarray
+) -> np.ndarray:
+    """
+    Compute constraint-space force rate: λ˙ = Sf† K' J(q) q̇
+
+    Args:
+        S_f: Force selection matrix (6 x n_constraint)
+        Compliance_matrix: Material compliance matrix (6 x 6), inverse of stiffness
+        jac: End-effector Jacobian (6 x n_joints)
+        dq: Joint velocities (n_joints,)
+
+    Returns:
+        F_dot: Force rate in constraint space
+    """
+    inner = S_f.T @ Compliance_matrix @ S_f
+    K_effective = S_f @ np.linalg.inv(inner) @ S_f.T
+    Sf_pinv = np.linalg.pinv(S_f, rcond=1e-6)
+    return Sf_pinv @ K_effective @ jac @ dq
+
+
+def force_ctrl_feedforward(F_desired: np.ndarray) -> np.ndarray:
+    """
+    Force control rule 1: pure feedforward.
+
+    F_ctrl_constraint = F_desired
+
+    Args:
+        F_desired: Desired contact force in constraint space
+
+    Returns:
+        F_ctrl_constraint
+    """
+    return F_desired.copy()
+
+
+def _build_compliance_matrix(k_normal: float) -> np.ndarray:
+    """
+    Build the 6x6 compliance matrix from a single normal stiffness value.
+
+    Tangential stiffness = 0.1 * k_normal
+    Rotational stiffness = 0.01 * k_normal
+    Compliance = inv(K_material)
+    """
+    K_material = np.diag([
+        k_normal * 0.1,   # x tangential
+        k_normal * 0.1,   # y tangential
+        k_normal * 0.1,   # z normal
+        k_normal * 0.01,  # rx rotational
+        k_normal * 0.01,  # ry rotational
+        k_normal * 0.01,  # rz rotational
+    ])
+    return np.linalg.inv(K_material)
+
+
+def force_ctrl_pd(
+    F_desired: np.ndarray,
+    F_ext_phi: np.ndarray,
+    S_f: np.ndarray,
+    jac: np.ndarray,
+    dq: np.ndarray,
+    k_normal: float = 5000.0,
+    kp: float = 3.0,
+    kd: float = 3.0
+) -> np.ndarray:
+    """
+    Force control rule 2: PD force control (eq. 9.81).
+
+    fλ = λ¨d + KDλ(λ˙d − λ˙) + KPλ(λd − λ)
+    With λ¨d = 0, λ˙d = 0:
+    F_ctrl_constraint = -Kd @ λ˙ - Kp @ (|F_desired| - |F_ext_phi|)
+
+    The compliance matrix is built from k_normal:
+        K_material = diag([0.1, 0.1, 0.1, 0.01, 0.01, 0.01]) * k_normal
+        Compliance_matrix = inv(K_material)
+
+    Args:
+        F_desired: Desired contact force in constraint space
+        F_ext_phi: Measured external force projected onto constraint space
+        S_f: Force selection matrix (6 x n_constraint)
+        jac: End-effector Jacobian (6 x n_joints)
+        dq: Joint velocities (n_joints,)
+        k_normal: Normal stiffness of the contact material (default 5000.0)
+        kp: Proportional gain (default 3.0)
+        kd: Derivative gain (default 3.0)
+
+    Returns:
+        F_ctrl_constraint
+    """
+    Compliance_matrix = _build_compliance_matrix(k_normal)
+    F_dot = compute_force_dot(S_f, Compliance_matrix, jac, dq)
+    n = F_dot.shape[0]
+    Kd_force = np.eye(n) * kd
+    Kp_force = np.eye(n) * kp
+    return -Kd_force @ F_dot - Kp_force @ (np.abs(F_desired) - np.abs(F_ext_phi))
+
+
 def generate_start_position(r, body_pos, size_z, R):
     theta = 0
     circle_local = np.zeros(3)
