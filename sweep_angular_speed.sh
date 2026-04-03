@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Sweep angular_speed from pi*0.1 to pi*5.0 in steps of 0.1,
+# run run_approach_then_hybrid_mujoco.py headless for each,
+# collect avg force Z error, then plot angular_speed vs avg error.
+# Saves individual simulation plots only at multipliers: 0.1, 0.5, 1.0, 1.5, ...
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RESULTS_CSV="${SCRIPT_DIR}/sweep_results.csv"
+PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
+
+# Angular speed multipliers that trigger saving individual plots
+SAVE_PLOT_MULTIPLIERS="0.1 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0"
+
+echo "multiplier,angular_speed_rad_s,avg_force_z_error" > "${RESULTS_CSV}"
+
+for i in $(seq 1 50); do
+    # multiplier = i * 0.1 (e.g. 1->0.1, 5->0.5, 10->1.0, ..., 50->5.0)
+    MULTIPLIER=$(python3 -c "print(f'{$i * 0.1:.1f}')")
+    ANGULAR_SPEED=$(python3 -c "import math; print(math.pi * $i * 0.1)")
+
+    # Check if this multiplier is in the save-plot list
+    SAVE_FLAG=""
+    for m in $SAVE_PLOT_MULTIPLIERS; do
+        if [ "$MULTIPLIER" = "$m" ]; then
+            SAVE_FLAG="--save-plots"
+            break
+        fi
+    done
+
+    echo ""
+    echo "============================================================"
+    echo "Running angular_speed = pi * ${MULTIPLIER} = ${ANGULAR_SPEED} rad/s"
+    if [ -n "$SAVE_FLAG" ]; then
+        echo "  (saving plots for this run)"
+    fi
+    echo "============================================================"
+
+    OUTPUT=$(python3 "${SCRIPT_DIR}/run_approach_then_hybrid_mujoco.py" \
+        --headless \
+        --angular-speed "${ANGULAR_SPEED}" \
+        $SAVE_FLAG \
+        2>&1)
+
+    echo "$OUTPUT"
+
+    # Extract avg force Z error from output
+    AVG_ERROR=$(echo "$OUTPUT" | grep "AVG_FORCE_Z_ERROR:" | tail -1 | awk '{print $2}')
+    if [ -z "$AVG_ERROR" ]; then
+        AVG_ERROR="nan"
+    fi
+
+    echo "${MULTIPLIER},${ANGULAR_SPEED},${AVG_ERROR}" >> "${RESULTS_CSV}"
+    echo "  -> avg_force_z_error = ${AVG_ERROR}"
+done
+
+echo ""
+echo "============================================================"
+echo "Sweep complete. Results saved to ${RESULTS_CSV}"
+echo "Generating summary plot..."
+echo "============================================================"
+
+python3 "${PLOT_SCRIPT}" "${RESULTS_CSV}"

@@ -52,6 +52,22 @@ def main() -> None:
         default=10.0,
         help="Duration of circle drawing in seconds (default: 10.0)"
     )
+    parser.add_argument(
+        "--angular-speed",
+        type=float,
+        default=np.pi * 2,
+        help="Angular speed for circle drawing in rad/s (default: pi*2)"
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run without MuJoCo viewer"
+    )
+    parser.add_argument(
+        "--save-plots",
+        action="store_true",
+        help="Save plots after simulation (default: False)"
+    )
     args = parser.parse_args()
 
     # ============================================================
@@ -68,6 +84,7 @@ def main() -> None:
     common_config = ControllerConfig(circle_duration=args.circle_duration)
     common_config.size_z = 0.01
     common_config.gravity_compensation = True
+    common_config.angular_speed = args.angular_speed
 
     approach_config = CartesianSpacePDControlConfig()
     hybrid_config = HybridControllerConfig()
@@ -93,7 +110,8 @@ def main() -> None:
         print("  1. The workspace is clear")
         print("  2. Emergency stop is accessible")
         print("=" * 60)
-        input("Press Enter to continue...")
+        if not args.headless:
+            input("Press Enter to continue...")
 
         # ============================================================
         # 4. Create Controllers
@@ -136,14 +154,15 @@ def main() -> None:
         # ============================================================
         # 7. Run Combined Control Loop
         # ============================================================
-        with mujoco.viewer.launch_passive(
-            mujoco_interface.model, mujoco_interface.data,
-            show_left_ui=False, show_right_ui=False
-        ) as viewer:
+        def run_control_loop(sync_viewer=None):
+            """Run the approach + hybrid control loop. Pass a viewer to sync, or None for headless."""
+            nonlocal hybrid_sim_time
+
             # Reset simulation to initial keyframe
             mujoco_interface.reset_to_keyframe()
             mujoco.mj_step(mujoco_interface.model, mujoco_interface.data)
-            mujoco.mjv_defaultFreeCamera(mujoco_interface.model, viewer.cam)
+            if sync_viewer is not None:
+                mujoco.mjv_defaultFreeCamera(mujoco_interface.model, sync_viewer.cam)
 
             # Read initial robot state
             robot_state, duration = mujoco_interface.readOnce()
@@ -159,9 +178,10 @@ def main() -> None:
             print("PHASE 1: APPROACHING TARGET POSITION")
             print("=" * 60)
 
-            hybrid_sim_time = 0.0
+            while True:
+                if sync_viewer is not None and not sync_viewer.is_running():
+                    break
 
-            while viewer.is_running():
                 step_start = time.time()
 
                 # Read robot state
@@ -190,7 +210,6 @@ def main() -> None:
                         hybrid_target_rot = O_T_EE[:3, :3]
                         hybrid_q0 = np.array(robot_state.q)
 
-                        hybrid_sim_time = 0.0
                         hybrid_controller.starting(
                             hybrid_sim_time, hybrid_target_rot, hybrid_q0, pino_model, pino_data
                         )
@@ -219,17 +238,42 @@ def main() -> None:
                 torque_cmd = Torques(tau.tolist())
                 mujoco_interface.writeOnce(torque_cmd)
 
-                # Update viewer
-                viewer.sync()
+                if sync_viewer is not None:
+                    sync_viewer.sync()
 
                 # Maintain real-time rate
                 time_until_next_step = common_config.dt - (time.time() - step_start)
                 if time_until_next_step > 0:
                     time.sleep(time_until_next_step)
 
-            # ============================================================
-            # 8. Plot Results
-            # ============================================================
+        hybrid_sim_time = 0.0
+
+        if args.headless:
+            run_control_loop(sync_viewer=None)
+        else:
+            with mujoco.viewer.launch_passive(
+                mujoco_interface.model, mujoco_interface.data,
+                show_left_ui=False, show_right_ui=False
+            ) as viewer:
+                run_control_loop(sync_viewer=viewer)
+
+        # ============================================================
+        # 8. Report avg force Z error (always printed for sweep scripts)
+        # ============================================================
+        contact_forces = np.array(hybrid_controller.contact_forces) if hybrid_controller.contact_forces else np.empty((0, 3))
+        desired_forces = np.array(hybrid_controller.desired_forces) if hybrid_controller.desired_forces else np.empty((0, 1))
+        if contact_forces.size > 0 and contact_forces.ndim == 2 and contact_forces.shape[1] >= 3 and desired_forces.size > 0:
+            error_z = contact_forces[:, 2] - desired_forces[:, 0]
+            avg_abs_error = np.mean(np.abs(error_z))
+            print(f"AVG_FORCE_Z_ERROR: {avg_abs_error:.6f}")
+        else:
+            avg_abs_error = float('nan')
+            print(f"AVG_FORCE_Z_ERROR: nan")
+
+        # ============================================================
+        # 9. Plot Results (only if --save-plots is set)
+        # ============================================================
+        if args.save_plots:
             print("\n[MAIN] Simulation complete. Generating plots...")
             plot_dir = "plots/run_approach_then_hybrid_mujoco"
             # plot_joint_torques(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
