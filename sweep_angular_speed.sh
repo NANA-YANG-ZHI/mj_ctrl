@@ -7,8 +7,18 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RESULTS_CSV="${SCRIPT_DIR}/sweep_results.csv"
 PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
+
+# ---------------------------------------------------------------
+# Configure the output subfolder name here
+# Results and sweep plot will be saved to:
+#   angular_speed_sweep_plots/<SWEEP_NAME>/
+# ---------------------------------------------------------------
+SWEEP_NAME="default"
+
+OUTPUT_DIR="${SCRIPT_DIR}/angular_speed_sweep_plots/${SWEEP_NAME}"
+mkdir -p "${OUTPUT_DIR}"
+RESULTS_CSV="${OUTPUT_DIR}/sweep_results.csv"
 
 # Angular speed multipliers that trigger saving individual plots
 SAVE_PLOT_MULTIPLIERS="0.1 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0"
@@ -61,4 +71,4 @@ echo "Sweep complete. Results saved to ${RESULTS_CSV}"
 echo "Generating summary plot..."
 echo "============================================================"
 
-python3 "${PLOT_SCRIPT}" "${RESULTS_CSV}"
+python3 "${PLOT_SCRIPT}" "${RESULTS_CSV}" "${OUTPUT_DIR}"

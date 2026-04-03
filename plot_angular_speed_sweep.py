@@ -6,11 +6,12 @@ import matplotlib.pyplot as plt
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python plot_angular_speed_sweep.py <results_csv>")
+    if len(sys.argv) < 3:
+        print("Usage: python plot_angular_speed_sweep.py <results_csv> <output_dir>")
         sys.exit(1)
 
     csv_path = sys.argv[1]
+    output_dir = sys.argv[2]
     if not os.path.exists(csv_path):
         print(f"File not found: {csv_path}")
         sys.exit(1)
@@ -38,7 +39,7 @@ def main():
     angular_speeds = np.array(angular_speeds)
     errors = np.array(errors)
 
-    plot_dir = os.path.join(os.path.dirname(csv_path), "plots", "run_approach_then_hybrid_mujoco")
+    plot_dir = output_dir
     os.makedirs(plot_dir, exist_ok=True)
 
     fig, ax = plt.subplots(figsize=(12, 5))
