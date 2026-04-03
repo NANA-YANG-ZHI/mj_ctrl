@@ -17,7 +17,7 @@ PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
 # Individual speed plots:
 #   angular_speed_sweep/plots/<SWEEP_NAME>/speed_<mult>pi/
 # ---------------------------------------------------------------
-SWEEP_NAME="default"
+SWEEP_NAME="test"
 
 OUTPUT_DIR="${SCRIPT_DIR}/plots/${SWEEP_NAME}"
 mkdir -p "${OUTPUT_DIR}"
@@ -25,6 +25,7 @@ RESULTS_CSV="${OUTPUT_DIR}/sweep_results.csv"
 
 # Angular speed multipliers that trigger saving individual plots
 SAVE_PLOT_MULTIPLIERS="0.1 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0"
+# SAVE_PLOT_MULTIPLIERS="0.1 0.5 1.0"
 
 echo "multiplier,angular_speed_rad_s,ee_linear_speed_m_s,avg_force_z_error,avg_position_error" > "${RESULTS_CSV}"
 
