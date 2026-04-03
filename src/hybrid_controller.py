@@ -515,6 +515,9 @@ class HybridController:
             )
 
         elif method == "pd":
+            control_force_compensation = np.zeros(1)
+            contact_force_compensation = np.zeros(1)
+            velocity_term = np.zeros(1)
             F_ctrl_constraint = force_ctrl_pd(
                 F_desired=self.config.F_desired_contact,
                 F_ext_phi=F_ext_phi,
@@ -525,6 +528,9 @@ class HybridController:
             )
 
         else:  # feedforward
+            control_force_compensation = np.zeros(1)
+            contact_force_compensation = np.zeros(1)
+            velocity_term = np.zeros(1)
             F_ctrl_constraint = force_ctrl_feedforward(self.config.F_desired_contact)
 
         tau_ctrl_phi = J_phi.T @ F_ctrl_constraint
