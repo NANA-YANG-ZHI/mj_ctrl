@@ -292,6 +292,10 @@ class HybridController:
         self.tau_ctrl_x_log: list = []
         self.tau_ctrl_v_log: list = []
 
+        # Tracks the log index at which circle drawing begins
+        # (non-zero if a pre-circle approach phase runs inside the hybrid controller)
+        self.circle_start_step: int = 0
+
     def starting(
         self,
         current_time: float,
@@ -339,6 +343,10 @@ class HybridController:
         self.tau_ctrl_x_log = []
         self.tau_ctrl_v_log = []
 
+        # Reset circle-phase tracking
+        self._update_step = 0
+        self.circle_start_step = 0  # updated in update() if a pre-circle phase exists
+
         # Zero control
         self.tau[:] = 0.0
 
@@ -366,10 +374,17 @@ class HybridController:
         elapsed = current_time - self.start_time
 
         # self.target_pos, self.x_dot_desired, self.x_ddot_desired  = generate_line_trajectory_delta(
-        #     elapsed, 
-        #     self.start_pos, 
-        #     self.end_pos, 
-        #     5.0) 
+        #     elapsed,
+        #     self.start_pos,
+        #     self.end_pos,
+        #     5.0)
+
+        # Mark where circle drawing begins in the log (non-zero when a pre-circle
+        # approach phase precedes the circle inside the hybrid controller)
+        _in_circle_phase = elapsed < self.common_config.circle_duration
+        if _in_circle_phase and self.circle_start_step == 0 and self._update_step > 0:
+            # first circle step after a pre-circle approach phase
+            self.circle_start_step = self._update_step
 
         if elapsed < self.common_config.circle_duration:
             self.target_pos, self.x_dot_desired, self.x_ddot_desired = \
@@ -546,6 +561,7 @@ class HybridController:
         self.tau_ctrl_x_log.append(tau_ctrl_x.copy())
         self.tau_ctrl_v_log.append(tau_ctrl_v.copy())
 
+        self._update_step += 1
         return self.tau
 
     def _log_force_data(self, F_ext_local: np.ndarray) -> None:
