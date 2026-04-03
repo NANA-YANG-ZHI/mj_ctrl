@@ -27,6 +27,9 @@ class ControllerConfig:
     circle_duration: float = 5.0
     angular_speed: float = np.pi * 2
 
+    # Force control method: "paper" | "pd" | "feedforward"
+    force_control_method: str = "paper"
+
     # Contact detection thresholds
     position_tolerance: float = 0.01  # 1cm tolerance for reaching target
 

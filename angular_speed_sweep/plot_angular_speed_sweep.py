@@ -1,12 +1,16 @@
-"""Plot EE linear speed vs avg_force_z_error and avg_position_error from sweep CSV.
+"""Plot EE linear speed vs force/position error metrics from sweep CSV.
 
 X-axis: EE linear speed  v = r × ω  (m/s,  r = 0.1 m)
-Two subplots: force Z error (top) | position error (bottom)
+Four subplots: avg force error | var force error | avg position error | var position error
 """
 import sys
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+
+
+def _parse_col(val: str) -> float:
+    return float(val) if val.strip() != "nan" else float("nan")
 
 
 def main():
@@ -21,50 +25,57 @@ def main():
         sys.exit(1)
 
     ee_linear_speeds = []
-    force_errors = []
-    pos_errors = []
+    avg_force_errors = []
+    var_force_errors = []
+    avg_pos_errors = []
+    var_pos_errors = []
 
     with open(csv_path) as f:
         for i, line in enumerate(f):
             if i == 0:
                 continue  # skip header
             parts = line.strip().split(",")
-            if len(parts) < 4:
+            # columns: multiplier, angular_speed, ee_linear_speed,
+            #          avg_force_z_error, var_force_z_error,
+            #          avg_position_error, var_position_error
+            if len(parts) < 5:
                 continue
             try:
-                # parts[0]=multiplier, parts[1]=angular_speed, parts[2]=ee_linear_speed
-                ee_v = float(parts[2])
-                f_err = float(parts[3]) if parts[3].strip() != "nan" else float("nan")
-                p_err = float(parts[4]) if len(parts) > 4 and parts[4].strip() != "nan" else float("nan")
-                ee_linear_speeds.append(ee_v)
-                force_errors.append(f_err)
-                pos_errors.append(p_err)
+                ee_linear_speeds.append(float(parts[2]))
+                avg_force_errors.append(_parse_col(parts[3]))
+                var_force_errors.append(_parse_col(parts[4]) if len(parts) > 4 else float("nan"))
+                avg_pos_errors.append(_parse_col(parts[5]) if len(parts) > 5 else float("nan"))
+                var_pos_errors.append(_parse_col(parts[6]) if len(parts) > 6 else float("nan"))
             except (ValueError, IndexError):
                 continue
 
-    ee_linear_speeds = np.array(ee_linear_speeds)
-    force_errors = np.array(force_errors)
-    pos_errors = np.array(pos_errors)
+    v = np.array(ee_linear_speeds)
+    avg_fe = np.array(avg_force_errors)
+    var_fe = np.array(var_force_errors)
+    avg_pe = np.array(avg_pos_errors)
+    var_pe = np.array(var_pos_errors)
 
     os.makedirs(output_dir, exist_ok=True)
 
-    fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    fig, axes = plt.subplots(4, 1, figsize=(12, 14), sharex=True)
     fig.suptitle("EE Linear Speed Sweep — Controller Performance", fontsize=14)
+    xlabel = "EE Linear Speed  v = r·ω  (m/s,  r = 0.1 m)"
 
-    valid_f = ~np.isnan(force_errors)
-    valid_p = ~np.isnan(pos_errors)
+    specs = [
+        (avg_fe, "Avg |Force Z Error| (N)",  "tab:blue"),
+        (var_fe, "Var Force Z Error (N²)",    "tab:cyan"),
+        (avg_pe, "Avg Position Error (m)",    "tab:orange"),
+        (var_pe, "Var Position Error (m²)",   "tab:red"),
+    ]
+    markers = ["o", "o", "s", "s"]
 
-    # --- Force error subplot ---
-    axes[0].plot(ee_linear_speeds[valid_f], force_errors[valid_f], "o-", linewidth=1.5, markersize=5, color="tab:blue")
-    axes[0].set_ylabel("Avg |Force Z Error| (N)")
-    axes[0].grid(True, alpha=0.3)
+    for ax, (data, ylabel, color), marker in zip(axes, specs, markers):
+        valid = ~np.isnan(data)
+        ax.plot(v[valid], data[valid], f"{marker}-", linewidth=1.5, markersize=5, color=color)
+        ax.set_ylabel(ylabel)
+        ax.grid(True, alpha=0.3)
 
-    # --- Position error subplot ---
-    axes[1].plot(ee_linear_speeds[valid_p], pos_errors[valid_p], "s-", linewidth=1.5, markersize=5, color="tab:orange")
-    axes[1].set_ylabel("Avg Position Error (m)")
-    axes[1].set_xlabel("EE Linear Speed  v = r·ω  (m/s,  r = 0.1 m)")
-    axes[1].grid(True, alpha=0.3)
-
+    axes[-1].set_xlabel(xlabel)
     plt.tight_layout()
     out_path = os.path.join(output_dir, "angular_speed_sweep.png")
     fig.savefig(out_path, dpi=150)

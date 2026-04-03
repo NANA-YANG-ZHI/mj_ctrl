@@ -235,7 +235,13 @@ class HybridController:
         self.n_joints = n_joints
         self.ee_frame_name = ee_frame_name
 
-        
+        # Validate force control method
+        valid_methods = ("paper", "pd", "feedforward")
+        if self.common_config.force_control_method not in valid_methods:
+            raise ValueError(
+                f"Unknown force_control_method '{self.common_config.force_control_method}'. "
+                f"Choose from {valid_methods}."
+            )
 
         # Selection matrices
         self.S_fc = np.zeros((6, 1))
@@ -488,22 +494,45 @@ class HybridController:
         # ============================================================
         # 6. Constraint Space (Force Control)
         # ============================================================
-        C = pino.computeCoriolisMatrix(self.pino_model, self.pino_data, q, dq)
-        J_dot = pino.getFrameJacobianTimeVariation(
-            self.pino_model, self.pino_data, self.pino_frame_id, pino.LOCAL_WORLD_ALIGNED
-        )
-        J_phi_dot = self.S_f.T @ J_dot
+        method = self.common_config.force_control_method
 
-        F_ext_x_new = F_ext_x.copy()
-        F_ext_x_new[-3:] = 0
-        control_force_compensation = 1 * (-Mx_constraint @ J_phi @ M_inv @ (tau_ctrl_x + tau_ctrl_v))
-        contact_force_compensation = 1 * (Mx_constraint @ J_phi @ M_inv @ (J_motion.T @ F_ext_x_new))
-        velocity_term = 1 * Mx_constraint @ (J_phi @ M_inv @ C - J_phi_dot) @ dq
-        F_ctrl_constraint = (
-            self.config.F_desired_contact +
-            control_force_compensation +
-            contact_force_compensation + velocity_term
-        )
+        if method == "paper":
+            C = pino.computeCoriolisMatrix(self.pino_model, self.pino_data, q, dq)
+            J_dot = pino.getFrameJacobianTimeVariation(
+                self.pino_model, self.pino_data, self.pino_frame_id, pino.LOCAL_WORLD_ALIGNED
+            )
+            J_phi_dot = self.S_f.T @ J_dot
+
+            F_ext_x_new = F_ext_x.copy()
+            F_ext_x_new[-3:] = 0
+            control_force_compensation = 1 * (-Mx_constraint @ J_phi @ M_inv @ (tau_ctrl_x + tau_ctrl_v))
+            contact_force_compensation = 1 * (Mx_constraint @ J_phi @ M_inv @ (J_motion.T @ F_ext_x_new))
+            velocity_term = 1 * Mx_constraint @ (J_phi @ M_inv @ C - J_phi_dot) @ dq
+            F_ctrl_constraint = (
+                self.config.F_desired_contact +
+                control_force_compensation +
+                contact_force_compensation + velocity_term
+            )
+
+        elif method == "pd":
+            control_force_compensation = np.zeros(1)
+            contact_force_compensation = np.zeros(1)
+            velocity_term = np.zeros(1)
+            F_ctrl_constraint = force_ctrl_pd(
+                F_desired=self.config.F_desired_contact,
+                F_ext_phi=F_ext_phi,
+                S_f=self.S_f,
+                jac=jac,
+                dq=dq,
+                k_normal=5000.0,
+            )
+
+        else:  # feedforward
+            control_force_compensation = np.zeros(1)
+            contact_force_compensation = np.zeros(1)
+            velocity_term = np.zeros(1)
+            F_ctrl_constraint = force_ctrl_feedforward(self.config.F_desired_contact)
+
         tau_ctrl_phi = J_phi.T @ F_ctrl_constraint
 
         # ============================================================

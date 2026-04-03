@@ -59,6 +59,13 @@ def main() -> None:
         help="Angular speed for circle drawing in rad/s (default: pi*2)"
     )
     parser.add_argument(
+        "--force-control-method",
+        type=str,
+        default="paper",
+        choices=["paper", "pd", "feedforward"],
+        help="Force control method: paper (default), pd, or feedforward"
+    )
+    parser.add_argument(
         "--headless",
         action="store_true",
         help="Run without MuJoCo viewer"
@@ -91,6 +98,7 @@ def main() -> None:
     common_config.size_z = 0.01
     common_config.gravity_compensation = True
     common_config.angular_speed = args.angular_speed
+    common_config.force_control_method = args.force_control_method
 
     approach_config = CartesianSpacePDControlConfig()
     hybrid_config = HybridControllerConfig()
@@ -109,6 +117,7 @@ def main() -> None:
         print("APPROACH + HYBRID FORCE-IMPEDANCE CONTROL")
         print("=" * 60)
         print(f"Robot: {robot_cfg.name.upper()}")
+        print(f"Force control method: {args.force_control_method}")
         print("This will:")
         print("  1. Approach the target surface position")
         print("  2. Perform circle drawing with hybrid force control")
@@ -271,18 +280,24 @@ def main() -> None:
         if contact_forces.size > 0 and contact_forces.ndim == 2 and contact_forces.shape[1] >= 3 and desired_forces.size > 0:
             error_z = contact_forces[:, 2] - desired_forces[:, 0]
             avg_abs_force_error = np.mean(np.abs(error_z))
+            var_force_error = np.var(error_z)
             print(f"AVG_FORCE_Z_ERROR: {avg_abs_force_error:.6f}")
+            print(f"VAR_FORCE_Z_ERROR: {var_force_error:.6f}")
         else:
             print(f"AVG_FORCE_Z_ERROR: nan")
+            print(f"VAR_FORCE_Z_ERROR: nan")
 
         ee_positions = np.array(hybrid_controller.ee_positions) if hybrid_controller.ee_positions else np.empty((0, 3))
         target_positions = np.array(hybrid_controller.target_positions) if hybrid_controller.target_positions else np.empty((0, 3))
         if ee_positions.size > 0 and target_positions.size > 0 and ee_positions.shape == target_positions.shape:
             pos_error = np.linalg.norm(ee_positions - target_positions, axis=1)
             avg_abs_pos_error = np.mean(pos_error)
+            var_pos_error = np.var(pos_error)
             print(f"AVG_POSITION_ERROR: {avg_abs_pos_error:.6f}")
+            print(f"VAR_POSITION_ERROR: {var_pos_error:.6f}")
         else:
             print(f"AVG_POSITION_ERROR: nan")
+            print(f"VAR_POSITION_ERROR: nan")
 
         # ============================================================
         # 9. Plot Results (only if --save-plots is set)
