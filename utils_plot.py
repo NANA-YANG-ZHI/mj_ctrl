@@ -222,15 +222,15 @@ def plot_force_error_z(
     dt: float,
     robot_name: str = "",
     plot_dir: str = "mj_ctrl/plots/sim/circle/force",
-    start_step: int = 0
+    circle_start_time: float = 0.0
 ) -> None:
     """Plot force error on Z axis during circle drawing, with average absolute error in title.
 
     Args:
-        start_step: Log index at which circle drawing begins. Data before this index
-                    (e.g. a pre-circle approach phase inside the hybrid controller) is
-                    excluded from the plot. Use ``controller.circle_start_step`` to pass
-                    the value tracked automatically by HybridController.
+        circle_start_time: Elapsed time (s) within the hybrid controller at which circle
+                           drawing begins. Data before this time is excluded from the plot.
+                           Pass ``controller.circle_start_time`` to use the value tracked
+                           automatically by HybridController.
     """
     import matplotlib.pyplot as plt
 
@@ -244,6 +244,7 @@ def plot_force_error_z(
         return
 
     # Slice to circle-drawing phase only
+    start_step = round(circle_start_time / dt)
     contact_forces = contact_forces[start_step:]
     desired_forces = desired_forces[start_step:]
 
