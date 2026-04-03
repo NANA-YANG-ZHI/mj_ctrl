@@ -68,6 +68,12 @@ def main() -> None:
         action="store_true",
         help="Save plots after simulation (default: False)"
     )
+    parser.add_argument(
+        "--plot-dir",
+        type=str,
+        default="plots/run_approach_then_hybrid_mujoco",
+        help="Directory to save plots (default: plots/run_approach_then_hybrid_mujoco)"
+    )
     args = parser.parse_args()
 
     # ============================================================
@@ -258,24 +264,32 @@ def main() -> None:
                 run_control_loop(sync_viewer=viewer)
 
         # ============================================================
-        # 8. Report avg force Z error (always printed for sweep scripts)
+        # 8. Report metrics (always printed for sweep scripts)
         # ============================================================
         contact_forces = np.array(hybrid_controller.contact_forces) if hybrid_controller.contact_forces else np.empty((0, 3))
         desired_forces = np.array(hybrid_controller.desired_forces) if hybrid_controller.desired_forces else np.empty((0, 1))
         if contact_forces.size > 0 and contact_forces.ndim == 2 and contact_forces.shape[1] >= 3 and desired_forces.size > 0:
             error_z = contact_forces[:, 2] - desired_forces[:, 0]
-            avg_abs_error = np.mean(np.abs(error_z))
-            print(f"AVG_FORCE_Z_ERROR: {avg_abs_error:.6f}")
+            avg_abs_force_error = np.mean(np.abs(error_z))
+            print(f"AVG_FORCE_Z_ERROR: {avg_abs_force_error:.6f}")
         else:
-            avg_abs_error = float('nan')
             print(f"AVG_FORCE_Z_ERROR: nan")
+
+        ee_positions = np.array(hybrid_controller.ee_positions) if hybrid_controller.ee_positions else np.empty((0, 3))
+        target_positions = np.array(hybrid_controller.target_positions) if hybrid_controller.target_positions else np.empty((0, 3))
+        if ee_positions.size > 0 and target_positions.size > 0 and ee_positions.shape == target_positions.shape:
+            pos_error = np.linalg.norm(ee_positions - target_positions, axis=1)
+            avg_abs_pos_error = np.mean(pos_error)
+            print(f"AVG_POSITION_ERROR: {avg_abs_pos_error:.6f}")
+        else:
+            print(f"AVG_POSITION_ERROR: nan")
 
         # ============================================================
         # 9. Plot Results (only if --save-plots is set)
         # ============================================================
         if args.save_plots:
             print("\n[MAIN] Simulation complete. Generating plots...")
-            plot_dir = "plots/run_approach_then_hybrid_mujoco"
+            plot_dir = args.plot_dir
             # plot_joint_torques(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
             # plot_ee_positions(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
             plot_joint_torques(hybrid_controller, "joint_torques", common_config.dt, plot_dir=plot_dir)
