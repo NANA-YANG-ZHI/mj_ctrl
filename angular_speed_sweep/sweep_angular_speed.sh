@@ -7,16 +7,19 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="${SCRIPT_DIR}/.."
 PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
 
 # ---------------------------------------------------------------
 # Configure the output subfolder name here
 # Results and sweep plot will be saved to:
-#   angular_speed_sweep_plots/<SWEEP_NAME>/
+#   angular_speed_sweep/plots/<SWEEP_NAME>/
+# Individual speed plots:
+#   angular_speed_sweep/plots/<SWEEP_NAME>/speed_<mult>pi/
 # ---------------------------------------------------------------
 SWEEP_NAME="default"
 
-OUTPUT_DIR="${SCRIPT_DIR}/angular_speed_sweep_plots/${SWEEP_NAME}"
+OUTPUT_DIR="${SCRIPT_DIR}/plots/${SWEEP_NAME}"
 mkdir -p "${OUTPUT_DIR}"
 RESULTS_CSV="${OUTPUT_DIR}/sweep_results.csv"
 
@@ -53,7 +56,7 @@ for i in $(seq 1 50); do
     fi
     echo "============================================================"
 
-    OUTPUT=$(python3 "${SCRIPT_DIR}/run_approach_then_hybrid_mujoco.py" \
+    OUTPUT=$(python3 "${REPO_DIR}/run_approach_then_hybrid_mujoco.py" \
         --headless \
         --angular-speed "${ANGULAR_SPEED}" \
         ${SAVE_FLAG} \
