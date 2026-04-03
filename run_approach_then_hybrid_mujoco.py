@@ -238,8 +238,7 @@ def main() -> None:
             plot_ee_positions(hybrid_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/circle")
             plot_control_torques(hybrid_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/circle")
             plot_hybrid_results(hybrid_controller, common_config.dt, robot_cfg.name)
-            plot_force_error_z(hybrid_controller, common_config.dt, robot_cfg.name,
-                               circle_start_time=hybrid_controller.circle_start_time)
+            plot_force_error_z(hybrid_controller, common_config.dt, robot_cfg.name)
 
         print("\n[MAIN] Combined control finished")
         print(f"Approach time: {approach_controller.time_elapsed:.2f}s")

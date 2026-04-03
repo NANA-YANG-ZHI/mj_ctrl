@@ -292,10 +292,6 @@ class HybridController:
         self.tau_ctrl_x_log: list = []
         self.tau_ctrl_v_log: list = []
 
-        # Elapsed time (within the hybrid controller) at which circle drawing begins.
-        # Non-zero only when a pre-circle approach phase runs inside the hybrid controller.
-        self.circle_start_time: float = 0.0
-
     def starting(
         self,
         current_time: float,
@@ -343,8 +339,6 @@ class HybridController:
         self.tau_ctrl_x_log = []
         self.tau_ctrl_v_log = []
 
-        self.circle_start_time = 0.0  # updated in update() if a pre-circle phase exists
-
         # Zero control
         self.tau[:] = 0.0
 
@@ -376,10 +370,6 @@ class HybridController:
         #     self.start_pos,
         #     self.end_pos,
         #     5.0)
-
-        # Record elapsed time when circle drawing first becomes active
-        if elapsed < self.common_config.circle_duration and self.circle_start_time == 0.0 and elapsed > 0.0:
-            self.circle_start_time = elapsed
 
         if elapsed < self.common_config.circle_duration:
             self.target_pos, self.x_dot_desired, self.x_ddot_desired = \
