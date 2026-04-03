@@ -231,14 +231,15 @@ def main() -> None:
             # 8. Plot Results
             # ============================================================
             print("\n[MAIN] Simulation complete. Generating plots...")
+            plot_dir = "plots/run_approach_then_hybrid_mujoco"
             # plot_joint_torques(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
             # plot_ee_positions(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
-            plot_joint_torques(hybrid_controller, "joint_torques", common_config.dt, plot_dir="mj_ctrl/plots/sim/circle")
-            plot_joint_torques(hybrid_controller, "joint_g_torques", common_config.dt, plot_dir="mj_ctrl/plots/sim/circle")
-            plot_ee_positions(hybrid_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/circle")
-            plot_control_torques(hybrid_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/circle")
-            plot_hybrid_results(hybrid_controller, common_config.dt, robot_cfg.name)
-            plot_force_error_z(hybrid_controller, common_config.dt, robot_cfg.name)
+            plot_joint_torques(hybrid_controller, "joint_torques", common_config.dt, plot_dir=plot_dir)
+            plot_joint_torques(hybrid_controller, "joint_g_torques", common_config.dt, plot_dir=plot_dir)
+            plot_ee_positions(hybrid_controller, common_config.dt, plot_dir=plot_dir)
+            plot_control_torques(hybrid_controller, common_config.dt, plot_dir=plot_dir)
+            plot_hybrid_results(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir)
+            plot_force_error_z(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir)
 
         print("\n[MAIN] Combined control finished")
         print(f"Approach time: {approach_controller.time_elapsed:.2f}s")
