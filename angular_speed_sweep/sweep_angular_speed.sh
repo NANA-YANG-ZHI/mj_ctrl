@@ -21,9 +21,9 @@ PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
 # FORCE_CONTROL_METHOD: "paper" | "pd" | "feedforward"
 # NUM_WORKERS: how many simulations to run in parallel
 # ---------------------------------------------------------------
-SWEEP_NAME="test"
-FORCE_CONTROL_METHOD="paper"
-NUM_WORKERS=8
+SWEEP_NAME="pd"
+FORCE_CONTROL_METHOD="pd"
+NUM_WORKERS=10
 
 OUTPUT_DIR="${SCRIPT_DIR}/plots/${SWEEP_NAME}"
 TMP_DIR="${OUTPUT_DIR}/tmp_results"
