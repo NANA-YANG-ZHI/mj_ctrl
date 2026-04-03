@@ -280,18 +280,24 @@ def main() -> None:
         if contact_forces.size > 0 and contact_forces.ndim == 2 and contact_forces.shape[1] >= 3 and desired_forces.size > 0:
             error_z = contact_forces[:, 2] - desired_forces[:, 0]
             avg_abs_force_error = np.mean(np.abs(error_z))
+            var_force_error = np.var(error_z)
             print(f"AVG_FORCE_Z_ERROR: {avg_abs_force_error:.6f}")
+            print(f"VAR_FORCE_Z_ERROR: {var_force_error:.6f}")
         else:
             print(f"AVG_FORCE_Z_ERROR: nan")
+            print(f"VAR_FORCE_Z_ERROR: nan")
 
         ee_positions = np.array(hybrid_controller.ee_positions) if hybrid_controller.ee_positions else np.empty((0, 3))
         target_positions = np.array(hybrid_controller.target_positions) if hybrid_controller.target_positions else np.empty((0, 3))
         if ee_positions.size > 0 and target_positions.size > 0 and ee_positions.shape == target_positions.shape:
             pos_error = np.linalg.norm(ee_positions - target_positions, axis=1)
             avg_abs_pos_error = np.mean(pos_error)
+            var_pos_error = np.var(pos_error)
             print(f"AVG_POSITION_ERROR: {avg_abs_pos_error:.6f}")
+            print(f"VAR_POSITION_ERROR: {var_pos_error:.6f}")
         else:
             print(f"AVG_POSITION_ERROR: nan")
+            print(f"VAR_POSITION_ERROR: nan")
 
         # ============================================================
         # 9. Plot Results (only if --save-plots is set)

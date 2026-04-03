@@ -30,7 +30,7 @@ RESULTS_CSV="${OUTPUT_DIR}/sweep_results.csv"
 SAVE_PLOT_MULTIPLIERS="0.1 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0"
 # SAVE_PLOT_MULTIPLIERS="0.1 0.5 1.0"
 
-echo "multiplier,angular_speed_rad_s,ee_linear_speed_m_s,avg_force_z_error,avg_position_error" > "${RESULTS_CSV}"
+echo "multiplier,angular_speed_rad_s,ee_linear_speed_m_s,avg_force_z_error,var_force_z_error,avg_position_error,var_position_error" > "${RESULTS_CSV}"
 
 for i in $(seq 1 50); do
     # multiplier = i * 0.1 (e.g. 1->0.1, 5->0.5, 10->1.0, ..., 50->5.0)
@@ -72,12 +72,16 @@ for i in $(seq 1 50); do
 
     # Extract metrics from output
     AVG_FORCE_ERROR=$(echo "$OUTPUT" | grep "AVG_FORCE_Z_ERROR:" | tail -1 | awk '{print $2}')
+    VAR_FORCE_ERROR=$(echo "$OUTPUT" | grep "VAR_FORCE_Z_ERROR:" | tail -1 | awk '{print $2}')
     AVG_POS_ERROR=$(echo "$OUTPUT" | grep "AVG_POSITION_ERROR:" | tail -1 | awk '{print $2}')
+    VAR_POS_ERROR=$(echo "$OUTPUT" | grep "VAR_POSITION_ERROR:" | tail -1 | awk '{print $2}')
     [ -z "$AVG_FORCE_ERROR" ] && AVG_FORCE_ERROR="nan"
+    [ -z "$VAR_FORCE_ERROR" ] && VAR_FORCE_ERROR="nan"
     [ -z "$AVG_POS_ERROR" ] && AVG_POS_ERROR="nan"
+    [ -z "$VAR_POS_ERROR" ] && VAR_POS_ERROR="nan"
 
-    echo "${MULTIPLIER},${ANGULAR_SPEED},${EE_LINEAR_SPEED},${AVG_FORCE_ERROR},${AVG_POS_ERROR}" >> "${RESULTS_CSV}"
-    echo "  -> avg_force_z_error = ${AVG_FORCE_ERROR}  avg_position_error = ${AVG_POS_ERROR}"
+    echo "${MULTIPLIER},${ANGULAR_SPEED},${EE_LINEAR_SPEED},${AVG_FORCE_ERROR},${VAR_FORCE_ERROR},${AVG_POS_ERROR},${VAR_POS_ERROR}" >> "${RESULTS_CSV}"
+    echo "  -> avg_force_z_error = ${AVG_FORCE_ERROR}  var = ${VAR_FORCE_ERROR}  avg_position_error = ${AVG_POS_ERROR}  var = ${VAR_POS_ERROR}"
 done
 
 echo ""
