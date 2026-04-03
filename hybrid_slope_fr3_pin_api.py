@@ -602,6 +602,9 @@ def plot_results(
         transition_time: float
 ) -> None:
     """Plot results from both controllers."""
+    import os
+    plot_dir = "plots/hybrid_slope_fr3_pin_api"
+    os.makedirs(plot_dir, exist_ok=True)
 
     # Combine data from both controllers
     all_ee_pos = approach_controller.ee_positions + circle_controller.ee_positions
@@ -629,7 +632,7 @@ def plot_results(
     axes[2].set_xlabel('Time (s)')
     fig.suptitle(f'FR3: position tracking')
     plt.tight_layout()
-    fig.savefig("plots/combined_position_tracking.png")
+    fig.savefig(f"{plot_dir}/combined_position_tracking.png")
 
     # ============================================================
     # Plot Contact Forces (Circle Drawing Phase Only)
@@ -656,27 +659,27 @@ def plot_results(
             plt.grid(True)
         fig.suptitle(f'FR3: contact forces')
         plt.tight_layout()
-        plt.savefig("plots/contact_forces.png")
+        plt.savefig(f"{plot_dir}/contact_forces.png")
 
     # ============================================================
     # Plot Force Error on Z Axis (Circle Drawing Phase Only)
     # ============================================================
-    plot_force_error_z(circle_controller, dt, robot_name="fr3", plot_dir="plots")
+    plot_force_error_z(circle_controller, dt, robot_name="fr3", plot_dir=plot_dir)
 
     # ============================================================
     # Plot Force Decomposition Components
     # ============================================================
-    if (hasattr(circle_controller, 'control_force_compensation_arr') and 
+    if (hasattr(circle_controller, 'control_force_compensation_arr') and
         len(circle_controller.control_force_compensation_arr) > 0):
-        
+
         control_comp = np.array(circle_controller.control_force_compensation_arr)
         contact_comp = np.array(circle_controller.contact_force_compensation_arr)
         velocity_term = np.array(circle_controller.velocity_term_arr)
         f_ctrl_constraint = np.array(circle_controller.F_ctrl_constraint_arr)
-        
+
         timesteps = len(control_comp)
         t = np.arange(timesteps) * dt + transition_time
-        
+
         # Determine number of dimensions
         if control_comp.ndim == 1:
             n_dim = 1
@@ -686,11 +689,11 @@ def plot_results(
             f_ctrl_constraint = f_ctrl_constraint[:, None]
         else:
             n_dim = control_comp.shape[1]
-        
+
         fig, axes = plt.subplots(n_dim, 1, figsize=(12, 3 * n_dim))
         if n_dim == 1:
             axes = [axes]
-        
+
         for i in range(n_dim):
             axes[i].plot(t, control_comp[:, i], label='Control Force Compensation', linewidth=2)
             axes[i].plot(t, contact_comp[:, i], label='Contact Force Compensation', linewidth=2)
@@ -700,13 +703,13 @@ def plot_results(
             axes[i].legend(loc='best')
             axes[i].grid(True, alpha=0.3)
             axes[i].set_title(f'FR3: Force Decomposition - Dimension {i + 1}')
-        
+
         axes[-1].set_xlabel('Time (s)')
         plt.tight_layout()
-        fig.savefig("plots/force_decomposition.png")
+        fig.savefig(f"{plot_dir}/force_decomposition.png")
 
     plt.show()
-    print("[PLOT] Results saved to plots/ directory")
+    print(f"[PLOT] Results saved to {plot_dir}/")
 
 
 def main() -> None:
