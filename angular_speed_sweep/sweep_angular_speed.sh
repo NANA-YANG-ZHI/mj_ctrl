@@ -11,13 +11,16 @@ REPO_DIR="${SCRIPT_DIR}/.."
 PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
 
 # ---------------------------------------------------------------
-# Configure the output subfolder name here
+# Configure the sweep here
 # Results and sweep plot will be saved to:
 #   angular_speed_sweep/plots/<SWEEP_NAME>/
 # Individual speed plots:
 #   angular_speed_sweep/plots/<SWEEP_NAME>/speed_<mult>pi/
+#
+# FORCE_CONTROL_METHOD: "paper" | "pd" | "feedforward"
 # ---------------------------------------------------------------
 SWEEP_NAME="test"
+FORCE_CONTROL_METHOD="paper"
 
 OUTPUT_DIR="${SCRIPT_DIR}/plots/${SWEEP_NAME}"
 mkdir -p "${OUTPUT_DIR}"
@@ -60,6 +63,7 @@ for i in $(seq 1 50); do
     OUTPUT=$(python3 "${REPO_DIR}/run_approach_then_hybrid_mujoco.py" \
         --headless \
         --angular-speed "${ANGULAR_SPEED}" \
+        --force-control-method "${FORCE_CONTROL_METHOD}" \
         ${SAVE_FLAG} \
         ${PLOT_DIR_FLAG} \
         2>&1)

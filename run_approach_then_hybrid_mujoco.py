@@ -59,6 +59,13 @@ def main() -> None:
         help="Angular speed for circle drawing in rad/s (default: pi*2)"
     )
     parser.add_argument(
+        "--force-control-method",
+        type=str,
+        default="paper",
+        choices=["paper", "pd", "feedforward"],
+        help="Force control method: paper (default), pd, or feedforward"
+    )
+    parser.add_argument(
         "--headless",
         action="store_true",
         help="Run without MuJoCo viewer"
@@ -91,6 +98,7 @@ def main() -> None:
     common_config.size_z = 0.01
     common_config.gravity_compensation = True
     common_config.angular_speed = args.angular_speed
+    common_config.force_control_method = args.force_control_method
 
     approach_config = CartesianSpacePDControlConfig()
     hybrid_config = HybridControllerConfig()
@@ -109,6 +117,7 @@ def main() -> None:
         print("APPROACH + HYBRID FORCE-IMPEDANCE CONTROL")
         print("=" * 60)
         print(f"Robot: {robot_cfg.name.upper()}")
+        print(f"Force control method: {args.force_control_method}")
         print("This will:")
         print("  1. Approach the target surface position")
         print("  2. Perform circle drawing with hybrid force control")
