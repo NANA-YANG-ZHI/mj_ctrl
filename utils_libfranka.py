@@ -240,7 +240,7 @@ def force_ctrl_pd(
     n = F_dot.shape[0]
     Kd_force = np.eye(n) * kd
     Kp_force = np.eye(n) * kp
-    return -Kd_force @ F_dot - Kp_force @ (np.abs(F_desired) - np.abs(F_ext_phi))
+    return -Kd_force @ F_dot + Kp_force @ (F_desired - F_ext_phi)
 
 
 def generate_start_position(r, body_pos, size_z, R):
