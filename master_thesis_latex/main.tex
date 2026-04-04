@@ -1083,36 +1083,144 @@ unmodelled dynamics.
 
 \section{System Overview}
 
-% TODO (FILL): Describe simulation setup (MuJoCo) and real-robot setup
-% (Franka Panda + Pinocchio for dynamics). State software architecture:
-% libfranka interface wrapper, unified MuJoCo/libfranka API.
+This section describes the simulation environment, the real-robot hardware
+interface, and the unified software architecture that allows the same
+controller code to run in both settings without modification.
+
+\subsection{Simulation Setup (MuJoCo)}
+\label{sec:mujoco_setup}
+
+All simulation experiments are conducted in MuJoCo~\cite{mujoco} using the
+Franka Research~3 (FR3) robot model.
+The simulation scene is constructed via an XML description: the FR3 model is
+loaded from its base XML file, and the contact surface (flat board or slope)
+is added procedurally at runtime via the helper function
+\texttt{add\_slope\_xml}.
+This function injects a \texttt{<body>} element with a box geometry whose
+orientation is set by Euler angles \(\texttt{euler} = [\phi_x, \phi_y,
+\phi_z]\); for the flat surface \(\phi_x = 0^\circ\), and for the slope
+\(\phi_x = 30^\circ\).
+
+The contact model is configured at the end-effector attachment geom with
+\texttt{condim=6} (enabling full 6-dimensional friction forces) and
+\texttt{friction="1~0.02~0.01"} (sliding, torsional, rolling friction
+coefficients).
+To study the effect of surface friction, alternative XML variants set
+\texttt{condim=1}, which disables tangential friction.
+The simulation timestep is set to \(1\,\mathrm{ms}\) (\texttt{dt = 0.001}),
+matching the \(1\,\mathrm{kHz}\) control rate of the real robot.
 
 \begin{figure}[htbp]
     \centering
-    % TODO (PLOT): System architecture diagram:
-    % MuJoCo / libfranka → controller loop → Pinocchio dynamics → torque.
-    \missingfigure{System architecture diagram}
-    \caption{System architecture: MuJoCo\,/\,libfranka interface feeding into
-             the controller loop, Pinocchio dynamics, and torque command.}
-    \label{fig:system_architecture}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Simulation scene screenshot: Panda approaching
+    % TODO (PLOT): Simulation scene screenshot: FR3 approaching
     % slope/flat board in MuJoCo.
-    \missingfigure{MuJoCo simulation scene: Panda approaching slope/flat board}
-    \caption{MuJoCo simulation scene showing the Panda robot approaching the
+    \missingfigure{MuJoCo simulation scene: FR3 approaching slope/flat board}
+    \caption{MuJoCo simulation scene showing the FR3 robot approaching the
              slope/flat board.}
     \label{fig:mujoco_scene}
+\end{figure}
+
+\subsection{Real-Robot Setup (Franka FR3 + libfranka)}
+\label{sec:real_robot_setup}
+
+The real-robot experiments use a Franka Research~3 (FR3) manipulator
+controlled via \texttt{libfranka}.
+The \texttt{libfranka} interface exposes a \(1\,\mathrm{kHz}\) torque control
+loop: at each millisecond tick, the controller reads the current
+\texttt{RobotState} (joint positions, velocities, external force estimate, and
+previous commanded torques) and returns a new torque command.
+
+Robot dynamics — Jacobian, joint inertia matrix, Coriolis matrix, and gravity
+vector — are computed using Pinocchio~\cite{pinocchio} with the FR3 URDF model.
+Pinocchio is used identically in both simulation and real-robot code: it
+receives the current joint configuration \(q\) and velocity \(\dot{q}\) from
+the robot state and returns the required kinematic and dynamic quantities.
+This ensures that the controller does not depend on MuJoCo's internal dynamics
+and that simulation-to-real transfer requires no algorithmic changes.
+
+\subsection{Unified Software Architecture}
+\label{sec:unified_arch}
+
+A key design goal of this work is to run the same controller code in
+simulation and on the real robot.
+This is achieved through the \texttt{MujocoRobotInterface} wrapper, which
+mimics the \texttt{libfranka} \texttt{Robot} and \texttt{RobotState}
+interfaces.
+\texttt{MujocoRobotInterface} exposes the same fields as a libfranka
+\texttt{RobotState}:
+\begin{itemize}
+    \item \texttt{q} — joint positions (\(\mathbb{R}^7\))
+    \item \texttt{dq} — joint velocities (\(\mathbb{R}^7\))
+    \item \texttt{O\_T\_EE} — end-effector homogeneous transformation in the
+          base frame, flattened in column-major order (\(\mathbb{R}^{16}\))
+    \item \texttt{O\_F\_ext\_hat\_K} — estimated external wrench (force and
+          torque) in the stiffness frame (\(\mathbb{R}^6\))
+    \item \texttt{tau\_J\_d} — last commanded joint torques (\(\mathbb{R}^7\))
+\end{itemize}
+Because both environments expose this unified \texttt{RobotState} interface,
+the \texttt{HybridController} and \texttt{CartesianSpacePDController} classes
+operate identically in simulation and on hardware without any
+environment-specific branching.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (DIAGRAM): Software architecture:
+    % libfranka / MujocoRobotInterface → unified RobotState →
+    % controller stack (CartesianSpacePDController → HybridController)
+    \missingfigure{Software architecture: libfranka\,/\,MujocoRobotInterface
+                   $\to$ unified RobotState $\to$ controller stack
+                   (CartesianSpacePDController $\to$ HybridController)}
+    \caption{Software architecture showing how \texttt{libfranka} and
+             \texttt{MujocoRobotInterface} both expose a unified
+             \texttt{RobotState}, which feeds into the controller stack
+             (\texttt{CartesianSpacePDController} $\to$
+             \texttt{HybridController}).}
+    \label{fig:system_architecture}
 \end{figure}
 
 
 \section{Task Definition}
 
-% TODO (FILL): Define the two tasks: (1) circle-drawing on a flat horizontal
-% surface, (2) circle-drawing on a 30° inclined slope. Specify trajectory
-% parametrisation (angular speed π/4 and π rad/s, circle radius, centre).
+Two contact tasks are studied in this work, both consisting of drawing a
+horizontal circle while maintaining a constant normal contact force against a
+surface.
+
+\paragraph{Task 1 — Flat surface.}
+The end-effector draws a circle on a flat horizontal surface
+(\(\texttt{euler} = [0^\circ, 0^\circ, 0^\circ]\)).
+The constraint direction is the world \(z\)-axis, and the motion subspace
+spans the \(xy\)-plane and all three rotation axes.
+
+\paragraph{Task 2 — Slope surface.}
+The end-effector draws a circle on a surface inclined at \(30^\circ\)
+(\(\texttt{euler} = [30^\circ, 0^\circ, 0^\circ]\)).
+The constraint direction is the surface normal, obtained by rotating the
+world \(z\)-axis by the slope rotation matrix \(R\).
+
+\paragraph{Trajectory parametrisation.}
+In both tasks the circle has radius \(r = 0.1\,\mathrm{m}\), centred at a
+fixed contact point on the surface.
+The angular speed \(\omega\) is swept from \(\pi \times 0.1\) to
+\(\pi \times 5\,\mathrm{rad/s}\), corresponding to end-effector linear speeds
+from \(0.0314\) to \(1.571\,\mathrm{m/s}\) at the given radius.
+The desired end-effector position, velocity, and acceleration at time \(t\) are
+\begin{align}
+    p_d(t) &= p_c + R_\text{slope}\,
+              \begin{bmatrix}
+                  r\cos(\omega t) \\ r\sin(\omega t) \\ 0
+              \end{bmatrix}, \\
+    \dot{p}_d(t) &= R_\text{slope}\,
+              \begin{bmatrix}
+                  -r\omega\sin(\omega t) \\ r\omega\cos(\omega t) \\ 0
+              \end{bmatrix}, \\
+    \ddot{p}_d(t) &= R_\text{slope}\,
+              \begin{bmatrix}
+                  -r\omega^2\cos(\omega t) \\ -r\omega^2\sin(\omega t) \\ 0
+              \end{bmatrix},
+\end{align}
+where \(p_c\) is the circle centre in the world frame and \(R_\text{slope}\)
+is the slope rotation matrix.
+The desired orientation is kept constant throughout the circle motion.
 
 \begin{figure}[htbp]
     \centering
@@ -1137,19 +1245,77 @@ unmodelled dynamics.
 
 
 \section{Constraint Frame and Selection Matrices}
+\label{sec:constraint_frame}
 
-% TODO (FILL): Explain how the constraint frame is constructed for flat
-% surface (φ = z, S_f = [0,0,1,0,0,0]ᵀ) and slope surface (R applied to
-% S_fc). Define S_v (5-dim motion) and S_f (1-dim force).
+The hybrid force/velocity controller partitions the six-dimensional
+end-effector space into a one-dimensional \emph{force subspace}
+(the constraint direction, normal to the contact surface) and a
+five-dimensional \emph{motion subspace} (the tangent plane and all
+rotational directions).
+This partitioning is encoded by two constant selection matrices,
+\(S_f \in \mathbb{R}^{6 \times 1}\) and \(S_v \in \mathbb{R}^{6 \times 5}\),
+which satisfy \(S_f^\top S_v = 0\) and together span all six Cartesian
+directions.
 
-For a flat surface the constraint Jacobian and motion Jacobian are
-\(J_\varphi = S_f^\top J\) and \(J_\text{motion} = S_v^\top J\),
-respectively. For a \(30^\circ\) slope a rotation matrix \(R\) from the
-world frame to the constraint frame is applied so that
-\(S_f = R \cdot S_{f,c}\). A key simplification for planar and slope
-surfaces is that \(S_f\) and \(R\) are constant, which implies
-\(\dot{J}_\varphi \approx 0\) (this no longer holds for curved surfaces such
-as a sphere).
+\paragraph{Canonical selection matrices.}
+For a flat horizontal surface the constraint direction is the world
+\(z\)-axis, so the canonical force selection vector is
+\begin{equation}
+    S_{f,c} = \begin{bmatrix}0&0&1&0&0&0\end{bmatrix}^\top \in \mathbb{R}^{6},
+\end{equation}
+and the canonical motion selection matrix selects the remaining five
+directions: \(x\) tangential (row~0), \(y\) tangential (row~1), and the
+three rotation axes \(r_x\) (row~3), \(r_y\) (row~4), \(r_z\) (row~5):
+\begin{equation}
+    S_{v,c} =
+    \begin{bmatrix}
+        1 & 0 & 0 & 0 & 0 \\
+        0 & 1 & 0 & 0 & 0 \\
+        0 & 0 & 0 & 0 & 0 \\
+        0 & 0 & 1 & 0 & 0 \\
+        0 & 0 & 0 & 1 & 0 \\
+        0 & 0 & 0 & 0 & 1
+    \end{bmatrix} \in \mathbb{R}^{6 \times 5}.
+\end{equation}
+Note that \(r_z\) (yaw around the surface normal) is deliberately included in
+the motion subspace rather than the force subspace; fixing it would
+over-constrain the orientation and cause drift in the yaw direction.
+
+\paragraph{Slope generalisation via block-diagonal rotation.}
+For the \(30^\circ\) inclined slope, the constraint direction is no longer
+aligned with the world \(z\)-axis.
+The surface normal in the world frame is obtained by rotating the
+canonical normal \([0,0,1]^\top\) by the slope's Euler-angle rotation
+matrix \(R_\text{slope} \in \mathrm{SO}(3)\).
+The full \(6 \times 6\) block-diagonal rotation mapping both translational and
+rotational components is
+\begin{equation}
+    \mathbf{R} =
+    \begin{bmatrix} R_\text{slope} & 0 \\ 0 & R_\text{slope} \end{bmatrix}
+    \in \mathbb{R}^{6 \times 6},
+\end{equation}
+and the world-frame selection matrices are
+\begin{equation}
+    S_f = \mathbf{R}\,S_{f,c}, \qquad S_v = \mathbf{R}\,S_{v,c}.
+\end{equation}
+
+\paragraph{Constraint and motion Jacobians.}
+The projected Jacobians used by the controller are
+\begin{equation}
+    J_\varphi = S_f^\top J, \qquad J_\text{motion} = S_v^\top J,
+\end{equation}
+where \(J \in \mathbb{R}^{6 \times 7}\) is the full geometric Jacobian of
+the end-effector.
+
+\paragraph{Key simplification for planar surfaces.}
+Because \(S_f\) and \(\mathbf{R}\) depend only on the surface geometry — not
+on the robot configuration — they are \emph{constant} throughout the motion.
+This implies \(\dot{J}_\varphi \approx \dot{S}_f^\top J + S_f^\top \dot{J}
+= S_f^\top \dot{J}\), and in the force dynamics derivation the term
+\(\dot{J}_\varphi\) can be treated as arising solely from the Jacobian
+time-derivative \(\dot{J}\).
+This simplification does \emph{not} hold for curved surfaces (e.g.\ a sphere),
+where the normal direction rotates as the end-effector moves.
 
 \begin{figure}[htbp]
     \centering
@@ -1164,49 +1330,73 @@ as a sphere).
 
 
 \section{Force Control Strategies Investigated}
+\label{sec:force_strategies}
 
-% TODO (FILL): Describe each strategy tested, from simplest to most complete.
+All force control methods described below compute a scalar force command
+\(F^\varphi_\text{ctrl} \in \mathbb{R}\) in the constraint direction
+\(\varphi\).
+This scalar is mapped to joint torques via the constraint-space Jacobian:
+\begin{equation}
+    \tau^\varphi_\text{ctrl} = J_\varphi^\top\,F^\varphi_\text{ctrl}.
+\end{equation}
+The methods are presented from simplest to most complete.
 
 \subsection{Baseline: \texorpdfstring{$F_\text{desired}$}{F\_desired} Feed-forward}
+\label{sec:ff_baseline}
 
-% TODO (FILL): F_ctrl_φ = F_desired. No feedback. Establishes performance
-% lower bound.
+The simplest strategy applies the desired contact force directly as the
+force command without any feedback:
+\begin{equation}
+    F^\varphi_\text{ctrl} = F_\text{desired}.
+\end{equation}
+This open-loop baseline establishes a performance lower bound.
+Because there is no feedback, the contact force tracks \(F_\text{desired}\)
+only as long as the dynamic coupling between the motion and force subspaces
+is negligible.
+At low end-effector speeds the coupling is small and performance is acceptable;
+at high speeds, dynamic coupling from Coriolis forces and inertia introduces
+significant steady-state force error.
 
 \subsection{PD Force Controller}
 \label{sec:pd_force}
 
-Building on the decoupled force dynamics \eqref{eq:force_dyn}, a
-feedforward proportional-derivative (PD) law tracks a desired force
-trajectory $\boldsymbol{\lambda}_d(t)$:
-%
+The PD force controller adds proportional and derivative feedback on the
+force error.
+With the desired force rate and desired force acceleration both set to zero
+(\(\dot{F}_\text{desired} = \ddot{F}_\text{desired} = 0\)), the control law
+implemented in this work is
 \begin{equation}
-    \mathbf{f}_{\lambda}
-    = \ddot{\boldsymbol{\lambda}}_d
-    + \mathbf{K}_{D}^{\lambda}
-        \left(\dot{\boldsymbol{\lambda}}_d - \dot{\boldsymbol{\lambda}}\right)
-    + \mathbf{K}_{P}^{\lambda}
-        \left(\boldsymbol{\lambda}_d - \boldsymbol{\lambda}\right),
-    \label{eq:pd_force}
+    F^\varphi_\text{ctrl}
+    = -K_P^\lambda \bigl(|F_\text{desired}| - |F^\varphi_\text{ext}|\bigr)
+      - K_D^\lambda\,\dot{F}^\varphi_\text{ext},
+    \label{eq:pd_force_impl}
 \end{equation}
-%
-where $\mathbf{K}_{P}^{\lambda}$ and $\mathbf{K}_{D}^{\lambda}$ are
-positive-definite gain matrices for the force channel, independently
-tunable from the motion-channel gains. Since force measurements are
-often corrupted by noise, direct differentiation of $\boldsymbol{\lambda}$
-is generally not feasible. Instead, the force rate is reconstructed from
-joint velocities via the kinematic relation
-%
+where \(F^\varphi_\text{ext} = S_f^\top F_\text{ext}\) is the measured contact
+force projected onto the constraint direction, and
+\(K_P^\lambda, K_D^\lambda > 0\) are scalar proportional and derivative gains.
+
+\paragraph{Sign convention.}
+The force error is defined as the difference of \emph{magnitudes} rather than
+signed values.
+This is necessary because the robot pushes down on the surface
+(\(F^\varphi_\text{ctrl} < 0\) in the world \(z\)-convention) while the
+environment reaction force is upward
+(\(F^\varphi_\text{ext} > 0\)).
+Using signed difference would invert the feedback polarity; using magnitudes
+produces a consistent error sign regardless of the contact direction.
+
+\paragraph{Force rate estimation.}
+The force rate \(\dot{F}^\varphi_\text{ext}\) is estimated from the kinematic
+relation
 \begin{equation}
-    \dot{\boldsymbol{\lambda}}
-    = \mathbf{S}_{f}^{\dagger}\,\mathbf{K}'\,\mathbf{J}(\mathbf{q})\,\dot{\mathbf{q}},
+    \dot{F}^\varphi_\text{ext}
+    = \bigl(S_f^\top \mathbf{C}^{-1} J\,\dot{q}\bigr)^\top,
     \label{eq:lambda_dot_est}
 \end{equation}
-%
-where $\mathbf{K}'$ is the positive semi-definite environmental
-stiffness matrix and $\mathbf{S}_{f}^{\dagger}$ denotes the
-Moore--Penrose pseudo-inverse of the force selection matrix.
-
-% TODO (FILL): Explain corrected sign convention discovered during implementation.
+where \(\mathbf{C}^{-1}\) is the compliance matrix of the contact surface
+(inverse of the contact stiffness matrix) and \(J\) is the end-effector
+Jacobian.
+This avoids direct numerical differentiation of the noisy force signal.
 
 \subsection{PI Force Controller}
 \label{sec:pi_force}
@@ -1234,14 +1424,81 @@ system to third order; stability is therefore ensured only for
 sufficiently small gains, but the law eliminates the steady-state force
 error that the PD controller leaves in the presence of constant disturbances.
 
-% TODO (FILL): Kp, Ki tuning discussion.
+A PI force controller (adding an integral term to eliminate steady-state
+error) was considered but not implemented in this work.
+The theoretical law would be
+\begin{equation}
+    F^\varphi_\text{ctrl}
+    = -K_P^\lambda \bigl(|F_\text{desired}| - |F^\varphi_\text{ext}|\bigr)
+      - K_I^\lambda \int_0^t
+            \bigl(|F_\text{desired}| - |F^\varphi_\text{ext}(\varsigma)|\bigr)
+            \,\mathrm{d}\varsigma.
+\end{equation}
+Because the force dynamics include the contact stiffness as an integrating
+element, adding an integral term in the controller raises the open-loop
+system to third order, and stability requires careful selection of
+\(K_P^\lambda\) and \(K_I^\lambda\).
+Tuning was found to be sensitive and outside the scope of this work;
+the method is therefore listed as a future extension.
 
 \subsection{Hybrid Force-Impedance with Velocity-Term Compensation}
+\label{sec:paper_method}
 
-% TODO (FILL): F_ctrl_φ = F_desired + compensation – velocity_term.
-% Compensation = Λ_φ J_φ M⁻¹ (–τ_ctrl_x).
-% Velocity term = Λ_φ (J_φ M⁻¹ C – J̇_φ) q̇.
-% Explain why velocity term uses negative sign for correct tracking.
+The full method from Iskandar~et~al.~\cite{iskandar2023} augments the
+feedforward force command with three compensation terms that cancel the
+dynamic coupling between the motion subspace and the force subspace:
+\begin{equation}
+    F^\varphi_\text{ctrl}
+    = F_\text{desired}
+      + F^\varphi_\text{ctrl\_comp}
+      + F^\varphi_\text{contact\_comp}
+      + F^\varphi_\text{vel},
+    \label{eq:paper_method}
+\end{equation}
+where \(\Lambda_\varphi = (J_\varphi M^{-1} J_\varphi^\top)^{-1}\) is the
+task-space inertia projected onto the constraint direction.
+
+\paragraph{Control force compensation.}
+The torques \(\tau_\text{ctrl}^x\) and \(\tau_\text{ctrl}^v\) that drive
+the motion and null-space subtasks couple back into the force subspace through
+the robot inertia.
+This term cancels that coupling:
+\begin{equation}
+    F^\varphi_\text{ctrl\_comp}
+    = \Lambda_\varphi\,J_\varphi\,M^{-1}
+      \bigl(-\tau_\text{ctrl}^x - \tau_\text{ctrl}^v\bigr).
+\end{equation}
+The negative sign arises because \(\tau_\text{ctrl}^x\) opposes the surface
+reaction force: subtracting it from the force command cancels its projection
+into the constraint subspace.
+
+\paragraph{Contact force compensation.}
+Tangential friction forces \(F_\text{ext}^x = S_v^\top F_\text{ext}\) acting
+in the motion subspace also couple back into the constraint space through the
+dynamics.
+This term accounts for that coupling:
+\begin{equation}
+    F^\varphi_\text{contact\_comp}
+    = \Lambda_\varphi\,J_\varphi\,M^{-1}\,J_\text{motion}^\top
+      \,F_\text{ext}^x.
+\end{equation}
+In practice, the rotational components of \(F_\text{ext}^x\) are set to zero
+before computing this term to avoid amplifying noisy torque measurements.
+
+\paragraph{Velocity term.}
+Coriolis forces and the time-variation of \(J_\varphi\) produce velocity-
+dependent coupling into the force subspace.
+This term compensates it:
+\begin{equation}
+    F^\varphi_\text{vel}
+    = \Lambda_\varphi
+      \bigl(J_\varphi\,M^{-1}\,C - \dot{J}_\varphi\bigr)\,\dot{q},
+\end{equation}
+where \(C = C(q,\dot{q})\) is the Coriolis/centrifugal matrix from Pinocchio
+and \(\dot{J}_\varphi = S_f^\top \dot{J}\) is the time derivative of the
+constraint Jacobian.
+This term grows with end-effector speed and is the primary cause of
+force-tracking degradation at high circular speeds when it is omitted.
 
 \begin{figure}[htbp]
     \centering
@@ -1258,24 +1515,56 @@ error that the PD controller leaves in the presence of constant disturbances.
 \section{Motion Control Law}
 \label{sec:motion_ctrl}
 
-For the velocity-controlled subspace, a feedforward-PD controller tracks a
-desired end-effector velocity $\boldsymbol{\nu}_d(t)$ in the motion subspace:
-%
-\begin{equation}
-    \boldsymbol{\alpha}_{\nu}
-    = \dot{\boldsymbol{\nu}}_d
-    + \mathbf{K}_{D}^{\nu}\!\left(\dot{\boldsymbol{\nu}}_d - \dot{\boldsymbol{\nu}}\right)
-    + \mathbf{K}_{P}^{\nu}\!\left(\boldsymbol{\nu}_d - \boldsymbol{\nu}\right),
-    \label{eq:motion_ctrl}
-\end{equation}
-%
-where $\mathbf{K}_{P}^{\nu}$ and $\mathbf{K}_{D}^{\nu}$ are the
-proportional and derivative gain matrices for the motion channel. The
-auxiliary input $\boldsymbol{\alpha}_{\nu}$ feeds into the decoupled
-motion dynamics \eqref{eq:motion_dyn}, producing the desired velocity
-acceleration in the unconstrained subspace independently of the contact force.
+\paragraph{Paper method vs.\ this implementation.}
+The method in Iskandar~et~al.~\cite{iskandar2023} derives the motion control
+law using full operational-space dynamics, which requires the Coriolis
+correction term
+\(C_x = (\Lambda_\text{motion} J_\text{motion} M^{-1} C
+         - \Lambda_\text{motion} \dot{J}_\text{motion})\)
+to cancel dynamic coupling in the motion space.
+In this implementation \(C_x\) is not computed: doing so requires additional
+Pinocchio calls and careful bookkeeping of the projected Coriolis matrix,
+and omitting \(C_x\) caused instability (the end-effector diverged rapidly at
+higher speeds when first attempted).
 
-% TODO (FILL): Compare against original task-space inertia approach.
+\paragraph{Modified law.}
+Instead, a Cartesian-space feedforward PD law is used with the motion-subspace
+task-space inertia \(\Lambda_\text{motion}\):
+\begin{align}
+    a_\text{motion}
+        &= \ddot{x}_{d,\text{sel}}
+           + K_p \bigl(S_v^\top \tilde{x}\bigr)
+           + K_d \bigl(S_v^\top \dot{\tilde{x}}\bigr),
+           \label{eq:motion_acc} \\
+    F^\text{ctrl}_x
+        &= \Lambda_\text{motion}\,a_\text{motion},
+           \label{eq:motion_force} \\
+    \tau^\text{ctrl}_x
+        &= J_\text{motion}^\top F^\text{ctrl}_x,
+           \label{eq:motion_torque}
+\end{align}
+where
+\begin{itemize}
+    \item \(\Lambda_\text{motion} = (J_\text{motion} M^{-1} J_\text{motion}^\top)^{-1}\)
+          is the projected task-space inertia matrix in the motion subspace,
+    \item \(\tilde{x} \in \mathbb{R}^6\) is the six-dimensional pose error
+          between the desired and actual end-effector pose,
+    \item \(\dot{\tilde{x}} = \dot{x}_d - J\dot{q}\) is the Cartesian velocity
+          error projected onto \(S_v\),
+    \item \(\ddot{x}_{d,\text{sel}} = S_v^\top \ddot{x}_d\) is the desired
+          Cartesian acceleration projected onto the motion subspace,
+    \item \(K_p, K_d > 0\) are the diagonal proportional and derivative gain
+          matrices (shared across translational and rotational directions).
+\end{itemize}
+
+Multiplying by \(\Lambda_\text{motion}\) converts the acceleration command
+into a force/torque that accounts for the effective inertia of the manipulator
+in the motion subspace, providing approximate inertia-shaping even without the
+full Coriolis cancellation term \(C_x\).
+The law relies on sufficiently high \(K_p\) and \(K_d\) to suppress
+tracking error, and is found to be stable and accurate for circle drawing
+across the tested speed range (\(\omega = \pi \times 0.1\) to
+\(\pi \times 5\,\mathrm{rad/s}\)).
 
 \begin{figure}[htbp]
     \centering
@@ -1290,17 +1579,79 @@ acceleration in the unconstrained subspace independently of the contact force.
 
 
 \section{Null-Space Control}
+\label{sec:null_space}
 
-% TODO (FILL): Explain null-space torque τ_ns = (I – J⁺J) τ_0 for posture
-% control / joint limit avoidance. Discuss its negligible effect on contact
-% force in practice.
+The primary task of the hybrid controller occupies the force subspace
+(\(J_\varphi\)) and the motion subspace (\(J_\text{motion}\)), but the
+Franka FR3 has seven joints, leaving one degree of freedom in the
+null space of the stacked Jacobian
+\(\tilde{J} = [J_\varphi;\, J_\text{motion}] \in \mathbb{R}^{6 \times 7}\).
+
+Null-space torques are used for posture control to keep the robot
+away from joint limits and in a comfortable configuration.
+The secondary torque is computed as a joint-space PD law towards a
+desired posture \(q_0\):
+\begin{equation}
+    \tau_0 = K_p^0 (q_0 - q) - K_d^0\,\dot{q},
+\end{equation}
+and then projected into the null space of \(\tilde{J}\):
+\begin{equation}
+    \tau_\text{ctrl}^v = N_2\,\tau_0,
+    \qquad
+    N_2 = I - \tilde{J}^\top\,(\tilde{J}^{\top})^+,
+\end{equation}
+where \((\tilde{J}^{\top})^+\) is the dynamically consistent pseudo-inverse
+and \(N_2\) is the null-space projector of the stacked Jacobian.
+By construction, \(\tilde{J} N_2 = 0\), so \(\tau_\text{ctrl}^v\) does
+not disturb the primary force and motion tasks.
+
+In practice, the null-space torque is found to have negligible effect on
+the contact force: because the projector ensures orthogonality to
+\(J_\varphi\), it does not appear in the force dynamics.
+Its main benefit is maintaining a well-conditioned robot configuration
+throughout the circular motion.
 
 
 \section{Approach Phase Controller}
+\label{sec:approach_ctrl}
 
-% TODO (FILL): Describe the Cartesian PD approach controller used to move
-% the robot from rest to the starting contact point before engaging hybrid
-% control. Include transition logic.
+Before the hybrid force/velocity controller can operate, the end-effector
+must move from its initial rest position to the contact point on the surface.
+This \emph{Phase~1} motion is handled by the \texttt{CartesianSpacePDController},
+a task-space impedance controller with minimum-jerk trajectory generation.
+
+\paragraph{Trajectory generation.}
+A minimum-jerk trajectory is interpolated from the current end-effector
+position to the starting circle contact point using
+\texttt{generate\_line\_trajectory\_delta}.
+The trajectory has a duration of \(1\,\mathrm{s}\) and uses a fifth-order
+polynomial (30\,\sigma^2 - 60\,\sigma^3 + 30\,\sigma^4) in normalised time
+\(\sigma = t/T\), ensuring zero velocity and acceleration at the endpoints.
+
+\paragraph{Control law.}
+The approach controller applies a task-space impedance law with a null-space
+posture term:
+\begin{equation}
+    \tau = J^\top \Lambda_x
+           \bigl(K_p\,\xi - K_d\,J\dot{q}\bigr)
+           + N^\top \tau_\text{null},
+    \label{eq:approach_law}
+\end{equation}
+where \(\xi \in \mathbb{R}^6\) is the six-dimensional pose error (twist)
+between the current and desired end-effector pose scaled by a positional gain
+\(K_\text{pos} = 0.95\), \(\Lambda_x = (J M^{-1} J^\top)^{-1}\) is the
+full Cartesian task-space inertia, and \(N = I - J^\top (J^\top)^+\) is
+the full null-space projector.
+The null-space torque \(\tau_\text{null}\) drives the joints towards the
+home configuration \(q_0\).
+
+\paragraph{Transition to hybrid control.}
+At each control step, the Euclidean distance between the current
+end-effector position and the target contact point is checked.
+When this distance falls below the position tolerance of
+\(1\,\mathrm{cm}\) (\texttt{position\_tolerance = 0.01\,m}), the
+control phase transitions from \textsc{Approaching} to
+\textsc{Circle\_Drawing} and the \texttt{HybridController} takes over.
 
 \begin{figure}[htbp]
     \centering
