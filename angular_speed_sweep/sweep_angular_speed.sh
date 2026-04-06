@@ -25,6 +25,9 @@ PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
 SWEEP_NAME="pd"
 FORCE_CONTROL_METHOD="pd"
 USE_PI="false"
+KP_FORCE=""   # e.g. "5.0" — passed as --kp-force; empty = use default
+KD_FORCE=""   # e.g. "0.5" — passed as --kd-force; empty = use default
+KI_FORCE=""   # e.g. "5.0" — passed as --ki-force; empty = use default
 NUM_WORKERS=10
 
 OUTPUT_DIR="${SCRIPT_DIR}/plots/${SWEEP_NAME}"
@@ -68,12 +71,20 @@ run_one() {
     local PI_FLAG=""
     [ "${USE_PI}" = "true" ] && PI_FLAG="--use-pi"
 
+    local KP_FLAG="" KD_FLAG="" KI_FLAG=""
+    [ -n "${KP_FORCE}" ] && KP_FLAG="--kp-force ${KP_FORCE}"
+    [ -n "${KD_FORCE}" ] && KD_FLAG="--kd-force ${KD_FORCE}"
+    [ -n "${KI_FORCE}" ] && KI_FLAG="--ki-force ${KI_FORCE}"
+
     local OUTPUT
     OUTPUT=$(python3 "${REPO_DIR}/run_approach_then_hybrid_mujoco.py" \
         --headless \
         --angular-speed "${ANGULAR_SPEED}" \
         --force-control-method "${FORCE_CONTROL_METHOD}" \
         ${PI_FLAG} \
+        ${KP_FLAG} \
+        ${KD_FLAG} \
+        ${KI_FLAG} \
         ${SAVE_FLAG} \
         ${PLOT_DIR_FLAG} \
         2>&1)
@@ -97,7 +108,7 @@ run_one() {
 }
 
 export -f run_one
-export OUTPUT_DIR TMP_DIR REPO_DIR FORCE_CONTROL_METHOD USE_PI SAVE_PLOT_MULTIPLIERS
+export OUTPUT_DIR TMP_DIR REPO_DIR FORCE_CONTROL_METHOD USE_PI KP_FORCE KD_FORCE KI_FORCE SAVE_PLOT_MULTIPLIERS
 
 # ---------------------------------------------------------------
 # Dispatch workers with a simple job-pool (no GNU parallel needed)
