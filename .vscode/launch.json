@@ -2,6 +2,23 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "run_approach_then_hybrid_mujoco",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_approach_then_hybrid_mujoco.py",
+      "args": [
+        "--force-control-method", "paper",
+        "--angular-speed", "6.283185307179586",
+        "--headless"
+      ],
+      "console": "integratedTerminal",
+      "python": "C:\\Users\\11452\\miniconda3\\envs\\hybrid_ctrl\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    {
       "name": "Python: Current File",
       "type": "debugpy",
       "request": "launch",
