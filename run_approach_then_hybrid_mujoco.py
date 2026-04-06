@@ -74,13 +74,19 @@ def main() -> None:
         "--kp-force",
         type=float,
         default=None,
-        help="Proportional PI gain (overrides HybridControllerConfig default)"
+        help="Proportional gain for PI/PD force control (overrides HybridControllerConfig default)"
     )
     parser.add_argument(
         "--ki-force",
         type=float,
         default=None,
         help="Integral PI gain (overrides HybridControllerConfig default)"
+    )
+    parser.add_argument(
+        "--kd-force",
+        type=float,
+        default=None,
+        help="Derivative PD gain (overrides HybridControllerConfig default)"
     )
     parser.add_argument(
         "--skip-seconds",
@@ -130,6 +136,8 @@ def main() -> None:
         hybrid_config.Kp_force = args.kp_force
     if args.ki_force is not None:
         hybrid_config.Ki_force = args.ki_force
+    if args.kd_force is not None:
+        hybrid_config.Kd_force = args.kd_force
 
     # Initial joint configuration (before approach)
     q0 = np.array([0.0225, 0.7064, -0.0243, -2.3135, -0.0095, 3.0422, -0.2441])
