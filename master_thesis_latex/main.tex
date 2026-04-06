@@ -206,7 +206,7 @@ The main contributions of this thesis are:
           framework \cite{iskandar2023} in simulation and on real hardware.
     \item Systematic study of force control methods (\(F_\text{desired}\),
           PD, PI, velocity-term compensation) on flat and slope surfaces.
-    \item Extension of the controller from a flat surface (\(\varphi = z\))
+    \item Extension of the controller from a flat surface (\(\Phi = z\))
           to an inclined surface (slope \(30^\circ\)) using constraint-frame
           Jacobians.
     \item Transfer and validation on the Franka Panda real robot using
@@ -999,23 +999,29 @@ required control force in the constraint direction~\cite[Eq.~19]{iskandar2023}:
 \begin{align}
     \mathbf{F}^{\text{ctrl}}_{\dot{\Phi}}
     &= \mathbf{F}^{\text{des}}(t) \notag \\
-    &\quad -\, \boldsymbol{\Lambda}_{\dot{\Phi}}
-        \mathbf{J}_{\dot{\Phi}}\mathbf{M}^{-1}
-        \bigl(
-            \mathbf{J}_{\dot{x}}^{T}\mathbf{F}^{\text{ctrl}}_{\dot{x}}
-            + \mathbf{J}_{v}^{T}\mathbf{F}^{\text{ctrl}}_{v}
-        \bigr) \notag \\
-    &\quad +\, \boldsymbol{\Lambda}_{\dot{\Phi}}
-        \mathbf{J}_{\dot{\Phi}}\mathbf{M}^{-1}
-        \bigl(
-            \mathbf{J}_{\dot{x}}^{T}\mathbf{F}^{\text{ext}}_{\dot{x}}
-            + \mathbf{J}_{v}^{T}\mathbf{F}^{\text{ext}}_{v}
-        \bigr) \notag \\
-    &\quad +\, \boldsymbol{\Lambda}_{\dot{\Phi}}
-        \bigl(
-            \mathbf{J}_{\dot{\Phi}}\mathbf{M}^{-1}\mathbf{C}
-            - \dot{\mathbf{J}}_{\dot{\Phi}}
-        \bigr)\dot{\mathbf{q}}.
+    &\quad -\, \underbrace{
+            \boldsymbol{\Lambda}_{\dot{\Phi}}
+            \mathbf{J}_{\dot{\Phi}}\mathbf{M}^{-1}
+            \bigl(
+                \mathbf{J}_{\dot{x}}^{T}\mathbf{F}^{\text{ctrl}}_{\dot{x}}
+                + \mathbf{J}_{v}^{T}\mathbf{F}^{\text{ctrl}}_{v}
+            \bigr)
+        }_{\mathbf{F}^{\text{ctrl}}_{\text{compensation}}} \notag \\
+    &\quad +\, \underbrace{
+            \boldsymbol{\Lambda}_{\dot{\Phi}}
+            \mathbf{J}_{\dot{\Phi}}\mathbf{M}^{-1}
+            \bigl(
+                \mathbf{J}_{\dot{x}}^{T}\mathbf{F}^{\text{ext}}_{\dot{x}}
+                + \mathbf{J}_{v}^{T}\mathbf{F}^{\text{ext}}_{v}
+            \bigr) 
+        }_{\mathbf{F}^{\text{ext}}_{\text{compensation}}}\notag \\
+    &\quad +\, \underbrace{
+            \boldsymbol{\Lambda}_{\dot{\Phi}}
+            \bigl(
+                \mathbf{J}_{\dot{\Phi}}\mathbf{M}^{-1}\mathbf{C}
+                - \dot{\mathbf{J}}_{\dot{\Phi}}
+            \bigr)\dot{\mathbf{q}}.
+            }_{\mathbf{F}_{\text{velocity\_term}}}
     \label{eq:F_ctrl_force}
 \end{align}
 The first line is the desired contact force.
@@ -1030,21 +1036,21 @@ $\mathbf{J}_{\dot{x}}^{T}\mathbf{F}^{\text{ctrl}}_{\dot{x}} +
 \mathbf{J}_{v}^{T}\mathbf{F}^{\text{ctrl}}_{v}$,
 produces a spurious acceleration in the constraint direction through
 $\mathbf{J}_{\dot{\Phi}}\mathbf{M}^{-1}$, disturbing the contact force.
-The second line pre-cancels the inertial bleed-through from the current
+$\mathbf{F}^{\text{ctrl}}_{\text{compensation}}$ cancels the inertial bleed-through from the current
 motion and null-space commands into the constraint direction.
 
-The third line compensates external forces $\mathbf{F}^{\text{ext}}_{\dot{x}}$
+$\mathbf{F}^{\text{ext}}_{\text{compensation}}$ compensates external forces $\mathbf{F}^{\text{ext}}_{\dot{x}}$
 and $\mathbf{F}^{\text{ext}}_{v}$ acting in the motion and null-space
 directions. Through the same inertial coupling, these forces also influence
 the robot in the constraint direction and would otherwise appear as a
-disturbance to the contact force. Adding this term cancels that effect.
+disturbance to the contact force. Adding this term cancels that effect. If the surface is frictionless, then there is no external force in motion space, $\mathbf{F}^{\text{ext}}_{\dot{x}}$ can considered as zero. When there is no external contact on the joints, $\mathbf{F}^{\text{ext}}_{v}$ vanishes as well. So when there is no surface friction and external force applying to the robot arms in the environment, $\mathbf{F}^{\text{ext}}_{\text{compensation}}$ can be treated as zero.
 
 
 The fourth line compensates the velocity-dependent coupling between the
 force and motion subspaces from Coriolis effects and Jacobian rate.
 The authors note that this term is commonly neglected in prior work but
 becomes the dominant force-tracking error during highly dynamic end-effector
-motions~\cite{iskandar2023}.
+motions. 
 
 In frictionless contact and in the absence of external forces in the motion
 and null-space directions, $\mathbf{F}^{\text{ext}}_{\dot{x}}$ and
@@ -1071,7 +1077,7 @@ unmodelled dynamics.
     \missingfigure{Normal force vs.\ tangential friction force on a surface}
     \caption{Illustration of normal force versus tangential friction force on
              a surface, and their interaction with $J_\text{motion}$ and
-             $J_\varphi$.}
+             $J_\Phi$.}
     \label{fig:friction}
 \end{figure}
 
@@ -1085,21 +1091,15 @@ unmodelled dynamics.
 
 This section describes the simulation environment, the real-robot hardware
 interface, and the unified software architecture that allows the same
-controller code to run in both settings without modification.
+controller code to run in both settings with minimum modification.
 
 \subsection{Simulation Setup (MuJoCo)}
 \label{sec:mujoco_setup}
 
 All simulation experiments are conducted in MuJoCo~\cite{mujoco} using the
 Franka Research~3 (FR3) robot model.
-The simulation scene is constructed via an XML description: the FR3 model is
-loaded from its base XML file, and the contact surface (flat board or slope)
-is added procedurally at runtime via the helper function
-\texttt{add\_slope\_xml}.
-This function injects a \texttt{<body>} element with a box geometry whose
-orientation is set by Euler angles \(\texttt{euler} = [\phi_x, \phi_y,
-\phi_z]\); for the flat surface \(\phi_x = 0^\circ\), and for the slope
-\(\phi_x = 30^\circ\).
+The simulation scene is constructed via an XML description: 
+% TODO: source of this xml file: https://github.com/google-deepmind/mujoco_menagerie/tree/main/franka_fr3
 
 The contact model is configured at the end-effector attachment geom with
 \texttt{condim=6} (enabling full 6-dimensional friction forces) and
@@ -1132,11 +1132,11 @@ previous commanded torques) and returns a new torque command.
 
 Robot dynamics — Jacobian, joint inertia matrix, Coriolis matrix, and gravity
 vector — are computed using Pinocchio~\cite{pinocchio} with the FR3 URDF model.
-Pinocchio is used identically in both simulation and real-robot code: it
+Pinocchio is used almost identically in both simulation and real-robot code: it
 receives the current joint configuration \(q\) and velocity \(\dot{q}\) from
 the robot state and returns the required kinematic and dynamic quantities.
 This ensures that the controller does not depend on MuJoCo's internal dynamics
-and that simulation-to-real transfer requires no algorithmic changes.
+and that simulation-to-real transfer requires no algorithmic changes. Only one exception is FR3 already has gravity compensation and don't need to calculate from Pinocchio.
 
 \subsection{Unified Software Architecture}
 \label{sec:unified_arch}
@@ -1196,6 +1196,7 @@ The end-effector draws a circle on a surface inclined at \(30^\circ\)
 (\(\texttt{euler} = [30^\circ, 0^\circ, 0^\circ]\)).
 The constraint direction is the surface normal, obtained by rotating the
 world \(z\)-axis by the slope rotation matrix \(R\).
+TODO: slope angle is an variable
 
 \paragraph{Trajectory parametrisation.}
 In both tasks the circle has radius \(r = 0.1\,\mathrm{m}\), centred at a
@@ -1302,7 +1303,7 @@ and the world-frame selection matrices are
 \paragraph{Constraint and motion Jacobians.}
 The projected Jacobians used by the controller are
 \begin{equation}
-    J_\varphi = S_f^\top J, \qquad J_\text{motion} = S_v^\top J,
+    J_\Phi = S_f^\top J, \qquad J_\text{motion} = S_v^\top J,
 \end{equation}
 where \(J \in \mathbb{R}^{6 \times 7}\) is the full geometric Jacobian of
 the end-effector.
@@ -1310,9 +1311,9 @@ the end-effector.
 \paragraph{Key simplification for planar surfaces.}
 Because \(S_f\) and \(\mathbf{R}\) depend only on the surface geometry — not
 on the robot configuration — they are \emph{constant} throughout the motion.
-This implies \(\dot{J}_\varphi \approx \dot{S}_f^\top J + S_f^\top \dot{J}
+This implies \(\dot{J}_\Phi \approx \dot{S}_f^\top J + S_f^\top \dot{J}
 = S_f^\top \dot{J}\), and in the force dynamics derivation the term
-\(\dot{J}_\varphi\) can be treated as arising solely from the Jacobian
+\(\dot{J}_\Phi\) can be treated as arising solely from the Jacobian
 time-derivative \(\dot{J}\).
 This simplification does \emph{not} hold for curved surfaces (e.g.\ a sphere),
 where the normal direction rotates as the end-effector moves.
@@ -1333,21 +1334,21 @@ where the normal direction rotates as the end-effector moves.
 \label{sec:force_strategies}
 
 All force control methods described below compute a scalar force command
-\(F^\varphi_\text{ctrl} \in \mathbb{R}\) in the constraint direction
-\(\varphi\).
+\(F^\Phi_\text{ctrl} \in \mathbb{R}\) in the constraint direction
+\(\Phi\).
 This scalar is mapped to joint torques via the constraint-space Jacobian:
 \begin{equation}
-    \tau^\varphi_\text{ctrl} = J_\varphi^\top\,F^\varphi_\text{ctrl}.
+    \tau^\Phi_\text{ctrl} = J_\Phi^\top\,F^\Phi_\text{ctrl}.
 \end{equation}
 The methods are presented from simplest to most complete.
 
-\subsection{Baseline: \texorpdfstring{$F_\text{desired}$}{F\_desired} Feed-forward}
+\subsection{Baseline: Desired Force Feed-forward}
 \label{sec:ff_baseline}
 
 The simplest strategy applies the desired contact force directly as the
 force command without any feedback:
 \begin{equation}
-    F^\varphi_\text{ctrl} = F_\text{desired}.
+    F^\Phi_\text{ctrl} = F_\text{desired}.
 \end{equation}
 This open-loop baseline establishes a performance lower bound.
 Because there is no feedback, the contact force tracks \(F_\text{desired}\)
@@ -1366,12 +1367,12 @@ With the desired force rate and desired force acceleration both set to zero
 (\(\dot{F}_\text{desired} = \ddot{F}_\text{desired} = 0\)), the control law
 implemented in this work is
 \begin{equation}
-    F^\varphi_\text{ctrl}
-    = -K_P^\lambda \bigl(|F_\text{desired}| - |F^\varphi_\text{ext}|\bigr)
-      - K_D^\lambda\,\dot{F}^\varphi_\text{ext},
+    F^\Phi_\text{ctrl}
+    = -K_P^\lambda \bigl(|F_\text{desired}| - |F^\Phi_\text{ext}|\bigr)
+      - K_D^\lambda\,\dot{F}^\Phi_\text{ext},
     \label{eq:pd_force_impl}
 \end{equation}
-where \(F^\varphi_\text{ext} = S_f^\top F_\text{ext}\) is the measured contact
+where \(F^\Phi_\text{ext} = S_f^\top F_\text{ext}\) is the measured contact
 force projected onto the constraint direction, and
 \(K_P^\lambda, K_D^\lambda > 0\) are scalar proportional and derivative gains.
 
@@ -1379,24 +1380,25 @@ force projected onto the constraint direction, and
 The force error is defined as the difference of \emph{magnitudes} rather than
 signed values.
 This is necessary because the robot pushes down on the surface
-(\(F^\varphi_\text{ctrl} < 0\) in the world \(z\)-convention) while the
+(\(F^\Phi_\text{ctrl} < 0\) in the world \(z\)-convention) while the
 environment reaction force is upward
-(\(F^\varphi_\text{ext} > 0\)).
+(\(F^\Phi_\text{ext} > 0\)).
 Using signed difference would invert the feedback polarity; using magnitudes
 produces a consistent error sign regardless of the contact direction.
 
 \paragraph{Force rate estimation.}
-The force rate \(\dot{F}^\varphi_\text{ext}\) is estimated from the kinematic
-relation
-\begin{equation}
-    \dot{F}^\varphi_\text{ext}
-    = \bigl(S_f^\top \mathbf{C}^{-1} J\,\dot{q}\bigr)^\top,
-    \label{eq:lambda_dot_est}
-\end{equation}
-where \(\mathbf{C}^{-1}\) is the compliance matrix of the contact surface
-(inverse of the contact stiffness matrix) and \(J\) is the end-effector
-Jacobian.
-This avoids direct numerical differentiation of the noisy force signal.
+
+Since force measurements are often corrupted by noise, direct differentiation
+of $F^\Phi_\text{ext}$ is not feasible in practice. Instead, the force
+rate $\dot{F}^\Phi_\text{ext}$ is reconstructed from joint velocities using the kinematic relation
+$\dot{F}^\Phi_\text{ext} = \mathbf{S}_{f}^{\dagger}\,\mathbf{K}'\,\mathbf{J}(\mathbf{q})\,\dot{\mathbf{q}}$,
+where $\mathbf{S}_{f}^{\dagger}$ is the Moore--Penrose pseudo-inverse of
+the force selection matrix and $\mathbf{K}' = \mathbf{S}_{f}(\mathbf{S}_{f}^{T}\mathbf{C}\,\mathbf{S}_{f})^{-1}\mathbf{S}_{f}^{T}$\cite{Siciliano_Sciavicco_Villani_Oriolo_2009}
+is the effective environmental stiffness projected onto the force subspace,
+with $\mathbf{C}$ the environmental compliance matrix. The matrix $\mathbf{K}'$
+is positive semi-definite by construction: it is zero in the unconstrained
+directions $\mathcal{R}(\mathbf{S}_{v})$ and inverts the compliance
+exclusively within the force-controlled subspace $\mathcal{R}(\mathbf{S}_{f})$.
 
 \subsection{PI Force Controller}
 \label{sec:pi_force}
@@ -1428,10 +1430,10 @@ A PI force controller (adding an integral term to eliminate steady-state
 error) was considered but not implemented in this work.
 The theoretical law would be
 \begin{equation}
-    F^\varphi_\text{ctrl}
-    = -K_P^\lambda \bigl(|F_\text{desired}| - |F^\varphi_\text{ext}|\bigr)
+    F^\Phi_\text{ctrl}
+    = -K_P^\lambda \bigl(|F_\text{desired}| - |F^\Phi_\text{ext}|\bigr)
       - K_I^\lambda \int_0^t
-            \bigl(|F_\text{desired}| - |F^\varphi_\text{ext}(\varsigma)|\bigr)
+            \bigl(|F_\text{desired}| - |F^\Phi_\text{ext}(\varsigma)|\bigr)
             \,\mathrm{d}\varsigma.
 \end{equation}
 Because the force dynamics include the contact stiffness as an integrating
@@ -1444,61 +1446,17 @@ the method is therefore listed as a future extension.
 \subsection{Hybrid Force-Impedance with Velocity-Term Compensation}
 \label{sec:paper_method}
 
-The full method from Iskandar~et~al.~\cite{iskandar2023} augments the
+The full method from Iskandar~et~al.~\cite{iskandar_hybrid_2023} augments the
 feedforward force command with three compensation terms that cancel the
-dynamic coupling between the motion subspace and the force subspace:
+dynamic coupling between the force subspace and other subspaces:
 \begin{equation}
-    F^\varphi_\text{ctrl}
+    F^\Phi_\text{ctrl}
     = F_\text{desired}
-      + F^\varphi_\text{ctrl\_comp}
-      + F^\varphi_\text{contact\_comp}
-      + F^\varphi_\text{vel},
+      + {F}^{\text{ext}}_{\text{compensation}}
+      + {F}^{\text{ctrl}}_{\text{compensation}}
+      + {F}_{\text{velocity\_term}},
     \label{eq:paper_method}
 \end{equation}
-where \(\Lambda_\varphi = (J_\varphi M^{-1} J_\varphi^\top)^{-1}\) is the
-task-space inertia projected onto the constraint direction.
-
-\paragraph{Control force compensation.}
-The torques \(\tau_\text{ctrl}^x\) and \(\tau_\text{ctrl}^v\) that drive
-the motion and null-space subtasks couple back into the force subspace through
-the robot inertia.
-This term cancels that coupling:
-\begin{equation}
-    F^\varphi_\text{ctrl\_comp}
-    = \Lambda_\varphi\,J_\varphi\,M^{-1}
-      \bigl(-\tau_\text{ctrl}^x - \tau_\text{ctrl}^v\bigr).
-\end{equation}
-The negative sign arises because \(\tau_\text{ctrl}^x\) opposes the surface
-reaction force: subtracting it from the force command cancels its projection
-into the constraint subspace.
-
-\paragraph{Contact force compensation.}
-Tangential friction forces \(F_\text{ext}^x = S_v^\top F_\text{ext}\) acting
-in the motion subspace also couple back into the constraint space through the
-dynamics.
-This term accounts for that coupling:
-\begin{equation}
-    F^\varphi_\text{contact\_comp}
-    = \Lambda_\varphi\,J_\varphi\,M^{-1}\,J_\text{motion}^\top
-      \,F_\text{ext}^x.
-\end{equation}
-In practice, the rotational components of \(F_\text{ext}^x\) are set to zero
-before computing this term to avoid amplifying noisy torque measurements.
-
-\paragraph{Velocity term.}
-Coriolis forces and the time-variation of \(J_\varphi\) produce velocity-
-dependent coupling into the force subspace.
-This term compensates it:
-\begin{equation}
-    F^\varphi_\text{vel}
-    = \Lambda_\varphi
-      \bigl(J_\varphi\,M^{-1}\,C - \dot{J}_\varphi\bigr)\,\dot{q},
-\end{equation}
-where \(C = C(q,\dot{q})\) is the Coriolis/centrifugal matrix from Pinocchio
-and \(\dot{J}_\varphi = S_f^\top \dot{J}\) is the time derivative of the
-constraint Jacobian.
-This term grows with end-effector speed and is the primary cause of
-force-tracking degradation at high circular speeds when it is omitted.
 
 \begin{figure}[htbp]
     \centering
@@ -1582,10 +1540,10 @@ across the tested speed range (\(\omega = \pi \times 0.1\) to
 \label{sec:null_space}
 
 The primary task of the hybrid controller occupies the force subspace
-(\(J_\varphi\)) and the motion subspace (\(J_\text{motion}\)), but the
+(\(J_\Phi\)) and the motion subspace (\(J_\text{motion}\)), but the
 Franka FR3 has seven joints, leaving one degree of freedom in the
 null space of the stacked Jacobian
-\(\tilde{J} = [J_\varphi;\, J_\text{motion}] \in \mathbb{R}^{6 \times 7}\).
+\(\tilde{J} = [J_\Phi;\, J_\text{motion}] \in \mathbb{R}^{6 \times 7}\).
 
 Null-space torques are used for posture control to keep the robot
 away from joint limits and in a comfortable configuration.
@@ -1607,7 +1565,7 @@ not disturb the primary force and motion tasks.
 
 In practice, the null-space torque is found to have negligible effect on
 the contact force: because the projector ensures orthogonality to
-\(J_\varphi\), it does not appear in the force dynamics.
+\(J_\Phi\), it does not appear in the force dynamics.
 Its main benefit is maintaining a well-conditioned robot configuration
 throughout the circular motion.
 
@@ -1812,9 +1770,9 @@ control phase transitions from \textsc{Approaching} to
     \centering
     % TODO (PLOT): Velocity term components (red: Coriolis part,
     % blue: J̇_φ part) and their sum ≈ 0 on slope.
-    \missingfigure{Velocity term components on slope: Coriolis (red) and $\dot{J}_\varphi$ (blue)}
+    \missingfigure{Velocity term components on slope: Coriolis (red) and $\dot{J}_\Phi$ (blue)}
     \caption{Velocity term components on the slope: Coriolis part (red) and
-             $-\Lambda_\varphi \dot{J}_\varphi \dot{q}$ part (blue), and
+             $-\Lambda_\Phi \dot{J}_\Phi \dot{q}$ part (blue), and
              their sum which is approximately zero.}
     \label{fig:velocity_term_slope}
 \end{figure}
@@ -1823,9 +1781,9 @@ control phase transitions from \textsc{Approaching} to
     \centering
     % TODO (PLOT): Force tracking: with J̇_φ (Pinocchio attachment frame)
     % vs. without J̇_φ — showing negligible difference on slope.
-    \missingfigure{Force tracking: with $\dot{J}_\varphi$ vs.\ without $\dot{J}_\varphi$ on slope}
+    \missingfigure{Force tracking: with $\dot{J}_\Phi$ vs.\ without $\dot{J}_\Phi$ on slope}
     \caption{Force tracking on the slope with and without the
-             $\dot{J}_\varphi$ term, demonstrating the negligible difference.}
+             $\dot{J}_\Phi$ term, demonstrating the negligible difference.}
     \label{fig:slope_jdot_comparison}
 \end{figure}
 
@@ -2043,7 +2001,7 @@ Promising directions for future work include:
 
 \begin{itemize}
     \item Extending the framework to curved surfaces (cylinder, sphere) where
-          $\dot{J}_\varphi \neq 0$ and $S_f$ is time-varying.
+          $\dot{J}_\Phi \neq 0$ and $S_f$ is time-varying.
     \item Incorporating an external force/torque sensor for more accurate
           force feedback.
     \item Developing a friction compensation module using the adaptive friction
