@@ -167,6 +167,20 @@ def compute_force_dot(
     return Sf_pinv @ K_effective @ jac @ dq
 
 
+def PI_term(
+    F_ext: np.ndarray,
+    F_desired: np.ndarray,
+    dt: float,
+    integral_force_error: np.ndarray,
+    kp: float = 2.0,
+    ki: float = 2.0,
+):
+    """PI force correction: -kp*(F_ext - F_des) - ki * integral(F_ext - F_des) dt"""
+    f_error = F_ext - F_desired
+    integral_force_error = integral_force_error + f_error * dt
+    return -kp * f_error - ki * integral_force_error, integral_force_error
+
+
 def force_ctrl_feedforward(F_desired: np.ndarray) -> np.ndarray:
     """
     Force control rule 1: pure feedforward.

@@ -19,10 +19,12 @@ PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
 #   angular_speed_sweep/plots/<SWEEP_NAME>/speed_<mult>pi/
 #
 # FORCE_CONTROL_METHOD: "paper" | "pd" | "feedforward"
+# USE_PI: "true" to add PI correction on top of the method, "false" otherwise
 # NUM_WORKERS: how many simulations to run in parallel
 # ---------------------------------------------------------------
 SWEEP_NAME="pd"
 FORCE_CONTROL_METHOD="pd"
+USE_PI="false"
 NUM_WORKERS=10
 
 OUTPUT_DIR="${SCRIPT_DIR}/plots/${SWEEP_NAME}"
@@ -63,11 +65,15 @@ run_one() {
 
     echo "[worker ${i}] angular_speed = pi * ${MULTIPLIER} = ${ANGULAR_SPEED} rad/s  (v = ${EE_LINEAR_SPEED} m/s)"
 
+    local PI_FLAG=""
+    [ "${USE_PI}" = "true" ] && PI_FLAG="--use-pi"
+
     local OUTPUT
     OUTPUT=$(python3 "${REPO_DIR}/run_approach_then_hybrid_mujoco.py" \
         --headless \
         --angular-speed "${ANGULAR_SPEED}" \
         --force-control-method "${FORCE_CONTROL_METHOD}" \
+        ${PI_FLAG} \
         ${SAVE_FLAG} \
         ${PLOT_DIR_FLAG} \
         2>&1)
@@ -91,7 +97,7 @@ run_one() {
 }
 
 export -f run_one
-export OUTPUT_DIR TMP_DIR REPO_DIR FORCE_CONTROL_METHOD SAVE_PLOT_MULTIPLIERS
+export OUTPUT_DIR TMP_DIR REPO_DIR FORCE_CONTROL_METHOD USE_PI SAVE_PLOT_MULTIPLIERS
 
 # ---------------------------------------------------------------
 # Dispatch workers with a simple job-pool (no GNU parallel needed)

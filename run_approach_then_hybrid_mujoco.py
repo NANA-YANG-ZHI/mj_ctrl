@@ -66,6 +66,11 @@ def main() -> None:
         help="Force control method: paper (default), pd, or feedforward"
     )
     parser.add_argument(
+        "--use-pi",
+        action="store_true",
+        help="Add PI force correction on top of the selected force control method"
+    )
+    parser.add_argument(
         "--headless",
         action="store_true",
         help="Run without MuJoCo viewer"
@@ -99,6 +104,7 @@ def main() -> None:
     common_config.gravity_compensation = True
     common_config.angular_speed = args.angular_speed
     common_config.force_control_method = args.force_control_method
+    common_config.use_pi = args.use_pi
 
     approach_config = CartesianSpacePDControlConfig()
     hybrid_config = HybridControllerConfig()
