@@ -21,6 +21,7 @@ from utils_libfranka import (
     compute_force_dot,
     force_ctrl_feedforward,
     force_ctrl_pd,
+    PI_term,
 )
 from src.controller_config import ControllerConfig
 
@@ -282,6 +283,7 @@ class HybridController:
 
         # Preallocated workspace
         self.tau = np.zeros(n_joints)
+        self.integral_force_error = np.zeros(1)
 
         # Data logging
         self.contact_forces: list = []
@@ -347,6 +349,7 @@ class HybridController:
 
         # Zero control
         self.tau[:] = 0.0
+        self.integral_force_error = np.zeros(1)
 
         print(f"[HYBRID START] Surface motion started at t={current_time:.2f}s")
         print(f"[HYBRID START] Center: {self.common_config.circle_center}")
@@ -532,6 +535,17 @@ class HybridController:
             contact_force_compensation = np.zeros(1)
             velocity_term = np.zeros(1)
             F_ctrl_constraint = force_ctrl_feedforward(self.config.F_desired_contact)
+
+        if self.common_config.use_pi:
+            pi_term, self.integral_force_error = PI_term(
+                -F_ext_phi,
+                self.config.F_desired_contact,
+                self.common_config.dt,
+                self.integral_force_error,
+                kp=self.config.Kp_force,
+                ki=self.config.Ki_force,
+            )
+            F_ctrl_constraint = F_ctrl_constraint + pi_term
 
         tau_ctrl_phi = J_phi.T @ F_ctrl_constraint
 

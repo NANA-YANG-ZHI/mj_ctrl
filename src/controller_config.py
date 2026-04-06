@@ -29,6 +29,7 @@ class ControllerConfig:
 
     # Force control method: "paper" | "pd" | "feedforward"
     force_control_method: str = "paper"
+    use_pi: bool = False  # add PI correction on top of any force method
 
     # Contact detection thresholds
     position_tolerance: float = 0.01  # 1cm tolerance for reaching target
