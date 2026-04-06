@@ -177,9 +177,9 @@ class HybridControllerConfig:
     impedance_ori: np.ndarray = None
 
     # Force control gains
-    Kp_force: float = 0.4
+    Kp_force: float = 0.8
     Kd_force: float = 0.002
-    Ki_force: float = 0.4
+    Ki_force: float = 0.8
     F_desired_contact: np.ndarray = None
 
     # Torque rate limiting (max Nm change per timestep)
@@ -538,7 +538,7 @@ class HybridController:
 
         if self.common_config.use_pi:
             pi_term, self.integral_force_error = PI_term(
-                -F_ext_phi,
+                F_ext_phi,
                 self.config.F_desired_contact,
                 self.common_config.dt,
                 self.integral_force_error,

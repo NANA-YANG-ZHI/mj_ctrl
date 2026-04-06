@@ -7,9 +7,11 @@
       "request": "launch",
       "program": "${workspaceFolder}/run_approach_then_hybrid_mujoco.py",
       "args": [
-        "--force-control-method", "paper",
+        "--force-control-method", "feedforward",
         "--angular-speed", "6.283185307179586",
-        "--headless"
+        "--headless",
+        "--save-plots",
+        "--use-pi",
       ],
       "console": "integratedTerminal",
       "python": "C:\\Users\\11452\\miniconda3\\envs\\hybrid_ctrl\\python.exe",
