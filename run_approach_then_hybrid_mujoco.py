@@ -71,6 +71,24 @@ def main() -> None:
         help="Add PI force correction on top of the selected force control method"
     )
     parser.add_argument(
+        "--kp-force",
+        type=float,
+        default=None,
+        help="Proportional PI gain (overrides HybridControllerConfig default)"
+    )
+    parser.add_argument(
+        "--ki-force",
+        type=float,
+        default=None,
+        help="Integral PI gain (overrides HybridControllerConfig default)"
+    )
+    parser.add_argument(
+        "--skip-seconds",
+        type=float,
+        default=1.0,
+        help="Seconds of data to skip at start when computing metrics (default: 1.0)"
+    )
+    parser.add_argument(
         "--headless",
         action="store_true",
         help="Run without MuJoCo viewer"
@@ -108,6 +126,10 @@ def main() -> None:
 
     approach_config = CartesianSpacePDControlConfig()
     hybrid_config = HybridControllerConfig()
+    if args.kp_force is not None:
+        hybrid_config.Kp_force = args.kp_force
+    if args.ki_force is not None:
+        hybrid_config.Ki_force = args.ki_force
 
     # Initial joint configuration (before approach)
     q0 = np.array([0.0225, 0.7064, -0.0243, -2.3135, -0.0095, 3.0422, -0.2441])
@@ -281,12 +303,19 @@ def main() -> None:
         # ============================================================
         # 8. Report metrics (always printed for sweep scripts)
         # ============================================================
+        skip_samples = int(args.skip_seconds / common_config.dt)
         contact_forces = np.array(hybrid_controller.contact_forces) if hybrid_controller.contact_forces else np.empty((0, 3))
         desired_forces = np.array(hybrid_controller.desired_forces) if hybrid_controller.desired_forces else np.empty((0, 1))
         if contact_forces.size > 0 and contact_forces.ndim == 2 and contact_forces.shape[1] >= 3 and desired_forces.size > 0:
-            error_z = contact_forces[:, 2] - desired_forces[:, 0]
-            avg_abs_force_error = np.mean(np.abs(error_z))
-            var_force_error = np.var(error_z)
+            cf_ss = contact_forces[skip_samples:]
+            df_ss = desired_forces[skip_samples:]
+            if cf_ss.shape[0] > 0 and df_ss.shape[0] > 0:
+                error_z = cf_ss[:, 2] - df_ss[:, 0]
+                avg_abs_force_error = np.mean(np.abs(error_z))
+                var_force_error = np.var(error_z)
+            else:
+                avg_abs_force_error = float('nan')
+                var_force_error = float('nan')
             print(f"AVG_FORCE_Z_ERROR: {avg_abs_force_error:.6f}")
             print(f"VAR_FORCE_Z_ERROR: {var_force_error:.6f}")
         else:
@@ -296,9 +325,15 @@ def main() -> None:
         ee_positions = np.array(hybrid_controller.ee_positions) if hybrid_controller.ee_positions else np.empty((0, 3))
         target_positions = np.array(hybrid_controller.target_positions) if hybrid_controller.target_positions else np.empty((0, 3))
         if ee_positions.size > 0 and target_positions.size > 0 and ee_positions.shape == target_positions.shape:
-            pos_error = np.linalg.norm(ee_positions - target_positions, axis=1)
-            avg_abs_pos_error = np.mean(pos_error)
-            var_pos_error = np.var(pos_error)
+            ep_ss = ee_positions[skip_samples:]
+            tp_ss = target_positions[skip_samples:]
+            if ep_ss.shape[0] > 0:
+                pos_error = np.linalg.norm(ep_ss - tp_ss, axis=1)
+                avg_abs_pos_error = np.mean(pos_error)
+                var_pos_error = np.var(pos_error)
+            else:
+                avg_abs_pos_error = float('nan')
+                var_pos_error = float('nan')
             print(f"AVG_POSITION_ERROR: {avg_abs_pos_error:.6f}")
             print(f"VAR_POSITION_ERROR: {var_pos_error:.6f}")
         else:
