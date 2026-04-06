@@ -22,12 +22,12 @@ PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
 # USE_PI: "true" to add PI correction on top of the method, "false" otherwise
 # NUM_WORKERS: how many simulations to run in parallel
 # ---------------------------------------------------------------
-SWEEP_NAME="pd"
-FORCE_CONTROL_METHOD="pd"
-USE_PI="false"
-KP_FORCE=""   # e.g. "5.0" — passed as --kp-force; empty = use default
+SWEEP_NAME="feedforward_pi"
+FORCE_CONTROL_METHOD="feedforward"
+USE_PI="true"
+KP_FORCE="2.0"   # e.g. "5.0" — passed as --kp-force; empty = use default
 KD_FORCE=""   # e.g. "0.5" — passed as --kd-force; empty = use default
-KI_FORCE=""   # e.g. "5.0" — passed as --ki-force; empty = use default
+KI_FORCE="5.0"   # e.g. "5.0" — passed as --ki-force; empty = use default
 NUM_WORKERS=10
 
 OUTPUT_DIR="${SCRIPT_DIR}/plots/${SWEEP_NAME}"
