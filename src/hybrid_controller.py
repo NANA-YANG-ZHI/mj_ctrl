@@ -528,6 +528,8 @@ class HybridController:
                 jac=jac,
                 dq=dq,
                 k_normal=5000.0,
+                kp=self.config.Kp_force,
+                kd=self.config.Kd_force,
             )
 
         else:  # feedforward
