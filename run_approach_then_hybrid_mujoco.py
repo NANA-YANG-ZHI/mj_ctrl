@@ -110,6 +110,23 @@ def main() -> None:
         default="plots/run_approach_then_hybrid_mujoco",
         help="Directory to save plots (default: plots/run_approach_then_hybrid_mujoco)"
     )
+    parser.add_argument(
+        "--save-data",
+        action="store_true",
+        help="Save time-series data to a .npz file (default: False)"
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default="",
+        help="Directory to save .npz data file (used with --save-data)"
+    )
+    parser.add_argument(
+        "--multiplier",
+        type=float,
+        default=0.0,
+        help="Angular speed multiplier (omega/pi); used as part of the saved data filename"
+    )
     args = parser.parse_args()
 
     # ============================================================
@@ -349,7 +366,54 @@ def main() -> None:
             print(f"VAR_POSITION_ERROR: nan")
 
         # ============================================================
-        # 9. Plot Results (only if --save-plots is set)
+        # 9. Save time-series data (only if --save-data is set)
+        # ============================================================
+        if args.save_data and args.data_dir:
+            import os as _os
+            _os.makedirs(args.data_dir, exist_ok=True)
+
+            # Velocities via numerical differentiation (consistent with utils_plot.py)
+            if ee_positions.size > 0:
+                actual_velocitys = np.gradient(ee_positions, common_config.dt, axis=0)
+            else:
+                actual_velocitys = np.empty((0, 3))
+
+            if target_positions.size > 0:
+                desired_velocitys = np.gradient(target_positions, common_config.dt, axis=0)
+            else:
+                desired_velocitys = np.empty((0, 3))
+
+            # Force error time series (full, not skip-trimmed)
+            if contact_forces.size > 0 and desired_forces.size > 0:
+                force_error = contact_forces[:, 2] - desired_forces[:, 0]
+            else:
+                force_error = np.empty(0)
+
+            # Position error time series (full, not skip-trimmed)
+            if ee_positions.size > 0 and target_positions.size > 0 and ee_positions.shape == target_positions.shape:
+                position_error = np.linalg.norm(ee_positions - target_positions, axis=1)
+            else:
+                position_error = np.empty(0)
+
+            ee_linear_speed = 0.1 * args.angular_speed  # circle radius = 0.1 m
+            fname = f"data_{args.multiplier:.1f}.npz"
+            fpath = _os.path.join(args.data_dir, fname)
+            np.savez(
+                fpath,
+                force_error=force_error,
+                position_error=position_error,
+                actual_positions=ee_positions,
+                desired_positions=target_positions,
+                actual_velocitys=actual_velocitys,
+                desired_velocitys=desired_velocitys,
+                multiplier=np.array(args.multiplier),
+                angular_speed_rad_s=np.array(args.angular_speed),
+                ee_linear_speed_m_s=np.array(ee_linear_speed),
+            )
+            print(f"DATA_SAVED: {fpath}")
+
+        # ============================================================
+        # 10. Plot Results (only if --save-plots is set)
         # ============================================================
         if args.save_plots:
             print("\n[MAIN] Simulation complete. Generating plots...")

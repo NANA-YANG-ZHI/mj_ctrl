@@ -22,18 +22,20 @@ PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
 # USE_PI: "true" to add PI correction on top of the method, "false" otherwise
 # NUM_WORKERS: how many simulations to run in parallel
 # ---------------------------------------------------------------
-SWEEP_NAME="feedforward_pi"
-FORCE_CONTROL_METHOD="feedforward"
-USE_PI="true"
-KP_FORCE="2.0"   # e.g. "5.0" — passed as --kp-force; empty = use default
-KD_FORCE=""   # e.g. "0.5" — passed as --kd-force; empty = use default
-KI_FORCE="5.0"   # e.g. "5.0" — passed as --ki-force; empty = use default
-NUM_WORKERS=10
+SWEEP_NAME="${SWEEP_NAME:-feedforward_pi}"
+FORCE_CONTROL_METHOD="${FORCE_CONTROL_METHOD:-feedforward}"
+USE_PI="${USE_PI:-true}"
+KP_FORCE="${KP_FORCE:-2.0}"   # e.g. "5.0" — passed as --kp-force; empty = use default
+KD_FORCE="${KD_FORCE:-}"      # e.g. "0.5" — passed as --kd-force; empty = use default
+KI_FORCE="${KI_FORCE:-5.0}"   # e.g. "5.0" — passed as --ki-force; empty = use default
+NUM_WORKERS="${NUM_WORKERS:-10}"
+SKIP_SECONDS="${SKIP_SECONDS:-1.0}"
 
 OUTPUT_DIR="${SCRIPT_DIR}/plots/${SWEEP_NAME}"
 TMP_DIR="${OUTPUT_DIR}/tmp_results"
+DATA_DIR="${OUTPUT_DIR}/data"
 RESULTS_CSV="${OUTPUT_DIR}/sweep_results.csv"
-mkdir -p "${OUTPUT_DIR}" "${TMP_DIR}"
+mkdir -p "${OUTPUT_DIR}" "${TMP_DIR}" "${DATA_DIR}"
 
 # Angular speed multipliers that trigger saving individual plots
 SAVE_PLOT_MULTIPLIERS="0.1 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0"
@@ -81,6 +83,10 @@ run_one() {
         --headless \
         --angular-speed "${ANGULAR_SPEED}" \
         --force-control-method "${FORCE_CONTROL_METHOD}" \
+        --multiplier "${MULTIPLIER}" \
+        --skip-seconds "${SKIP_SECONDS}" \
+        --save-data \
+        --data-dir "${DATA_DIR}" \
         ${PI_FLAG} \
         ${KP_FLAG} \
         ${KD_FLAG} \
@@ -108,7 +114,7 @@ run_one() {
 }
 
 export -f run_one
-export OUTPUT_DIR TMP_DIR REPO_DIR FORCE_CONTROL_METHOD USE_PI KP_FORCE KD_FORCE KI_FORCE SAVE_PLOT_MULTIPLIERS
+export OUTPUT_DIR TMP_DIR DATA_DIR REPO_DIR FORCE_CONTROL_METHOD USE_PI KP_FORCE KD_FORCE KI_FORCE SKIP_SECONDS SAVE_PLOT_MULTIPLIERS
 
 # ---------------------------------------------------------------
 # Dispatch workers with a simple job-pool (no GNU parallel needed)
