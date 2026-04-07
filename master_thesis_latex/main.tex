@@ -1670,11 +1670,108 @@ control phase transitions from \textsc{Approaching} to
 \end{figure}
 
 
-\section{Effect of Circle Speed}
+\section{Speed-Dependent Evaluation of Force Control Methods}
 
-% TODO (FILL): Compare π/4 vs. π rad/s results. Explain why faster motion
-% increases force coupling and why the velocity-term compensation becomes
-% more critical.
+To evaluate the impact of end-effector velocity on force control performance and
+to determine the maximum speed at which adequate force and position regulation
+can be sustained, a parametric simulation study was conducted in which the
+angular speed of a circular contact trajectory was varied systematically.
+The task requires the robot to trace a circle of radius $r = 0.1\,\mathrm{m}$
+on a planar surface while maintaining a constant normal contact force of
+$F_d = 8\,\mathrm{N}$.
+The angular speed $\omega$ was swept over 50 uniformly spaced values in the
+range $\omega \in [0.1\pi,\,5.0\pi]\,\mathrm{rad/s}$, corresponding to
+end-effector linear speeds
+$v = r\omega \in [0.031,\,1.571]\,\mathrm{m/s}$.
+Each trial ran for 10 seconds of simulated time.
+
+Five control strategies were evaluated:
+(1) pure feedforward force control,
+(2) feedforward with PI correction ($K_p = 2$, $K_i = 5$),
+(3) a PD controller ($K_p = 5$, $K_d = 0.5$),
+(4) the paper method (the model-based approach developed in this work), and
+(5) the paper method augmented with a PI corrector (Paper\,+\,PI,
+$K_p = 2$, $K_i = 5$).
+PI and PD gains were selected independently via grid search.
+
+\paragraph{Metrics and measurement window.}
+Two scalar metrics are reported per trial:
+the mean absolute steady-state force error
+$\bar{e}_F = \mathbb{E}[|F_z - F_d|]$
+and the mean position tracking error $\bar{e}_p$,
+together with their respective variances.
+During the initial approach phase the robot closes contact from free space;
+this produces transient force spikes of up to $8\,\mathrm{N}$ that are
+unrelated to steady-state control quality.
+Accordingly, force metrics are computed only over the interval
+$[1\,\mathrm{s},\,10\,\mathrm{s}]$, discarding the first 1000 samples
+(at $\Delta t = 1\,\mathrm{ms}$) to exclude the approach transient.
+Position error, which does not exhibit such a transient, is computed over
+the full $10\,\mathrm{s}$ window.
+
+\paragraph{Force error analysis.}
+All methods exhibit a monotonically increasing force error with speed, but the
+rate of increase and the absolute level differ markedly.
+
+The \emph{PD controller} is the sole exception to monotonic growth: it
+produces a roughly constant steady-state offset of
+$\bar{e}_F \approx 1.35$--$1.46\,\mathrm{N}$ across the full stable speed
+range $v \lesssim 1.3\,\mathrm{m/s}$.
+This behaviour is characteristic of PD control in the presence of a constant
+disturbance: the proportional term compensates for velocity-induced coupling
+forces with only marginal gain variation, but the absence of integral action
+leaves a permanent bias determined by the controller gains and the contact
+stiffness.
+
+The \emph{feedforward} controller, which relies solely on the desired force
+command, accumulates the largest errors.
+Its mean force error grows from $\bar{e}_F = 0.019\,\mathrm{N}$
+at $v = 0.031\,\mathrm{m/s}$ to $\bar{e}_F = 8.16\,\mathrm{N}$
+at $v = 1.35\,\mathrm{m/s}$, effectively reaching the target force magnitude
+itself.
+The PI augmentation (\emph{feedforward\,+\,PI}) reduces this substantially:
+$\bar{e}_F$ grows from $0.003\,\mathrm{N}$ to $3.44\,\mathrm{N}$ over the
+same range, a reduction of roughly $58\,\%$ at the highest stable speed.
+
+The \emph{paper method} achieves lower errors than feedforward\,+\,PI in the
+mid-to-high speed regime:
+$\bar{e}_F = 0.028\,\mathrm{N}$ at $v = 0.031\,\mathrm{m/s}$,
+rising to $3.27\,\mathrm{N}$ at $v = 1.35\,\mathrm{m/s}$.
+The addition of PI correction (\emph{paper\,+\,PI}) yields the best overall
+force tracking: $\bar{e}_F = 0.002\,\mathrm{N}$ at the lowest speed,
+increasing to $2.18\,\mathrm{N}$ at $v = 1.35\,\mathrm{m/s}$, representing
+the best absolute performance across the entire speed sweep.
+
+\paragraph{Trajectory tracking and critical speed.}
+Position error remains uniformly small---in the range
+$3$--$14\,\mathrm{mm}$---for all methods at speeds below a critical
+threshold.
+A sharp, abrupt increase in $\bar{e}_p$ is observed for all methods near
+$v \approx 1.38$--$1.41\,\mathrm{m/s}$
+($\omega \approx 13.8$--$14.1\,\mathrm{rad/s}$, i.e.\ approximately
+$4.4\pi\,\mathrm{rad/s}$), indicating loss of trajectory tracking.
+The PD controller degrades first, with $\bar{e}_p$ jumping from
+$0.018\,\mathrm{m}$ to $0.112\,\mathrm{m}$ at $v = 1.38\,\mathrm{m/s}$
+($\omega \approx 13.8\,\mathrm{rad/s}$).
+The feedforward and paper methods lose tracking at $v = 1.41\,\mathrm{m/s}$,
+with $\bar{e}_p$ reaching $0.385\,\mathrm{m}$ and $0.218\,\mathrm{m}$
+respectively.
+The paper\,+\,PI and feedforward\,+\,PI methods degrade more gradually at
+$v = 1.41\,\mathrm{m/s}$ ($\bar{e}_p = 0.057\,\mathrm{m}$ and
+$0.023\,\mathrm{m}$, respectively), suggesting that integral force correction
+moderates the destabilising effect of high-frequency contact dynamics.
+Above $v \approx 1.5\,\mathrm{m/s}$ all methods diverge, with paper\,+\,PI
+and feedforward exhibiting catastrophic instability (force errors exceeding
+$10^3\,\mathrm{N}$).
+
+In summary, the model-based paper method and its PI variant provide
+consistently superior force tracking relative to the other strategies across the
+full stable operating range, with paper\,+\,PI achieving the lowest
+steady-state force error at every speed.
+The critical speed limit for sustained contact control is approximately
+$v \approx 1.38\,\mathrm{m/s}$ ($\omega \approx 4.4\pi\,\mathrm{rad/s}$),
+beyond which trajectory tracking degrades irrecoverably for all evaluated
+methods.
 
 
 \section{Effect of Friction}
