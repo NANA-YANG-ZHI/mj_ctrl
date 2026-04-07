@@ -22,50 +22,50 @@ echo "Running all 5 angular speed sweep experiments"
 echo "========================================================"
 echo ""
 
-# ----------------------------------------------------------
-# 1. feedforward
-# ----------------------------------------------------------
-echo "=== Experiment 1/5: feedforward ==="
-SWEEP_NAME="feedforward" \
-FORCE_CONTROL_METHOD="feedforward" \
-USE_PI="false" \
-KP_FORCE="" \
-KD_FORCE="" \
-KI_FORCE="" \
-SKIP_SECONDS="0.0" \
-bash "${SWEEP}"
+# # ----------------------------------------------------------
+# # 1. feedforward
+# # ----------------------------------------------------------
+# echo "=== Experiment 1/5: feedforward ==="
+# SWEEP_NAME="feedforward" \
+# FORCE_CONTROL_METHOD="feedforward" \
+# USE_PI="false" \
+# KP_FORCE="" \
+# KD_FORCE="" \
+# KI_FORCE="" \
+# SKIP_SECONDS="0.0" \
+# bash "${SWEEP}"
 
-echo ""
+# echo ""
 
-# ----------------------------------------------------------
-# 2. feedforward + PI (kp=2.0, ki=5.0)
-# ----------------------------------------------------------
-echo "=== Experiment 2/5: feedforward + PI (kp=2.0, ki=5.0) ==="
-SWEEP_NAME="feedforward_pi" \
-FORCE_CONTROL_METHOD="feedforward" \
-USE_PI="true" \
-KP_FORCE="2.0" \
-KD_FORCE="" \
-KI_FORCE="5.0" \
-SKIP_SECONDS="0.0" \
-bash "${SWEEP}"
+# # ----------------------------------------------------------
+# # 2. feedforward + PI (kp=2.0, ki=5.0)
+# # ----------------------------------------------------------
+# echo "=== Experiment 2/5: feedforward + PI (kp=2.0, ki=5.0) ==="
+# SWEEP_NAME="feedforward_pi" \
+# FORCE_CONTROL_METHOD="feedforward" \
+# USE_PI="true" \
+# KP_FORCE="2.0" \
+# KD_FORCE="" \
+# KI_FORCE="5.0" \
+# SKIP_SECONDS="0.0" \
+# bash "${SWEEP}"
 
-echo ""
+# echo ""
 
-# ----------------------------------------------------------
-# 3. PD (kp=5.0, kd=0.5)
-# ----------------------------------------------------------
-echo "=== Experiment 3/5: PD (kp=5.0, kd=0.5) ==="
-SWEEP_NAME="pd" \
-FORCE_CONTROL_METHOD="pd" \
-USE_PI="false" \
-KP_FORCE="5.0" \
-KD_FORCE="0.5" \
-KI_FORCE="" \
-SKIP_SECONDS="0.0" \
-bash "${SWEEP}"
+# # ----------------------------------------------------------
+# # 3. PD (kp=5.0, kd=0.5)
+# # ----------------------------------------------------------
+# echo "=== Experiment 3/5: PD (kp=5.0, kd=0.5) ==="
+# SWEEP_NAME="pd" \
+# FORCE_CONTROL_METHOD="pd" \
+# USE_PI="false" \
+# KP_FORCE="5.0" \
+# KD_FORCE="0.5" \
+# KI_FORCE="" \
+# SKIP_SECONDS="0.0" \
+# bash "${SWEEP}"
 
-echo ""
+# echo ""
 
 # ----------------------------------------------------------
 # 4. paper
