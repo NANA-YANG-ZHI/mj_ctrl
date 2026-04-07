@@ -18,7 +18,6 @@ Usage
     python angular_speed_sweep/plot_force_error_comparison.py
 """
 
-import csv
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -28,10 +27,11 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR = os.path.join(SCRIPT_DIR, "plots")
 
 METHODS = [
-    ("Feedforward",      os.path.join(PLOTS_DIR, "feedforward",      "sweep_results.csv"), "tab:blue",   "o"),
-    ("Feedforward + PI", os.path.join(PLOTS_DIR, "feedforward_pi",   "sweep_results.csv"), "tab:orange", "s"),
-    ("PD New Params",    os.path.join(PLOTS_DIR, "pd_newparameters", "sweep_results.csv"), "tab:green",  "^"),
-    ("Paper",            os.path.join(PLOTS_DIR, "paper",            "sweep_results.csv"), "tab:red",    "D"),
+    ("Feedforward",      os.path.join(PLOTS_DIR, "feedforward",    "data"), "tab:blue",   "o"),
+    ("Feedforward + PI", os.path.join(PLOTS_DIR, "feedforward_pi", "data"), "tab:orange", "s"),
+    ("PD",               os.path.join(PLOTS_DIR, "pd",             "data"), "tab:green",  "^"),
+    ("Paper",            os.path.join(PLOTS_DIR, "paper",          "data"), "tab:red",    "D"),
+    ("Paper + PI",       os.path.join(PLOTS_DIR, "paper_pi",       "data"), "tab:purple", "P"),
 ]
 
 # ── Per-metric plot configuration ────────────────────────────────────────────
@@ -83,23 +83,45 @@ METRICS = [
 ]
 
 
-def load_all(path):
-    """Return dict col_name → np.array for all numeric columns."""
+DT = 0.001                          # simulation timestep (ControllerConfig.dt)
+FORCE_SKIP_SAMPLES = int(1.0 / DT)  # skip first 1 s for force metrics (= 1000 samples)
+
+
+def load_all(data_dir):
+    """Load per-speed .npz files and aggregate into metric arrays."""
+    import glob
+    npz_files = sorted(
+        glob.glob(os.path.join(data_dir, "data_*.npz")),
+        key=lambda p: float(os.path.basename(p)[5:-4])  # sort by multiplier float
+    )
     rows = {k: [] for k in (
         "ee_linear_speed_m_s",
         "avg_force_z_error", "var_force_z_error",
         "avg_position_error", "var_position_error",
     )}
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            try:
-                for k in rows:
-                    rows[k].append(float(row[k]))
-            except (KeyError, ValueError):
-                for k in rows:
-                    if rows[k]:
-                        rows[k].append(float("nan"))
+    for fpath in npz_files:
+        d = np.load(fpath)
+        rows["ee_linear_speed_m_s"].append(float(d["ee_linear_speed_m_s"]))
+
+        # Force: skip first second
+        fe = d["force_error"]
+        fe_ss = fe[FORCE_SKIP_SAMPLES:]
+        if len(fe_ss) > 0:
+            rows["avg_force_z_error"].append(np.mean(np.abs(fe_ss)))
+            rows["var_force_z_error"].append(np.var(fe_ss))
+        else:
+            rows["avg_force_z_error"].append(float("nan"))
+            rows["var_force_z_error"].append(float("nan"))
+
+        # Position: no skip
+        pe = d["position_error"]
+        if len(pe) > 0:
+            rows["avg_position_error"].append(np.mean(pe))
+            rows["var_position_error"].append(np.var(pe))
+        else:
+            rows["avg_position_error"].append(float("nan"))
+            rows["var_position_error"].append(float("nan"))
+
     return {k: np.array(v) for k, v in rows.items()}
 
 
@@ -207,10 +229,16 @@ def _fmt_val(v, col):
 
 
 def main():
-    # Load all CSVs once
     datasets = []
-    for name, path, color, marker in METHODS:
-        datasets.append((name, load_all(path), color, marker))
+    for name, data_dir, color, marker in METHODS:
+        if not os.path.isdir(data_dir):
+            print(f"[SKIP] {name}: data dir not found ({data_dir})")
+            continue
+        datasets.append((name, load_all(data_dir), color, marker))
+
+    if not datasets:
+        print("No data found. Run experiments first.")
+        return
 
     for cfg in METRICS:
         make_plot(cfg, datasets)
