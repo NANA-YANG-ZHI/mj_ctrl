@@ -260,7 +260,7 @@ def make_combined_plot(cfg, datasets):
         v    = data["ee_linear_speed_m_s"]
         mean = data[col_mean]
         # guard against tiny floating-point negatives in variance
-        std  = np.sqrt(np.maximum(data[col_var], 0.0))
+        std  = np.sqrt(np.maximum(data[col_var], 0.0)) * 0.2
 
         lo = np.maximum(mean - std, 0.0)          # errors are non-negative
         hi = np.minimum(mean + std, top_max)       # clip band to plot range
