@@ -145,8 +145,11 @@ def plot_force_tracking(datasets: list) -> None:
         t  = make_time_axis(n)
         sk = int(SKIP_S / DT)
         avg = np.mean(np.abs(fe[sk:])) if n > sk else np.mean(np.abs(fe))
+        sk = int(1.0 / DT)
+        max = np.max(np.abs(fe[sk:])) if n > sk else np.max(np.abs(fe))
+        
         ax.plot(t, fe, color=color, linestyle=ls, linewidth=1.0, alpha=0.80,
-                label=f"{name}  (avg|err|={avg:.3f} N)")
+                label=f"{name}  (avg|err|={avg:.3f} N) (max|err|={max:.3f} N)")
 
     ax.axhline(0, color="gray", linestyle="--", linewidth=0.9, alpha=0.6)
     # ax.axvline(SKIP_S, color="gray", linestyle=":", linewidth=0.9, alpha=0.6,
