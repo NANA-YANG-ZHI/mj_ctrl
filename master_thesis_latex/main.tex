@@ -95,6 +95,7 @@
 \usepackage{amssymb}    % for math symbols
 \usepackage{todonotes}  % optional: for \todo{FILL} and \missingfigure
 \usepackage{tcolorbox}
+\usepackage{subcaption} 
 % ------------------------------------------------------------------
 
 %%%%%%%%%%%%%%%%%%%
@@ -1098,8 +1099,7 @@ controller code to run in both settings with minimum modification.
 
 All simulation experiments are conducted in MuJoCo~\cite{mujoco} using the
 Franka Research~3 (FR3) robot model.
-The simulation scene is constructed via an XML description: 
-% TODO: source of this xml file: https://github.com/google-deepmind/mujoco_menagerie/tree/main/franka_fr3
+The simulation scene is constructed via an MJCF description\cite{Zakka_MuJoCo_Menagerie_A_2022}.
 
 The contact model is configured at the end-effector attachment geom with
 \texttt{condim=6} (enabling full 6-dimensional friction forces) and
@@ -1107,7 +1107,7 @@ The contact model is configured at the end-effector attachment geom with
 coefficients).
 To study the effect of surface friction, alternative XML variants set
 \texttt{condim=1}, which disables tangential friction.
-The simulation timestep is set to \(1\,\mathrm{ms}\) (\texttt{dt = 0.001}),
+The simulation timestep is set to \(1\,\mathrm{ms}\),
 matching the \(1\,\mathrm{kHz}\) control rate of the real robot.
 
 \begin{figure}[htbp]
@@ -1443,7 +1443,7 @@ system to third order, and stability requires careful selection of
 Tuning was found to be sensitive and outside the scope of this work;
 the method is therefore listed as a future extension.
 
-\subsection{Hybrid Force-Impedance with Velocity-Term Compensation}
+\subsection{Hybrid Force Control with Dynamic Compensation}
 \label{sec:paper_method}
 
 The full method from Iskandar~et~al.~\cite{iskandar_hybrid_2023} augments the
@@ -1633,16 +1633,6 @@ control phase transitions from \textsc{Approaching} to
 % orientation. Control gains (impedance_pos=500, impedance_ori=250).
 % Simulation timestep, friction settings.
 
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): MuJoCo scene rendering: Panda drawing circle on flat
-    % board with trajectory trace.
-    \missingfigure{MuJoCo scene: Panda drawing circle on flat board}
-    \caption{MuJoCo simulation scene rendering of the Panda robot drawing
-             a circle on the flat board with the trajectory trace.}
-    \label{fig:mujoco_flat}
-\end{figure}
-
 
 \section{Force Tracking Results}
 
@@ -1651,7 +1641,7 @@ control phase transitions from \textsc{Approaching} to
 \begin{figure}[htbp]
     \centering
     % TODO (PLOT): Contact force z vs. time for F_desired, PD, PI,
-    % Bruno+velocity_term at π/4 and π rad/s (frictionless).
+    % Bruno+velocity_term at π/4 and 2π rad/s (frictionless).
     \missingfigure{Contact force $z$ vs.\ time for all four methods at $\pi/4$ and $\pi$\,rad/s (frictionless)}
     \caption{Contact force ($z$-direction) versus time for all four control
              methods at $\pi/4$\,rad/s (top) and $\pi$\,rad/s (bottom) in
@@ -1659,15 +1649,11 @@ control phase transitions from \textsc{Approaching} to
     \label{fig:force_flat_frictionless}
 \end{figure}
 
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Steady-state force error and RMS across all methods
-    % and speeds.
-    \missingfigure{Steady-state force error and RMS across all methods}
-    \caption{Steady-state force error and RMS comparison across all control
-             methods and circle speeds.}
-    \label{fig:force_error_summary}
-\end{figure}
+\section{Speed-Dependent Evaluation of Force Control Methods}
+
+To evaluate the impact of end-effector velocity on force control and find out what is the maximum speed, that we can still have relatively good control of force and position, a parametric simulation study was conducted in which the angular speed of a circular contact trajectory was varied systematically. The task requires the robot to trace a circle of radius $r = 0.1,\text{m}$ on a planar surface while maintaining a constant normal contact force of $F_d = 8,\text{N}$. The angular speed $\omega$ was swept over 50 values in the range $\omega \in [0.1\pi,, 5.0\pi],\text{rad/s}$, corresponding to end-effector linear speeds $v = r\omega \in [0.031,, 1.571],\text{m/s}$. Each trial ran for 10 seconds of simulated time. The metrics recorded per trial are the mean absolute force error $\bar{e}_F = \mathbb{E}[|F_z - F_d|]$ and the mean position tracking error $\bar{e}_p$, along with their respective variances.
+
+Four control strategies were evaluated: (1) pure feedforward force control, (2) feedforward with PI correction ($K_p=2$, $K_i=5$), (3) the paper method (a model-based approach from prior work), and (4) a PD controller ($K_p=5$, $K_d=0.5$). Parameters for PD and PI controllers are tuned and chosen separately using grid search.
 
 
 \section{Speed-Dependent Evaluation of Force Control Methods}
@@ -1708,65 +1694,155 @@ $[1\,\mathrm{s},\,10\,\mathrm{s}]$, discarding the first 1000 samples
 (at $\Delta t = 1\,\mathrm{ms}$) to exclude the approach transient.
 Position error is however computed over the full $10\,\mathrm{s}$ window.
 
-\paragraph{Force error analysis.}
+\begin{figure}[htbp]
+    \centering
+    % Row 1
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{images/force_error_comparison.png}
+        \caption{}
+        \label{fig:force_error_comparison}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{images/force_var_comparison.png}
+        \caption{}
+        \label{fig:force_var_comparison}
+    \end{subfigure}
+    
+    \caption{force error comparison}
+    \label{fig:speed_sweep_force_comparison}
+\end{figure}
+
+Force error analysis.
 All methods exhibit a monotonically increasing force error with speed, but the
-rate of increase and the absolute level differ markedly.
+rate of increase and the absolute level differ markedly as you can see in Figure~\ref{fig:speed_sweep_force_comparison}.
 
-The \emph{PD controller} is the sole exception to monotonic growth: it
-produces a roughly constant steady-state offset of
-$\bar{e}_F \approx 1.35$--$1.46\,\mathrm{N}$ across the full stable speed
-range $v \lesssim 1.3\,\mathrm{m/s}$.
-This behaviour is characteristic of PD control in the presence of a constant
-disturbance.
+The \emph{PD controller} produces a roughly constant steady-state offset of
+$\bar{e}_F \approx 1.35$--$1.5\,\mathrm{N}$ across speed
+range $v \lesssim 1.0\,\mathrm{m/s}$. This behaviour is characteristic of PD control, which brings a constant disturbance. 
 
-The \emph{feedforward} controller, which relies solely on the desired force
-command, accumulates the largest errors.
-Its mean force error grows from $\bar{e}_F = 0.019\,\mathrm{N}$
-at $v = 0.031\,\mathrm{m/s}$ to $\bar{e}_F = 8.16\,\mathrm{N}$
-at $v = 1.35\,\mathrm{m/s}$,
-The PI augmentation (\emph{feedforward\,+\,PI}) reduces this substantially:
-$\bar{e}_F$ grows from $0.003\,\mathrm{N}$ to $3.44\,\mathrm{N}$ over the
-same range, a reduction of roughly $58\,\%$ at the highest stable speed.
+The \emph{feedforward} controller, which relies solely on the desired force command, accumulates the largest errors. The force error grows the most rapidly as the velocity increases as plot 1 shows. The PI augmentation (\emph{feedforward\,+\,PI}) reduces this substantially: $\bar{e}_F$ of feedforward\,+\,PI grows from $0.25\,\mathrm{N}$ at $v = 0.4\,\mathrm{m/s}$ to $1.8\,\mathrm{N}$ at $v = 1.07\,\mathrm{m/s}$ 
 
-The \emph{paper method} achieves lower errors than feedforward\,+\,PI in the
-mid-to-high speed regime:
-$\bar{e}_F = 0.028\,\mathrm{N}$ at $v = 0.031\,\mathrm{m/s}$,
-rising to $3.27\,\mathrm{N}$ at $v = 1.35\,\mathrm{m/s}$.
-The addition of PI correction (\emph{paper\,+\,PI}) yields the best overall
-force tracking: $\bar{e}_F = 0.002\,\mathrm{N}$ at the lowest speed,
-increasing to $2.18\,\mathrm{N}$ at $v = 1.35\,\mathrm{m/s}$, representing
-the best absolute performance across the entire speed sweep.
+The \emph{HFPD} controller achieves lower errors than feedforward\,+\,PI in the
+mid-to-high speed regime. Over the same speed regime from $0.4\,\mathrm{m/s}$ to $1.07\,\mathrm{m/s}$, $\bar{e}_F$ of HFPD grows from $0.23\,\mathrm{N}$ to $0.72\,\mathrm{N}$.
+The addition of PI correction (\emph{HFPD\,+\,PI}) yields the best overall
+force tracking: $\bar{e}_F = 0.08\,\mathrm{N}$ at $v = 0.4\,\mathrm{m/s}$,
+increasing to only $0.23\,\mathrm{N}$ at $v = 1.07\,\mathrm{m/s}$, and maintain $\bar{e}_F$ as $2.3\,\mathrm{N}$ even when $v = 1.35\,\mathrm{m/s}$,  representing
+the best absolute performance across all methods.
 
-\paragraph{Trajectory tracking and critical speed.}
-Position error remains uniformly small---in the range
-$3$--$14\,\mathrm{mm}$---for all methods at speeds below a critical
-threshold.
-A sharp, abrupt increase in $\bar{e}_p$ is observed for all methods near
-$v \approx 1.38$--$1.41\,\mathrm{m/s}$
-($\omega \approx 13.8$--$14.1\,\mathrm{rad/s}$, i.e.\ approximately
-$4.4\pi\,\mathrm{rad/s}$), indicating loss of trajectory tracking.
+Trajectory tracking and critical speed.
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{images/position_error_comparison.png}
+        \caption{}
+        \label{fig:position_error_comparison}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{images/position_var_comparison.png}
+        \caption{}
+        \label{fig:position_var_comparison}
+    \end{subfigure}
+    \caption{position error comparison}
+    \label{fig:speed_sweep_position_error}
+\end{figure}
+Position error remains uniformly small for all methods at speeds below a critical
+threshold, in the range of $3$--$14\,\mathrm{mm}$.
+Figure ~\ref{fig:position_error_comparison} shows a sharp, abrupt increase in $\bar{e}_p$ is observed for all methods near
+$v \approx 1.38$--$1.41\,\mathrm{m/s}$, indicating loss of trajectory tracking.
 The PD controller degrades first, with $\bar{e}_p$ jumping from
 $0.018\,\mathrm{m}$ to $0.112\,\mathrm{m}$ at $v = 1.38\,\mathrm{m/s}$
 ($\omega \approx 13.8\,\mathrm{rad/s}$).
-The feedforward and paper methods lose tracking at $v = 1.41\,\mathrm{m/s}$,
-with $\bar{e}_p$ reaching $0.385\,\mathrm{m}$ and $0.218\,\mathrm{m}$
-respectively.
-The paper\,+\,PI and feedforward\,+\,PI methods degrade more gradually at
+The HFPD\,+\,PI and feedforward\,+\,PI methods degrade more gradually at
 $v = 1.41\,\mathrm{m/s}$ ($\bar{e}_p = 0.057\,\mathrm{m}$ and
 $0.023\,\mathrm{m}$, respectively), suggesting that integral force correction
 moderates the destabilising effect of high-frequency contact dynamics.
-Above $v \approx 1.5\,\mathrm{m/s}$ all methods diverge, with paper\,+\,PI
-and feedforward exhibiting catastrophic instability (force errors exceeding
-$10^3\,\mathrm{N}$).
+Above $v \approx 1.5\,\mathrm{m/s}$ all methods diverge, exhibiting catastrophic instability and huge force errors.
 
-In summary, the model-based paper method and its PI variant provide
+\begin{figure}[htbp]
+    \centering
+    % Row 1
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/speed_3.4/force_tracking.png}
+        \caption{}
+        \label{fig:speed_3.4/force_tracking}
+    \end{subfigure}
+
+    \vspace{0.5em}  % vertical gap between rows
+
+    % Row 2
+    
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/speed_3.4/position_tracking_xyz.png}
+        \caption{}
+        \label{fig:speed_3.4/position_tracking}
+    \end{subfigure}
+
+    \caption{force position details 3.4}
+    \label{fig:force_position_details_3.4}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    % Row 1
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/speed_3.8/force_tracking.png}
+        \caption{}
+        \label{fig:speed_3.8/force_tracking}
+    \end{subfigure}
+
+    \vspace{0.5em}  % vertical gap between rows
+
+    % Row 2
+
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/speed_3.8/position_tracking_xyz.png}
+        \caption{}
+        \label{fig:speed_3.8/position_tracking}
+    \end{subfigure}
+
+    \caption{force position details 3.8}
+    \label{fig:force_position_details_3.8}
+\end{figure}
+
+Figure~\ref{fig:speed_3.4/position_tracking} presents the force tracking performance at an end-effector 
+speed of $v = 1.068\,\mathrm{m/s}$, corresponding to an angular speed multiplier 
+of $3.4$ (i.e., $3.4$ full circles per second). The position tracking results 
+confirm that all controllers maintain accurate trajectory following throughout the 
+motion. A transient deviation is observed during the first $0.5\,\mathrm{s}$, 
+attributable to the approach phase prior to surface contact, after which all 
+methods converge to the desired trajectory.
+
+The force tracking results in Figure ~\ref{fig:speed_3.4/force_tracking} reveal significant differences among the controllers 
+at this speed. The pure feedforward ($F_\text{des}$) controller fails to maintain 
+stable contact, exhibiting force errors up to $8\,\mathrm{N}$, which means complete loss of contact. The PD controller, or down to $-20\,\mathrm{N}$, which means
+excessive surface penetration. The PD controller
+displays a notably wide error band, indicating high-frequency force oscillations 
+at this end-effector speed. Both the PD controller and the feedforward with PI 
+($F_\text{des}$ + PI) exhibit a mean force error exceeding $1.5\,\mathrm{N}$ and 
+peak errors of approximately $4\,\mathrm{N}$.
+
+In contrast, HFPD controller and its PI-augmented variant 
+(HFPD + PI) achieve substantially reduced force tracking errors. In particular, 
+HFPD + PI attains a mean force error of $0.235\,\mathrm{N}$ and a maximum force 
+error of $0.524\,\mathrm{N}$, demonstrating (to be filled).
+
+In summary, the HFPD and its PI variant provide
 consistently superior force tracking relative to the other strategies across the
-full stable operating range, with paper\,+\,PI achieving the lowest
+full stable operating range, with HFPD\,+\,PI achieving the lowest
 steady-state force error at every speed.
-The critical speed limit for sustained contact control is approximately
-$v \approx 1.38\,\mathrm{m/s}$ ($\omega \approx 4.4\pi\,\mathrm{rad/s}$),
-beyond which trajectory tracking degrades irrecoverably for all evaluated
+
+For HFPD to maintain a good force tracking, without losing contact or extreme penetration force, the speed limit in drawing circle scenario with r=0.1m is approximately
+$v \approx 1.10\,\mathrm{m/s}$ ($\omega \approx 3.5\pi\,\mathrm{rad/s}$). Between $v \approx 1.10\,\mathrm{m/s}$ ($\omega \approx 3.5\pi\,\mathrm{rad/s}$) and $v \approx 1.38\,\mathrm{m/s}$ ($\omega \approx 4.4\pi\,\mathrm{rad/s}$), HFPD Will lose contact of the surface sometimes, but won't result in massive penetration force. 
+Beyond $v \approx 1.38\,\mathrm{m/s}$, trajectory tracking and force tracking degrade irrecoverably for HFPD, and of course for all evaluated
 methods.
+
+
+
+
+
+
 
 
 \section{Effect of Friction}
@@ -1794,6 +1870,10 @@ methods.
              force component and the relatively stable $z$-component.}
     \label{fig:friction_norm}
 \end{figure}
+
+% TODO (FILL): angular speed sweep across 5 methods. Explain why faster motion
+% increases force coupling and why the velocity-term compensation becomes
+% more critical.
 
 
 \section{Contact Force Compensation Analysis}
