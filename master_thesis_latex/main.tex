@@ -1706,8 +1706,7 @@ unrelated to steady-state control quality.
 Accordingly, force metrics are computed only over the interval
 $[1\,\mathrm{s},\,10\,\mathrm{s}]$, discarding the first 1000 samples
 (at $\Delta t = 1\,\mathrm{ms}$) to exclude the approach transient.
-Position error, which does not exhibit such a transient, is computed over
-the full $10\,\mathrm{s}$ window.
+Position error is however computed over the full $10\,\mathrm{s}$ window.
 
 \paragraph{Force error analysis.}
 All methods exhibit a monotonically increasing force error with speed, but the
@@ -1718,17 +1717,13 @@ produces a roughly constant steady-state offset of
 $\bar{e}_F \approx 1.35$--$1.46\,\mathrm{N}$ across the full stable speed
 range $v \lesssim 1.3\,\mathrm{m/s}$.
 This behaviour is characteristic of PD control in the presence of a constant
-disturbance: the proportional term compensates for velocity-induced coupling
-forces with only marginal gain variation, but the absence of integral action
-leaves a permanent bias determined by the controller gains and the contact
-stiffness.
+disturbance.
 
 The \emph{feedforward} controller, which relies solely on the desired force
 command, accumulates the largest errors.
 Its mean force error grows from $\bar{e}_F = 0.019\,\mathrm{N}$
 at $v = 0.031\,\mathrm{m/s}$ to $\bar{e}_F = 8.16\,\mathrm{N}$
-at $v = 1.35\,\mathrm{m/s}$, effectively reaching the target force magnitude
-itself.
+at $v = 1.35\,\mathrm{m/s}$,
 The PI augmentation (\emph{feedforward\,+\,PI}) reduces this substantially:
 $\bar{e}_F$ grows from $0.003\,\mathrm{N}$ to $3.44\,\mathrm{N}$ over the
 same range, a reduction of roughly $58\,\%$ at the highest stable speed.

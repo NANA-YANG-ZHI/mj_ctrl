@@ -35,8 +35,8 @@ METHODS = [
     ("Feedforward",       "feedforward",    "tab:blue",   "-",  "o"),
     ("Feedforward + PI",  "feedforward_pi", "tab:purple", "-",  "s"),
     ("PD",                "pd",             "tab:green",  "-",  "^"),
-    ("Paper",             "paper",          "tab:orange",    "-",  "D"),
-    ("Paper + PI",        "paper_pi",       "tab:red", "-",  "P"),
+    ("HFPD",             "paper",          "tab:orange",    "-",  "D"),
+    ("HFPD + PI",        "paper_pi",       "tab:red", "-",  "P"),
 ]
 
 AXES_LABELS = ["X", "Y", "Z"]

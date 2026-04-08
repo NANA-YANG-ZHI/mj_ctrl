@@ -30,8 +30,8 @@ METHODS = [
     ("Feedforward",      os.path.join(PLOTS_DIR, "feedforward",    "data"), "tab:blue",   "o"),
     ("Feedforward + PI", os.path.join(PLOTS_DIR, "feedforward_pi", "data"), "tab:orange", "s"),
     ("PD",               os.path.join(PLOTS_DIR, "pd",             "data"), "tab:green",  "^"),
-    ("Paper",            os.path.join(PLOTS_DIR, "paper",          "data"), "tab:red",    "D"),
-    ("Paper + PI",       os.path.join(PLOTS_DIR, "paper_pi",       "data"), "tab:purple", "P"),
+    ("HFPD",            os.path.join(PLOTS_DIR, "paper",          "data"), "tab:red",    "D"),
+    ("HFPD + PI",       os.path.join(PLOTS_DIR, "paper_pi",       "data"), "tab:purple", "P"),
 ]
 
 # ── Per-metric plot configuration ────────────────────────────────────────────
