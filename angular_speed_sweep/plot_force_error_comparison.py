@@ -1,4 +1,4 @@
-"""Compare control-method metrics vs EE linear speed — 4 plots.
+"""Compare control-method metrics vs EE linear speed — 4 individual + 2 combined plots.
 
 Each plot uses a piecewise linear y-scale:
   - y ≤ BREAK  : normal slope (detail zone, ~70 % of axis height)
@@ -12,6 +12,8 @@ force_error_comparison.png     – avg_force_z_error  (N)
 force_var_comparison.png       – var_force_z_error  (N²)
 position_error_comparison.png  – avg_position_error (m)
 position_var_comparison.png    – var_position_error (m²)
+force_error_combined.png       – mean ± std for force Z error  (GP-style band)
+position_error_combined.png    – mean ± std for position error (GP-style band)
 
 Usage
 -----
@@ -82,6 +84,34 @@ METRICS = [
     ),
 ]
 
+
+# ── Combined (GP-style) plot configuration ───────────────────────────────────
+# Each entry pairs a mean column with its variance column.
+# The shaded band shows mean ± std (√var), clipped to [0, top_max].
+COMBINED_METRICS = [
+    dict(
+        col_mean="avg_force_z_error",
+        col_var="var_force_z_error",
+        ylabel="Avg |Force Z Error| ± Std  (N)",
+        title="Force Z Error  (mean ± std)",
+        out="force_error_combined.png",
+        break_y=3.0,
+        compress=17.0,
+        top_max=20.0,
+        yticks=[0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 5, 8, 11, 14, 17, 20],
+    ),
+    dict(
+        col_mean="avg_position_error",
+        col_var="var_position_error",
+        ylabel="Avg Position Error ± Std  (m)",
+        title="Position Error  (mean ± std)",
+        out="position_error_combined.png",
+        break_y=0.020,
+        compress=25.0,
+        top_max=0.50,
+        yticks=[0, 0.004, 0.008, 0.012, 0.016, 0.020, 0.10, 0.20, 0.35, 0.50],
+    ),
+]
 
 DT = 0.001                          # simulation timestep (ControllerConfig.dt)
 FORCE_SKIP_SAMPLES = int(1.0 / DT)  # skip first 1 s for force metrics (= 1000 samples)
@@ -215,6 +245,87 @@ def make_plot(cfg, datasets):
     print(f"[PLOT] {cfg['out']}")
 
 
+def make_combined_plot(cfg, datasets):
+    """GP-style plot: solid mean line with a ±1 std shaded band per method."""
+    col_mean = cfg["col_mean"]
+    col_var  = cfg["col_var"]
+    break_y  = cfg["break_y"]
+    compress = cfg["compress"]
+    top_max  = cfg["top_max"]
+
+    fig, ax = plt.subplots(figsize=(10, 11))
+
+    # ── Plot each method: band first, then line on top ────────────────────────
+    for name, data, color, marker in datasets:
+        v    = data["ee_linear_speed_m_s"]
+        mean = data[col_mean]
+        # guard against tiny floating-point negatives in variance
+        std  = np.sqrt(np.maximum(data[col_var], 0.0))
+
+        lo = np.maximum(mean - std, 0.0)          # errors are non-negative
+        hi = np.minimum(mean + std, top_max)       # clip band to plot range
+        mean_plot = np.where(mean > top_max, np.nan, mean)
+
+        ax.fill_between(v, lo, hi, alpha=0.15, color=color, linewidth=0)
+        ax.plot(v, mean_plot, marker=marker, color=color, label=name,
+                linewidth=1.5, markersize=4, markerfacecolor=color)
+
+    # ── Piecewise y-scale ────────────────────────────────────────────────────
+    fwd, inv = make_piecewise(break_y, compress)
+    ax.set_yscale("function", functions=(fwd, inv))
+    ax.set_ylim(0.0, top_max)
+
+    # ── Y-ticks ──────────────────────────────────────────────────────────────
+    ax.set_yticks(cfg["yticks"])
+    ax.yaxis.set_major_formatter(ticker.ScalarFormatter())
+    ax.ticklabel_format(style="plain", axis="y")
+
+    # ── Inflection guide line ────────────────────────────────────────────────
+    ax.axhline(break_y, color="gray", linestyle="--", linewidth=0.9, alpha=0.55)
+    ax.annotate(
+        f"  scale ÷{compress:.0f} above",
+        xy=(0.0, break_y), xycoords=("axes fraction", "data"),
+        fontsize=7.5, color="gray", style="italic", va="bottom",
+    )
+
+    # ── Annotate outliers (based on mean exceeding top_max) ──────────────────
+    y_annot = top_max * 0.92
+    y_label = top_max * 0.81
+    for name, data, color, marker in datasets:
+        v    = data["ee_linear_speed_m_s"]
+        mean = data[col_mean]
+        mask = mean > top_max
+        if not mask.any():
+            continue
+        for xi, yi in zip(v[mask], mean[mask]):
+            ax.plot(xi, y_annot, marker="^", color=color,
+                    markersize=8, zorder=5, clip_on=False)
+            lbl = _fmt_val(yi, col_mean)
+            ax.text(xi, y_label, lbl, color=color, fontsize=7,
+                    ha="center", va="top",
+                    bbox=dict(boxstyle="round,pad=0.15", fc="white",
+                              ec=color, lw=0.7, alpha=0.85))
+
+    # ── Axes labels / legend / grid ──────────────────────────────────────────
+    x_max = max(data["ee_linear_speed_m_s"].max() for _, data, _, _ in datasets)
+    ax.set_xlim(0.0, x_max * 1.02)
+    ax.set_xlabel("EE Linear Speed  v = r·ω  (m/s,  r = 0.1 m)", fontsize=11)
+    ax.set_ylabel(cfg["ylabel"], fontsize=11)
+    ax.legend(loc="upper left", fontsize=10, framealpha=0.85)
+    ax.grid(True, alpha=0.3)
+
+    fig.suptitle(
+        f"Force Error Comparison — {cfg['title']} vs. EE Linear Speed",
+        fontsize=13,
+    )
+
+    out = os.path.join(PLOTS_DIR, cfg["out"])
+    os.makedirs(PLOTS_DIR, exist_ok=True)
+    fig.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[PLOT] {cfg['out']}")
+
+
 def _fmt_val(v, col):
     """Format an outlier value with appropriate precision/units."""
     if col in ("avg_force_z_error", "var_force_z_error"):
@@ -242,6 +353,9 @@ def main():
 
     for cfg in METRICS:
         make_plot(cfg, datasets)
+
+    for cfg in COMBINED_METRICS:
+        make_combined_plot(cfg, datasets)
 
 
 if __name__ == "__main__":
