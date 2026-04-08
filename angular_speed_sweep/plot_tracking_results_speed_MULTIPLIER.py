@@ -25,18 +25,18 @@ import matplotlib.pyplot as plt
 
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR   = os.path.join(SCRIPT_DIR, "plots")
-OUT_DIR     = os.path.join(PLOTS_DIR, "tracking_speed_3.6")
 
-MULTIPLIER  = 3.6
+MULTIPLIER  = 3.4
 DT          = 0.001          # simulation timestep (s)
-SKIP_S      = 1.0            # seconds to skip at the start for steady-state metrics
+SKIP_S      = 0.0            # seconds to skip at the start for steady-state metrics
+OUT_DIR     = os.path.join(PLOTS_DIR, f"tracking_speed_{MULTIPLIER}")
 
 METHODS = [
     ("Feedforward",       "feedforward",    "tab:blue",   "-",  "o"),
-    ("Feedforward + PI",  "feedforward_pi", "tab:orange", "-",  "s"),
+    ("Feedforward + PI",  "feedforward_pi", "tab:purple", "-",  "s"),
     ("PD",                "pd",             "tab:green",  "-",  "^"),
-    ("Paper",             "paper",          "tab:red",    "-",  "D"),
-    ("Paper + PI",        "paper_pi",       "tab:purple", "-",  "P"),
+    ("Paper",             "paper",          "tab:orange",    "-",  "D"),
+    ("Paper + PI",        "paper_pi",       "tab:red", "-",  "P"),
 ]
 
 AXES_LABELS = ["X", "Y", "Z"]
@@ -149,8 +149,8 @@ def plot_force_tracking(datasets: list) -> None:
                 label=f"{name}  (avg|err|={avg:.3f} N)")
 
     ax.axhline(0, color="gray", linestyle="--", linewidth=0.9, alpha=0.6)
-    ax.axvline(SKIP_S, color="gray", linestyle=":", linewidth=0.9, alpha=0.6,
-               label=f"Skip boundary ({SKIP_S} s)")
+    # ax.axvline(SKIP_S, color="gray", linestyle=":", linewidth=0.9, alpha=0.6,
+    #            label=f"Skip boundary ({SKIP_S} s)")
 
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Force Z Error (N)")
