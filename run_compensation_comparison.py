@@ -126,9 +126,12 @@ def make_comparison_plot(args, data_dir):
         d = np.load(fpath)
         force_error = d["force_error"]
         t = np.arange(len(force_error)) * dt
+        n = len(force_error)
         skip = int(args.skip_seconds / dt)
-        avg_abs = np.mean(np.abs(force_error[skip:])) if len(force_error) > skip else float("nan")
-        label = f"{cfg['label']}  (avg |err| = {avg_abs:.3f} N)"
+        fe_sk = force_error[skip:] if n > skip else force_error
+        avg_abs = np.mean(np.abs(fe_sk))
+        max_abs = np.max(np.abs(fe_sk))
+        label = f"{cfg['label']}  (avg |err| = {avg_abs:.3f} N,  max |err| = {max_abs:.3f} N)"
         ax.plot(t, force_error, linewidth=1.2, color=cfg["color"], label=label)
 
     ax.axhline(0, color="black", linestyle="--", linewidth=0.8)
