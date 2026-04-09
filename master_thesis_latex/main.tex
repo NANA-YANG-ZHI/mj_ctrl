@@ -1088,163 +1088,6 @@ unmodelled dynamics.
 \label{chap:methodology}
 % ==================================================================
 
-\section{System Overview}
-
-This section describes the simulation environment, the real-robot hardware
-interface, and the unified software architecture that allows the same
-controller code to run in both settings with minimum modification.
-
-\subsection{Simulation Setup (MuJoCo)}
-\label{sec:mujoco_setup}
-
-All simulation experiments are conducted in MuJoCo~\cite{mujoco} using the
-Franka Research~3 (FR3) robot model.
-The simulation scene is constructed via an MJCF description\cite{Zakka_MuJoCo_Menagerie_A_2022}.
-
-The contact model is configured at the end-effector attachment geom with
-\texttt{condim=6} (enabling full 6-dimensional friction forces) and
-\texttt{friction="1~0.02~0.01"} (sliding, torsional, rolling friction
-coefficients).
-To study the effect of surface friction, alternative XML variants set
-\texttt{condim=1}, which disables tangential friction.
-The simulation timestep is set to \(1\,\mathrm{ms}\),
-matching the \(1\,\mathrm{kHz}\) control rate of the real robot.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Simulation scene screenshot: FR3 approaching
-    % slope/flat board in MuJoCo.
-    \missingfigure{MuJoCo simulation scene: FR3 approaching slope/flat board}
-    \caption{MuJoCo simulation scene showing the FR3 robot approaching the
-             slope/flat board.}
-    \label{fig:mujoco_scene}
-\end{figure}
-
-\subsection{Real-Robot Setup (Franka FR3 + libfranka)}
-\label{sec:real_robot_setup}
-
-The real-robot experiments use a Franka Research~3 (FR3) manipulator
-controlled via \texttt{libfranka}.
-The \texttt{libfranka} interface exposes a \(1\,\mathrm{kHz}\) torque control
-loop: at each millisecond tick, the controller reads the current
-\texttt{RobotState} (joint positions, velocities, external force estimate, and
-previous commanded torques) and returns a new torque command.
-
-Robot dynamics — Jacobian, joint inertia matrix, Coriolis matrix, and gravity
-vector — are computed using Pinocchio~\cite{pinocchio} with the FR3 URDF model.
-Pinocchio is used almost identically in both simulation and real-robot code: it
-receives the current joint configuration \(q\) and velocity \(\dot{q}\) from
-the robot state and returns the required kinematic and dynamic quantities.
-This ensures that the controller does not depend on MuJoCo's internal dynamics
-and that simulation-to-real transfer requires no algorithmic changes. Only one exception is FR3 already has gravity compensation and don't need to calculate from Pinocchio.
-
-\subsection{Unified Software Architecture}
-\label{sec:unified_arch}
-
-A key design goal of this work is to run the same controller code in
-simulation and on the real robot.
-This is achieved through the \texttt{MujocoRobotInterface} wrapper, which
-mimics the \texttt{libfranka} \texttt{Robot} and \texttt{RobotState}
-interfaces.
-\texttt{MujocoRobotInterface} exposes the same fields as a libfranka
-\texttt{RobotState}:
-\begin{itemize}
-    \item \texttt{q} — joint positions (\(\mathbb{R}^7\))
-    \item \texttt{dq} — joint velocities (\(\mathbb{R}^7\))
-    \item \texttt{O\_T\_EE} — end-effector homogeneous transformation in the
-          base frame, flattened in column-major order (\(\mathbb{R}^{16}\))
-    \item \texttt{O\_F\_ext\_hat\_K} — estimated external wrench (force and
-          torque) in the stiffness frame (\(\mathbb{R}^6\))
-    \item \texttt{tau\_J\_d} — last commanded joint torques (\(\mathbb{R}^7\))
-\end{itemize}
-Because both environments expose this unified \texttt{RobotState} interface,
-the \texttt{HybridController} and \texttt{CartesianSpacePDController} classes
-operate identically in simulation and on hardware without any
-environment-specific branching.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (DIAGRAM): Software architecture:
-    % libfranka / MujocoRobotInterface → unified RobotState →
-    % controller stack (CartesianSpacePDController → HybridController)
-    \missingfigure{Software architecture: libfranka\,/\,MujocoRobotInterface
-                   $\to$ unified RobotState $\to$ controller stack
-                   (CartesianSpacePDController $\to$ HybridController)}
-    \caption{Software architecture showing how \texttt{libfranka} and
-             \texttt{MujocoRobotInterface} both expose a unified
-             \texttt{RobotState}, which feeds into the controller stack
-             (\texttt{CartesianSpacePDController} $\to$
-             \texttt{HybridController}).}
-    \label{fig:system_architecture}
-\end{figure}
-
-
-\section{Task Definition}
-
-Two contact tasks are studied in this work, both consisting of drawing a
-horizontal circle while maintaining a constant normal contact force against a
-surface.
-
-\paragraph{Task 1 — Flat surface.}
-The end-effector draws a circle on a flat horizontal surface
-(\(\texttt{euler} = [0^\circ, 0^\circ, 0^\circ]\)).
-The constraint direction is the world \(z\)-axis, and the motion subspace
-spans the \(xy\)-plane and all three rotation axes.
-
-\paragraph{Task 2 — Slope surface.}
-The end-effector draws a circle on a surface inclined at \(30^\circ\)
-(\(\texttt{euler} = [30^\circ, 0^\circ, 0^\circ]\)).
-The constraint direction is the surface normal, obtained by rotating the
-world \(z\)-axis by the slope rotation matrix \(R\).
-TODO: slope angle is an variable
-
-\paragraph{Trajectory parametrisation.}
-In both tasks the circle has radius \(r = 0.1\,\mathrm{m}\), centred at a
-fixed contact point on the surface.
-The angular speed \(\omega\) is swept from \(\pi \times 0.1\) to
-\(\pi \times 5\,\mathrm{rad/s}\), corresponding to end-effector linear speeds
-from \(0.0314\) to \(1.571\,\mathrm{m/s}\) at the given radius.
-The desired end-effector position, velocity, and acceleration at time \(t\) are
-\begin{align}
-    p_d(t) &= p_c + R_\text{slope}\,
-              \begin{bmatrix}
-                  r\cos(\omega t) \\ r\sin(\omega t) \\ 0
-              \end{bmatrix}, \\
-    \dot{p}_d(t) &= R_\text{slope}\,
-              \begin{bmatrix}
-                  -r\omega\sin(\omega t) \\ r\omega\cos(\omega t) \\ 0
-              \end{bmatrix}, \\
-    \ddot{p}_d(t) &= R_\text{slope}\,
-              \begin{bmatrix}
-                  -r\omega^2\cos(\omega t) \\ -r\omega^2\sin(\omega t) \\ 0
-              \end{bmatrix},
-\end{align}
-where \(p_c\) is the circle centre in the world frame and \(R_\text{slope}\)
-is the slope rotation matrix.
-The desired orientation is kept constant throughout the circle motion.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): 3D trajectory visualisation: desired circle path on flat
-    % and slope surfaces.
-    \missingfigure{3D trajectory: desired circle path on flat surface and on slope}
-    \caption{Three-dimensional trajectory visualisation showing the desired
-             circle path on the flat surface (left) and the slope surface
-             (right).}
-    \label{fig:trajectory_3d}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Coordinate frame diagram: world frame, constraint frame
-    % (normal to surface), motion frame (tangent plane).
-    \missingfigure{Coordinate frame diagram: world, constraint, and motion frames}
-    \caption{Coordinate frame diagram illustrating the world frame, constraint
-             frame (normal to surface), and motion frame (tangent plane).}
-    \label{fig:coord_frames}
-\end{figure}
-
-
 \section{Constraint Frame and Selection Matrices}
 \label{sec:constraint_frame}
 
@@ -1624,17 +1467,179 @@ control phase transitions from \textsc{Approaching} to
 
 
 % ==================================================================
-\chapter{Simulation Experiments --- Flat Surface}
+\chapter{Simulation and Experiments}
+\label{chap:experiments}
 % ==================================================================
 
-\section{Experimental Setup}
+\section{System Overview}
+
+This section describes the simulation environment, the real-robot hardware
+interface, and the unified software architecture that allows the same
+controller code to run in both settings with minimum modification.
+
+\subsection{Simulation Setup (MuJoCo)}
+\label{sec:mujoco_setup}
+
+All simulation experiments are conducted in MuJoCo~\cite{mujoco} using the
+Franka Research~3 (FR3) robot model.
+The simulation scene is constructed via an MJCF description\cite{Zakka_MuJoCo_Menagerie_A_2022}.
+
+The contact model is configured at the end-effector attachment geom with
+\texttt{condim=6} (enabling full 6-dimensional friction forces) and
+\texttt{friction="1~0.02~0.01"} (sliding, torsional, rolling friction
+coefficients).
+To study the effect of surface friction, alternative XML variants set
+\texttt{condim=1}, which disables tangential friction.
+The simulation timestep is set to \(1\,\mathrm{ms}\),
+matching the \(1\,\mathrm{kHz}\) control rate of the real robot.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Simulation scene screenshot: FR3 approaching
+    % slope/flat board in MuJoCo.
+    \missingfigure{MuJoCo simulation scene: FR3 approaching slope/flat board}
+    \caption{MuJoCo simulation scene showing the FR3 robot approaching the
+             slope/flat board.}
+    \label{fig:mujoco_scene}
+\end{figure}
+
+\subsection{Real-Robot Setup (Franka FR3 + libfranka)}
+\label{sec:real_robot_setup}
+
+The real-robot experiments use a Franka Research~3 (FR3) manipulator
+controlled via \texttt{libfranka}.
+The \texttt{libfranka} interface exposes a \(1\,\mathrm{kHz}\) torque control
+loop: at each millisecond tick, the controller reads the current
+\texttt{RobotState} (joint positions, velocities, external force estimate, and
+previous commanded torques) and returns a new torque command.
+
+Robot dynamics — Jacobian, joint inertia matrix, Coriolis matrix, and gravity
+vector — are computed using Pinocchio~\cite{pinocchio} with the FR3 URDF model.
+Pinocchio is used almost identically in both simulation and real-robot code: it
+receives the current joint configuration \(q\) and velocity \(\dot{q}\) from
+the robot state and returns the required kinematic and dynamic quantities.
+This ensures that the controller does not depend on MuJoCo's internal dynamics
+and that simulation-to-real transfer requires no algorithmic changes. Only one exception is FR3 already has gravity compensation and don't need to calculate from Pinocchio.
+
+\subsection{Unified Software Architecture}
+\label{sec:unified_arch}
+
+A key design goal of this work is to run the same controller code in
+simulation and on the real robot.
+This is achieved through the \texttt{MujocoRobotInterface} wrapper, which
+mimics the \texttt{libfranka} \texttt{Robot} and \texttt{RobotState}
+interfaces.
+\texttt{MujocoRobotInterface} exposes the same fields as a libfranka
+\texttt{RobotState}:
+\begin{itemize}
+    \item \texttt{q} — joint positions (\(\mathbb{R}^7\))
+    \item \texttt{dq} — joint velocities (\(\mathbb{R}^7\))
+    \item \texttt{O\_T\_EE} — end-effector homogeneous transformation in the
+          base frame, flattened in column-major order (\(\mathbb{R}^{16}\))
+    \item \texttt{O\_F\_ext\_hat\_K} — estimated external wrench (force and
+          torque) in the stiffness frame (\(\mathbb{R}^6\))
+    \item \texttt{tau\_J\_d} — last commanded joint torques (\(\mathbb{R}^7\))
+\end{itemize}
+Because both environments expose this unified \texttt{RobotState} interface,
+the \texttt{HybridController} and \texttt{CartesianSpacePDController} classes
+operate identically in simulation and on hardware without any
+environment-specific branching.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (DIAGRAM): Software architecture:
+    % libfranka / MujocoRobotInterface → unified RobotState →
+    % controller stack (CartesianSpacePDController → HybridController)
+    \missingfigure{Software architecture: libfranka\,/\,MujocoRobotInterface
+                   $\to$ unified RobotState $\to$ controller stack
+                   (CartesianSpacePDController $\to$ HybridController)}
+    \caption{Software architecture showing how \texttt{libfranka} and
+             \texttt{MujocoRobotInterface} both expose a unified
+             \texttt{RobotState}, which feeds into the controller stack
+             (\texttt{CartesianSpacePDController} $\to$
+             \texttt{HybridController}).}
+    \label{fig:system_architecture}
+\end{figure}
+
+
+\section{Task Definition}
+
+Two contact tasks are studied in this work, both consisting of drawing a
+horizontal circle while maintaining a constant normal contact force against a
+surface.
+
+\paragraph{Task 1 — Flat surface.}
+The end-effector draws a circle on a flat horizontal surface
+(\(\texttt{euler} = [0^\circ, 0^\circ, 0^\circ]\)).
+The constraint direction is the world \(z\)-axis, and the motion subspace
+spans the \(xy\)-plane and all three rotation axes.
+
+\paragraph{Task 2 — Slope surface.}
+The end-effector draws a circle on a surface inclined at \(30^\circ\)
+(\(\texttt{euler} = [30^\circ, 0^\circ, 0^\circ]\)).
+The constraint direction is the surface normal, obtained by rotating the
+world \(z\)-axis by the slope rotation matrix \(R\).
+TODO: slope angle is an variable
+
+\paragraph{Trajectory parametrisation.}
+In both tasks the circle has radius \(r = 0.1\,\mathrm{m}\), centred at a
+fixed contact point on the surface.
+The angular speed \(\omega\) is swept from \(\pi \times 0.1\) to
+\(\pi \times 5\,\mathrm{rad/s}\), corresponding to end-effector linear speeds
+from \(0.0314\) to \(1.571\,\mathrm{m/s}\) at the given radius.
+The desired end-effector position, velocity, and acceleration at time \(t\) are
+\begin{align}
+    p_d(t) &= p_c + R_\text{slope}\,
+              \begin{bmatrix}
+                  r\cos(\omega t) \\ r\sin(\omega t) \\ 0
+              \end{bmatrix}, \\
+    \dot{p}_d(t) &= R_\text{slope}\,
+              \begin{bmatrix}
+                  -r\omega\sin(\omega t) \\ r\omega\cos(\omega t) \\ 0
+              \end{bmatrix}, \\
+    \ddot{p}_d(t) &= R_\text{slope}\,
+              \begin{bmatrix}
+                  -r\omega^2\cos(\omega t) \\ -r\omega^2\sin(\omega t) \\ 0
+              \end{bmatrix},
+\end{align}
+where \(p_c\) is the circle centre in the world frame and \(R_\text{slope}\)
+is the slope rotation matrix.
+The desired orientation is kept constant throughout the circle motion.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): 3D trajectory visualisation: desired circle path on flat
+    % and slope surfaces.
+    \missingfigure{3D trajectory: desired circle path on flat surface and on slope}
+    \caption{Three-dimensional trajectory visualisation showing the desired
+             circle path on the flat surface (left) and the slope surface
+             (right).}
+    \label{fig:trajectory_3d}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Coordinate frame diagram: world frame, constraint frame
+    % (normal to surface), motion frame (tangent plane).
+    \missingfigure{Coordinate frame diagram: world, constraint, and motion frames}
+    \caption{Coordinate frame diagram illustrating the world frame, constraint
+             frame (normal to surface), and motion frame (tangent plane).}
+    \label{fig:coord_frames}
+\end{figure}
+
+
+% ==================================================================
+\section{Simulation: Flat Surface --- Without Friction}
+% ==================================================================
+
+\subsection{Experimental Setup}
 
 % TODO (FILL): Franka Panda in MuJoCo. Flat board. Circle radius, centre,
 % orientation. Control gains (impedance_pos=500, impedance_ori=250).
 % Simulation timestep, friction settings.
 
 
-\section{Force Tracking Results}
+\subsection{Force Tracking Results}
 
 % TODO (FILL): Present contact force results for each method tested.
 
@@ -1649,14 +1654,7 @@ control phase transitions from \textsc{Approaching} to
     \label{fig:force_flat_frictionless}
 \end{figure}
 
-\section{Speed-Dependent Evaluation of Force Control Methods}
-
-To evaluate the impact of end-effector velocity on force control and find out what is the maximum speed, that we can still have relatively good control of force and position, a parametric simulation study was conducted in which the angular speed of a circular contact trajectory was varied systematically. The task requires the robot to trace a circle of radius $r = 0.1,\text{m}$ on a planar surface while maintaining a constant normal contact force of $F_d = 8,\text{N}$. The angular speed $\omega$ was swept over 50 values in the range $\omega \in [0.1\pi,, 5.0\pi],\text{rad/s}$, corresponding to end-effector linear speeds $v = r\omega \in [0.031,, 1.571],\text{m/s}$. Each trial ran for 10 seconds of simulated time. The metrics recorded per trial are the mean absolute force error $\bar{e}_F = \mathbb{E}[|F_z - F_d|]$ and the mean position tracking error $\bar{e}_p$, along with their respective variances.
-
-Four control strategies were evaluated: (1) pure feedforward force control, (2) feedforward with PI correction ($K_p=2$, $K_i=5$), (3) the paper method (a model-based approach from prior work), and (4) a PD controller ($K_p=5$, $K_d=0.5$). Parameters for PD and PI controllers are tuned and chosen separately using grid search.
-
-
-\section{Speed-Dependent Evaluation of Force Control Methods}
+\subsection{Speed-Dependent Evaluation of Force Control Methods}
 
 To evaluate the impact of end-effector velocity on force control performance and
 to determine the maximum speed at which adequate force and position regulation
@@ -1845,7 +1843,137 @@ methods.
 
 
 
-\section{Effect of Friction}
+\subsection{Contact Force Compensation Analysis}
+
+% TODO (FILL): Deep dive into contact_force_compensation = Λ_φ J_φ M⁻¹ Jᵀ_motion F_ext_x.
+% Show its effect when added (+1), subtracted (–1), or zeroed.
+% Conclusion: compensation term destabilises with full friction.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Component visualisation: control_force_compensation,
+    % contact_force_compensation, velocity_term over time in force subspace.
+    \missingfigure{Compensation components over time in the force subspace}
+    \caption{Component visualisation of \texttt{control\_force\_compensation},
+             \texttt{contact\_force\_compensation}, and \texttt{velocity\_term}
+             over time in the force subspace.}
+    \label{fig:compensation_components}
+\end{figure}
+
+
+\subsection{Impedance Gain Sensitivity}
+
+% TODO (FILL): Show how impedance_pos values (100, 500, 1000, 1500) affect
+% EE stability and force tracking. Identify stable operating range.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Force tracking and EE position for impedance_pos ∈
+    % {500, 1000, 1500} — 3-subplot comparison.
+    \missingfigure{Force tracking and EE position for impedance\_pos $\in\{500, 1000, 1500\}$}
+    \caption{Force tracking and end-effector position for
+             $k_\text{imp} \in \{500, 1000, 1500\}$\,N/m --- three-subplot
+             comparison.}
+    \label{fig:impedance_sensitivity}
+\end{figure}
+
+
+% ==================================================================
+\section{Simulation: Slope Surface --- Without Friction}
+% ==================================================================
+
+\subsection{Slope Setup and Constraint Frame Adaptation}
+
+% TODO (FILL): Describe MuJoCo XML modification for 30° slope, coordinate
+% frame rotation, and how J_φ is computed using the rotated S_f. Explain
+% why J̇_φ ≈ 0 for planar slope.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): MuJoCo scene: Panda on slope environment with constraint
+    % frame axes overlaid.
+    \missingfigure{MuJoCo scene: Panda on slope with constraint frame axes}
+    \caption{MuJoCo simulation scene of the Panda robot on the $30^\circ$
+             slope environment with the constraint frame axes overlaid.}
+    \label{fig:mujoco_slope}
+\end{figure}
+
+
+\subsection{Velocity Term Analysis on Slope}
+
+% TODO (FILL): Show J̇_φ computation problem (was zero due to un-updated
+% Pinocchio data). After fix, analyse two sub-terms:
+% Λ_φ J_φ M⁻¹ C q̇ (red) and –Λ_φ J̇_φ q̇ (blue). Show they nearly cancel.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Velocity term components (red: Coriolis part,
+    % blue: J̇_φ part) and their sum ≈ 0 on slope.
+    \missingfigure{Velocity term components on slope: Coriolis (red) and $\dot{J}_\Phi$ (blue)}
+    \caption{Velocity term components on the slope: Coriolis part (red) and
+             $-\Lambda_\Phi \dot{J}_\Phi \dot{q}$ part (blue), and
+             their sum which is approximately zero.}
+    \label{fig:velocity_term_slope}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Force tracking: with J̇_φ (Pinocchio attachment frame)
+    % vs. without J̇_φ — showing negligible difference on slope.
+    \missingfigure{Force tracking: with $\dot{J}_\Phi$ vs.\ without $\dot{J}_\Phi$ on slope}
+    \caption{Force tracking on the slope with and without the
+             $\dot{J}_\Phi$ term, demonstrating the negligible difference.}
+    \label{fig:slope_jdot_comparison}
+\end{figure}
+
+
+\subsection{Slope Performance: Slow vs.\ Fast}
+
+% TODO (FILL): Present force tracking at π/4 and π rad/s on 30° slope.
+% Compare with flat surface results. Note that Bruno+velocity_term performs
+% well in frictionless environment.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Contact force tracking on slope: π/4 rad/s (top) and
+    % π rad/s (bottom) — desired vs. actual.
+    \missingfigure{Contact force tracking on slope: $\pi/4$\,rad/s (top) and $\pi$\,rad/s (bottom)}
+    \caption{Contact force tracking on the $30^\circ$ slope at
+             $\pi/4$\,rad/s (top) and $\pi$\,rad/s (bottom), showing
+             desired versus actual force.}
+    \label{fig:force_slope}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): EE trajectory on slope: 3D path plot and X/Y/Z time series.
+    \missingfigure{End-effector trajectory on slope: 3D path and X/Y/Z time series}
+    \caption{End-effector trajectory on the slope: three-dimensional path
+             plot (left) and $X/Y/Z$ position time series (right).}
+    \label{fig:ee_trajectory_slope}
+\end{figure}
+
+
+\subsection{Franka vs.\ KUKA Comparison in Simulation}
+
+% TODO (FILL): Describe adaptation from KUKA iiwa to Franka Panda XML
+% (torque actuator, attachment collision). Note Panda has larger force error
+% and less stability at π rad/s compared to KUKA.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Side-by-side force tracking: KUKA iiwa vs. Franka Panda,
+    % with and without friction, at π rad/s.
+    \missingfigure{Force tracking: KUKA iiwa vs.\ Franka Panda, with/without friction, $\pi$\,rad/s}
+    \caption{Side-by-side force tracking comparison between the KUKA iiwa
+             and Franka Panda at $\pi$\,rad/s, with and without friction.}
+    \label{fig:kuka_vs_panda}
+\end{figure}
+
+
+% ==================================================================
+\section{Simulation: With Surface Friction}
+% ==================================================================
 
 % TODO (FILL): Show how friction degrades force tracking. Explain the role
 % of tangential friction force in the constraint subspace and how it differs
@@ -1876,139 +2004,11 @@ methods.
 % more critical.
 
 
-\section{Contact Force Compensation Analysis}
-
-% TODO (FILL): Deep dive into contact_force_compensation = Λ_φ J_φ M⁻¹ Jᵀ_motion F_ext_x.
-% Show its effect when added (+1), subtracted (–1), or zeroed.
-% Conclusion: compensation term destabilises with full friction.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Component visualisation: control_force_compensation,
-    % contact_force_compensation, velocity_term over time in force subspace.
-    \missingfigure{Compensation components over time in the force subspace}
-    \caption{Component visualisation of \texttt{control\_force\_compensation},
-             \texttt{contact\_force\_compensation}, and \texttt{velocity\_term}
-             over time in the force subspace.}
-    \label{fig:compensation_components}
-\end{figure}
-
-
-\section{Impedance Gain Sensitivity}
-
-% TODO (FILL): Show how impedance_pos values (100, 500, 1000, 1500) affect
-% EE stability and force tracking. Identify stable operating range.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Force tracking and EE position for impedance_pos ∈
-    % {500, 1000, 1500} — 3-subplot comparison.
-    \missingfigure{Force tracking and EE position for impedance\_pos $\in\{500, 1000, 1500\}$}
-    \caption{Force tracking and end-effector position for
-             $k_\text{imp} \in \{500, 1000, 1500\}$\,N/m --- three-subplot
-             comparison.}
-    \label{fig:impedance_sensitivity}
-\end{figure}
-
-
 % ==================================================================
-\chapter{Simulation Experiments --- Slope Surface (\texorpdfstring{$30^\circ$}{30 deg})}
+\section{Real Robot Experiments}
 % ==================================================================
 
-\section{Slope Setup and Constraint Frame Adaptation}
-
-% TODO (FILL): Describe MuJoCo XML modification for 30° slope, coordinate
-% frame rotation, and how J_φ is computed using the rotated S_f. Explain
-% why J̇_φ ≈ 0 for planar slope.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): MuJoCo scene: Panda on slope environment with constraint
-    % frame axes overlaid.
-    \missingfigure{MuJoCo scene: Panda on slope with constraint frame axes}
-    \caption{MuJoCo simulation scene of the Panda robot on the $30^\circ$
-             slope environment with the constraint frame axes overlaid.}
-    \label{fig:mujoco_slope}
-\end{figure}
-
-
-\section{Velocity Term Analysis on Slope}
-
-% TODO (FILL): Show J̇_φ computation problem (was zero due to un-updated
-% Pinocchio data). After fix, analyse two sub-terms:
-% Λ_φ J_φ M⁻¹ C q̇ (red) and –Λ_φ J̇_φ q̇ (blue). Show they nearly cancel.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Velocity term components (red: Coriolis part,
-    % blue: J̇_φ part) and their sum ≈ 0 on slope.
-    \missingfigure{Velocity term components on slope: Coriolis (red) and $\dot{J}_\Phi$ (blue)}
-    \caption{Velocity term components on the slope: Coriolis part (red) and
-             $-\Lambda_\Phi \dot{J}_\Phi \dot{q}$ part (blue), and
-             their sum which is approximately zero.}
-    \label{fig:velocity_term_slope}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Force tracking: with J̇_φ (Pinocchio attachment frame)
-    % vs. without J̇_φ — showing negligible difference on slope.
-    \missingfigure{Force tracking: with $\dot{J}_\Phi$ vs.\ without $\dot{J}_\Phi$ on slope}
-    \caption{Force tracking on the slope with and without the
-             $\dot{J}_\Phi$ term, demonstrating the negligible difference.}
-    \label{fig:slope_jdot_comparison}
-\end{figure}
-
-
-\section{Slope Performance: Slow vs.\ Fast}
-
-% TODO (FILL): Present force tracking at π/4 and π rad/s on 30° slope.
-% Compare with flat surface results. Note that Bruno+velocity_term performs
-% well in frictionless environment.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Contact force tracking on slope: π/4 rad/s (top) and
-    % π rad/s (bottom) — desired vs. actual.
-    \missingfigure{Contact force tracking on slope: $\pi/4$\,rad/s (top) and $\pi$\,rad/s (bottom)}
-    \caption{Contact force tracking on the $30^\circ$ slope at
-             $\pi/4$\,rad/s (top) and $\pi$\,rad/s (bottom), showing
-             desired versus actual force.}
-    \label{fig:force_slope}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): EE trajectory on slope: 3D path plot and X/Y/Z time series.
-    \missingfigure{End-effector trajectory on slope: 3D path and X/Y/Z time series}
-    \caption{End-effector trajectory on the slope: three-dimensional path
-             plot (left) and $X/Y/Z$ position time series (right).}
-    \label{fig:ee_trajectory_slope}
-\end{figure}
-
-
-\section{Franka vs.\ KUKA Comparison in Simulation}
-
-% TODO (FILL): Describe adaptation from KUKA iiwa to Franka Panda XML
-% (torque actuator, attachment collision). Note Panda has larger force error
-% and less stability at π rad/s compared to KUKA.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Side-by-side force tracking: KUKA iiwa vs. Franka Panda,
-    % with and without friction, at π rad/s.
-    \missingfigure{Force tracking: KUKA iiwa vs.\ Franka Panda, with/without friction, $\pi$\,rad/s}
-    \caption{Side-by-side force tracking comparison between the KUKA iiwa
-             and Franka Panda at $\pi$\,rad/s, with and without friction.}
-    \label{fig:kuka_vs_panda}
-\end{figure}
-
-
-% ==================================================================
-\chapter{Real Robot Experiments}
-% ==================================================================
-
-\section{Hardware and Software Setup}
+\subsection{Hardware and Software Setup}
 
 % TODO (FILL): Describe Franka Panda hardware, libfranka interface,
 % pylibfranka Python wrapper, Pinocchio for real-time dynamics,
@@ -2026,7 +2026,7 @@ methods.
 \end{figure}
 
 
-\section{Unified Simulation-to-Real Interface}
+\subsection{Unified Simulation-to-Real Interface}
 
 % TODO (FILL): Explain the MuJoCo/libfranka API unification (wrapping MuJoCo
 % with libfranka interface, removing dof_ids dependency). Describe the
@@ -2043,7 +2043,7 @@ methods.
 \end{figure}
 
 
-\section{Real Robot Results: Flat Surface}
+\subsection{Real Robot Results: Flat Surface}
 
 % TODO (FILL): Present force tracking results on physical robot. F_ext
 % estimated from joint torque observer (no F/T sensor). Compare with sim.
@@ -2078,7 +2078,7 @@ methods.
 \end{figure}
 
 
-\section{Real Robot Results: Slope Surface}
+\subsection{Real Robot Results: Slope Surface}
 
 % TODO (FILL): Results for slope experiment on real robot. Discuss
 % discrepancies from simulation (real friction, model mismatch, flexibility).
@@ -2094,12 +2094,40 @@ methods.
 \end{figure}
 
 
-\section{Discussion: Sim-to-Real Gap}
+\subsection{Discussion: Sim-to-Real Gap}
 
 % TODO (FILL): Analyse sources of difference: joint flexibility, unmodelled
 % friction, contact model (MuJoCo soft contact vs. real hard contact),
 % communication latency. Force feedback from external torque observer is
 % less accurate than F/T sensor.
+
+
+% ==================================================================
+\chapter{PPO Residual Compensation}
+\label{chap:ppo}
+% ==================================================================
+
+\section{Motivation}
+
+% TODO (FILL): The paper method uses decoupled subspace control and performs
+% well in frictionless conditions, but force errors increase with friction
+% and at high speed. A PPO-based residual compensation policy is trained to
+% output an additive torque correction on top of the hybrid controller,
+% targeting the residual force error.
+
+\section{PPO Policy Design}
+
+% TODO (FILL): State and action space, reward function (force error penalty
+% + position tracking reward), network architecture.
+
+\section{Simulation Results}
+
+% TODO (FILL): Compare PPO compensation vs.\ paper method in simulation
+% with friction.
+
+\section{Real-Robot Transfer}
+
+% TODO (FILL): Describe sim-to-real transfer. Results on FR3/Panda.
 
 
 % ==================================================================
