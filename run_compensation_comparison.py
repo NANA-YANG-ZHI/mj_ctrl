@@ -23,28 +23,41 @@ import numpy as np
 
 CONFIGS = [
     {
-        "label": "All compensations ON",
-        "flags": [],
-        "suffix": "_all",
-        "color": "tab:blue",
-    },
-    {
         "label": "No contact force compensation",
         "flags": ["--no-contact-force-compensation"],
         "suffix": "_no_contact",
         "color": "tab:orange",
+        "linestyle": "-",
+        "linewidth": 1.2,
+        "zorder": 2,
     },
     {
         "label": "No velocity term",
         "flags": ["--no-velocity-term"],
         "suffix": "_no_vel",
         "color": "tab:green",
+        "linestyle": "-",
+        "linewidth": 1.2,
+        "zorder": 2,
     },
     {
         "label": "No control force compensation",
         "flags": ["--no-control-force-compensation"],
         "suffix": "_no_ctrl",
         "color": "tab:red",
+        "linestyle": "-",
+        "linewidth": 1.2,
+        "zorder": 2,
+    },
+    # Plotted last so it renders on top of overlapping lines
+    {
+        "label": "All compensations ON",
+        "flags": [],
+        "suffix": "_all",
+        "color": "tab:blue",
+        "linestyle": "--",
+        "linewidth": 1.8,
+        "zorder": 3,
     },
 ]
 
@@ -132,7 +145,8 @@ def make_comparison_plot(args, data_dir):
         avg_abs = np.mean(np.abs(fe_sk))
         max_abs = np.max(np.abs(fe_sk))
         label = f"{cfg['label']}  (avg |err| = {avg_abs:.3f} N,  max |err| = {max_abs:.3f} N)"
-        ax.plot(t, force_error, linewidth=1.2, color=cfg["color"], label=label)
+        ax.plot(t, force_error, color=cfg["color"], linestyle=cfg["linestyle"],
+                linewidth=cfg["linewidth"], zorder=cfg["zorder"], label=label)
 
     ax.axhline(0, color="black", linestyle="--", linewidth=0.8)
     ax.set_xlabel("Time (s)")
