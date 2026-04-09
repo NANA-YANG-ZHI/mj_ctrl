@@ -80,6 +80,7 @@ run_one() {
 
     local OUTPUT
     OUTPUT=$(python3 "${REPO_DIR}/run_approach_then_hybrid_mujoco.py" \
+        --robot fr3_friction \
         --headless \
         --angular-speed "${ANGULAR_SPEED}" \
         --force-control-method "${FORCE_CONTROL_METHOD}" \
