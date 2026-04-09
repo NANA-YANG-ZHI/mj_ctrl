@@ -37,7 +37,7 @@ def main() -> None:
         "--robot",
         type=str,
         default="fr3",
-        choices=["fr3", "kuka", "panda"],
+        choices=["fr3", "kuka", "panda", "fr3_friction"],
         help="Robot type: fr3, kuka, or panda (default: fr3)"
     )
     parser.add_argument(
