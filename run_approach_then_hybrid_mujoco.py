@@ -127,7 +127,14 @@ def main() -> None:
         "--multiplier",
         type=float,
         default=0.0,
-        help="Angular speed multiplier (omega/pi); used as part of the saved data filename"
+        help="Angular speed multiplier (omega/pi); saved in the data file"
+    )
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        dest="run_id",
+        help="Identifier used as the data filename suffix (overrides --multiplier for naming only)"
     )
     parser.add_argument(
         "--surface-friction",
@@ -456,7 +463,8 @@ def main() -> None:
                 position_error = np.empty(0)
 
             ee_linear_speed = 0.1 * args.angular_speed  # circle radius = 0.1 m
-            fname = f"data_{args.multiplier:.1f}.npz"
+            file_id = args.run_id if args.run_id is not None else f"{args.multiplier:.1f}"
+            fname = f"data_{file_id}.npz"
             fpath = _os.path.join(args.data_dir, fname)
             np.savez(
                 fpath,

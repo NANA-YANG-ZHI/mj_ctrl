@@ -63,7 +63,8 @@ run_one() {
         --headless \
         --angular-speed "${ANGULAR_SPEED}" \
         --force-control-method "${FORCE_CONTROL_METHOD}" \
-        --multiplier "${MU}" \
+        --multiplier 2.0 \
+        --run-id "${MU}" \
         --skip-seconds "${SKIP_SECONDS}" \
         --save-data \
         --data-dir "${DATA_DIR}" \
