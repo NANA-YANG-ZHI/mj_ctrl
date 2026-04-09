@@ -1443,7 +1443,7 @@ system to third order, and stability requires careful selection of
 Tuning was found to be sensitive and outside the scope of this work;
 the method is therefore listed as a future extension.
 
-\subsection{Hybrid Force Control with Dynamic Compensation}
+\subsection{Hybrid Control with Dynamic Compensation}
 \label{sec:paper_method}
 
 The full method from Iskandar~et~al.~\cite{iskandar_hybrid_2023} augments the
@@ -1623,53 +1623,187 @@ control phase transitions from \textsc{Approaching} to
 \end{figure}
 
 
+\chapter{Simulation and Experiments}
+\label{chap:experiments}
 % ==================================================================
-\chapter{Simulation Experiments --- Flat Surface}
-% ==================================================================
 
-\section{Experimental Setup}
+\section{System Overview}
 
-% TODO (FILL): Franka Panda in MuJoCo. Flat board. Circle radius, centre,
-% orientation. Control gains (impedance_pos=500, impedance_ori=250).
-% Simulation timestep, friction settings.
+This section describes the simulation environment, the real-robot hardware
+interface, and the unified software architecture that allows the same
+controller code to run in both settings with minimum modification.
 
+\subsection{Simulation Setup (MuJoCo)}
+\label{sec:mujoco_setup}
 
-\section{Force Tracking Results}
+All simulation experiments are conducted in MuJoCo~\cite{mujoco} using the
+Franka Research~3 (FR3) robot model.
+The simulation scene is constructed via an MJCF description\cite{Zakka_MuJoCo_Menagerie_A_2022}.
 
-% TODO (FILL): Present contact force results for each method tested.
+The contact model is configured at the end-effector attachment geom with
+\texttt{condim=6} (enabling full 6-dimensional friction forces) and
+\texttt{friction="1~0.02~0.01"} (sliding, torsional, rolling friction
+coefficients).
+To study the effect of surface friction, alternative XML variants set
+\texttt{condim=1}, which disables tangential friction.
+The simulation timestep is set to \(1\,\mathrm{ms}\),
+matching the \(1\,\mathrm{kHz}\) control rate of the real robot.
 
 \begin{figure}[htbp]
     \centering
-    % TODO (PLOT): Contact force z vs. time for F_desired, PD, PI,
-    % Bruno+velocity_term at π/4 and 2π rad/s (frictionless).
-    \missingfigure{Contact force $z$ vs.\ time for all four methods at $\pi/4$ and $\pi$\,rad/s (frictionless)}
-    \caption{Contact force ($z$-direction) versus time for all four control
-             methods at $\pi/4$\,rad/s (top) and $\pi$\,rad/s (bottom) in
-             the frictionless environment.}
-    \label{fig:force_flat_frictionless}
+    % TODO (PLOT): Simulation scene screenshot: FR3 approaching
+    % slope/flat board in MuJoCo.
+    \missingfigure{MuJoCo simulation scene: FR3 approaching slope/flat board}
+    \caption{MuJoCo simulation scene showing the FR3 robot approaching the
+             slope/flat board.}
+    \label{fig:mujoco_scene}
 \end{figure}
 
-\section{Speed-Dependent Evaluation of Force Control Methods}
+\subsection{Real-Robot Setup (Franka FR3 + libfranka)}
+\label{sec:real_robot_setup}
 
-To evaluate the impact of end-effector velocity on force control and find out what is the maximum speed, that we can still have relatively good control of force and position, a parametric simulation study was conducted in which the angular speed of a circular contact trajectory was varied systematically. The task requires the robot to trace a circle of radius $r = 0.1,\text{m}$ on a planar surface while maintaining a constant normal contact force of $F_d = 8,\text{N}$. The angular speed $\omega$ was swept over 50 values in the range $\omega \in [0.1\pi,, 5.0\pi],\text{rad/s}$, corresponding to end-effector linear speeds $v = r\omega \in [0.031,, 1.571],\text{m/s}$. Each trial ran for 10 seconds of simulated time. The metrics recorded per trial are the mean absolute force error $\bar{e}_F = \mathbb{E}[|F_z - F_d|]$ and the mean position tracking error $\bar{e}_p$, along with their respective variances.
+The real-robot experiments use a Franka Research~3 (FR3) manipulator
+controlled via \texttt{libfranka}.
+The \texttt{libfranka} interface exposes a \(1\,\mathrm{kHz}\) torque control
+loop: at each millisecond tick, the controller reads the current
+\texttt{RobotState} (joint positions, velocities, external force estimate, and
+previous commanded torques) and returns a new torque command.
 
-Four control strategies were evaluated: (1) pure feedforward force control, (2) feedforward with PI correction ($K_p=2$, $K_i=5$), (3) the paper method (a model-based approach from prior work), and (4) a PD controller ($K_p=5$, $K_d=0.5$). Parameters for PD and PI controllers are tuned and chosen separately using grid search.
+Robot dynamics — Jacobian, joint inertia matrix, Coriolis matrix, and gravity
+vector — are computed using Pinocchio~\cite{pinocchio} with the FR3 URDF model.
+Pinocchio is used almost identically in both simulation and real-robot code: it
+receives the current joint configuration \(q\) and velocity \(\dot{q}\) from
+the robot state and returns the required kinematic and dynamic quantities.
+This ensures that the controller does not depend on MuJoCo's internal dynamics
+and that simulation-to-real transfer requires no algorithmic changes. Only one exception is FR3 already has gravity compensation and don't need to calculate from Pinocchio.
+
+\subsection{Unified Software Architecture}
+\label{sec:unified_arch}
+
+A key design goal of this work is to run the same controller code in
+simulation and on the real robot.
+This is achieved through the \texttt{MujocoRobotInterface} wrapper, which
+mimics the \texttt{libfranka} \texttt{Robot} and \texttt{RobotState}
+interfaces.
+\texttt{MujocoRobotInterface} exposes the same fields as a libfranka
+\texttt{RobotState}:
+\begin{itemize}
+    \item \texttt{q} — joint positions (\(\mathbb{R}^7\))
+    \item \texttt{dq} — joint velocities (\(\mathbb{R}^7\))
+    \item \texttt{O\_T\_EE} — end-effector homogeneous transformation in the
+          base frame, flattened in column-major order (\(\mathbb{R}^{16}\))
+    \item \texttt{O\_F\_ext\_hat\_K} — estimated external wrench (force and
+          torque) in the stiffness frame (\(\mathbb{R}^6\))
+    \item \texttt{tau\_J\_d} — last commanded joint torques (\(\mathbb{R}^7\))
+\end{itemize}
+Because both environments expose this unified \texttt{RobotState} interface,
+the \texttt{HybridController} and \texttt{CartesianSpacePDController} classes
+operate identically in simulation and on hardware without any
+environment-specific branching.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (DIAGRAM): Software architecture:
+    % libfranka / MujocoRobotInterface → unified RobotState →
+    % controller stack (CartesianSpacePDController → HybridController)
+    \missingfigure{Software architecture: libfranka\,/\,MujocoRobotInterface
+                   $\to$ unified RobotState $\to$ controller stack
+                   (CartesianSpacePDController $\to$ HybridController)}
+    \caption{Software architecture showing how \texttt{libfranka} and
+             \texttt{MujocoRobotInterface} both expose a unified
+             \texttt{RobotState}, which feeds into the controller stack
+             (\texttt{CartesianSpacePDController} $\to$
+             \texttt{HybridController}).}
+    \label{fig:system_architecture}
+\end{figure}
 
 
-\section{Speed-Dependent Evaluation of Force Control Methods}
+\section{Task Definition}
 
-To evaluate the impact of end-effector velocity on force control performance and
-to determine the maximum speed at which adequate force and position regulation
-can be sustained, a parametric simulation study was conducted in which the
-angular speed of a circular contact trajectory was varied systematically.
+Two contact tasks are studied in this work, both consisting of drawing a
+horizontal circle while maintaining a constant normal contact force against a
+surface.
+
+\paragraph{Task 1 — Flat surface.}
+The end-effector draws a circle on a flat horizontal surface
+(\(\texttt{euler} = [0^\circ, 0^\circ, 0^\circ]\)).
+The constraint direction is the world \(z\)-axis, and the motion subspace
+spans the \(xy\)-plane and all three rotation axes.
+
+\paragraph{Task 2 — Slope surface.}
+The end-effector draws a circle on a surface inclined at \(30^\circ\)
+(\(\texttt{euler} = [30^\circ, 0^\circ, 0^\circ]\)).
+The constraint direction is the surface normal, obtained by rotating the
+world \(z\)-axis by the slope rotation matrix \(R\).
+TODO: slope angle is an variable
+
+\paragraph{Trajectory parametrisation.}
+In both tasks the circle has radius \(r = 0.1\,\mathrm{m}\), centred at a
+fixed contact point on the surface.
+The angular speed \(\omega\) is swept from \(\pi \times 0.1\) to
+\(\pi \times 5\,\mathrm{rad/s}\), corresponding to end-effector linear speeds
+from \(0.0314\) to \(1.571\,\mathrm{m/s}\) at the given radius.
+The desired end-effector position, velocity, and acceleration at time \(t\) are
+\begin{align}
+    p_d(t) &= p_c + R_\text{slope}\,
+              \begin{bmatrix}
+                  r\cos(\omega t) \\ r\sin(\omega t) \\ 0
+              \end{bmatrix}, \\
+    \dot{p}_d(t) &= R_\text{slope}\,
+              \begin{bmatrix}
+                  -r\omega\sin(\omega t) \\ r\omega\cos(\omega t) \\ 0
+              \end{bmatrix}, \\
+    \ddot{p}_d(t) &= R_\text{slope}\,
+              \begin{bmatrix}
+                  -r\omega^2\cos(\omega t) \\ -r\omega^2\sin(\omega t) \\ 0
+              \end{bmatrix},
+\end{align}
+where \(p_c\) is the circle centre in the world frame and \(R_\text{slope}\)
+is the slope rotation matrix.
+The desired orientation is kept constant throughout the circle motion.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): 3D trajectory visualisation: desired circle path on flat
+    % and slope surfaces.
+    \missingfigure{3D trajectory: desired circle path on flat surface and on slope}
+    \caption{Three-dimensional trajectory visualisation showing the desired
+             circle path on the flat surface (left) and the slope surface
+             (right).}
+    \label{fig:trajectory_3d}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Coordinate frame diagram: world frame, constraint frame
+    % (normal to surface), motion frame (tangent plane).
+    \missingfigure{Coordinate frame diagram: world, constraint, and motion frames}
+    \caption{Coordinate frame diagram illustrating the world frame, constraint
+             frame (normal to surface), and motion frame (tangent plane).}
+    \label{fig:coord_frames}
+\end{figure}
+
+
+% ==================================================================
+\section{Simulation: Flat Surface --- Without Surface Friction}
+% ==================================================================
+
+The end-effector draws a circle on a flat horizontal surface
+(\(\texttt{euler} = [0^\circ, 0^\circ, 0^\circ]\)).
+The constraint direction is the world \(z\)-axis, and the motion subspace
+spans the \(xy\)-plane and all three rotation axes. In this experiment, \texttt{condim} is set to 1 in the end effector contact frame, which corresponds to a frictionless contact and only normal force will be generated.
+
+We want to investigate the impact of end-effector velocity on both force tracking and 
+motion tracking performance across all methods and determine the operational limit of each control method, at what velocity a good control of force and position can be still maintained. A parametric simulation study was conducted in which the angular speed of a circular contact
+trajectory was varied systematically. 
 The task requires the robot to trace a circle of radius $r = 0.1\,\mathrm{m}$
 on a planar surface while maintaining a constant normal contact force of
-$F_d = 8\,\mathrm{N}$.
+$F_d = -8\,\mathrm{N}$.
 The angular speed $\omega$ was swept over 50 uniformly spaced values in the
 range $\omega \in [0.1\pi,\,5.0\pi]\,\mathrm{rad/s}$, corresponding to
 end-effector linear speeds
 $v = r\omega \in [0.031,\,1.571]\,\mathrm{m/s}$.
-Each trial ran for 10 seconds of simulated time.
+Each trial ran for 10 seconds of simulated time. 
 
 Five control strategies were evaluated:
 (1) pure feedforward force control,
@@ -1687,23 +1821,25 @@ $\bar{e}_F = \mathbb{E}[|F_z - F_d|]$
 and the mean position tracking error $\bar{e}_p$,
 together with their respective variances.
 During the initial approach phase the robot closes contact from free space;
-this produces transient force spikes of up to $8\,\mathrm{N}$ that are
+this produces transient force spikes of up to $-10\,\mathrm{N}$ that are
 unrelated to steady-state control quality.
 Accordingly, force metrics are computed only over the interval
 $[1\,\mathrm{s},\,10\,\mathrm{s}]$, discarding the first 1000 samples
 (at $\Delta t = 1\,\mathrm{ms}$) to exclude the approach transient.
 Position error is however computed over the full $10\,\mathrm{s}$ window.
 
-\begin{figure}[htbp]
+\subsection{Force Tracking Results}
+
+\begin{figure}[h]
     \centering
     % Row 1
-    \begin{subfigure}[b]{0.48\textwidth}
+    \begin{subfigure}[b]{0.45\textwidth}
         \includegraphics[width=\textwidth]{images/force_error_comparison.png}
         \caption{}
         \label{fig:force_error_comparison}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.48\textwidth}
+    \begin{subfigure}[b]{0.45\textwidth}
         \includegraphics[width=\textwidth]{images/force_var_comparison.png}
         \caption{}
         \label{fig:force_var_comparison}
@@ -1713,9 +1849,8 @@ Position error is however computed over the full $10\,\mathrm{s}$ window.
     \label{fig:speed_sweep_force_comparison}
 \end{figure}
 
-Force error analysis.
-All methods exhibit a monotonically increasing force error with speed, but the
-rate of increase and the absolute level differ markedly as you can see in Figure~\ref{fig:speed_sweep_force_comparison}.
+As shown in Figure~\ref{fig:speed_sweep_force_comparison}, all methods exhibit a monotonically increasing force error with speed, but the
+rate of increase and the absolute level differ markedly.
 
 The \emph{PD controller} produces a roughly constant steady-state offset of
 $\bar{e}_F \approx 1.35$--$1.5\,\mathrm{N}$ across speed
@@ -1730,8 +1865,8 @@ force tracking: $\bar{e}_F = 0.08\,\mathrm{N}$ at $v = 0.4\,\mathrm{m/s}$,
 increasing to only $0.23\,\mathrm{N}$ at $v = 1.07\,\mathrm{m/s}$, and maintain $\bar{e}_F$ as $2.3\,\mathrm{N}$ even when $v = 1.35\,\mathrm{m/s}$,  representing
 the best absolute performance across all methods.
 
-Trajectory tracking and critical speed.
-\begin{figure}[htbp]
+\subsection{Motion Tracking Results}
+\begin{figure}[h]
     \centering
     \begin{subfigure}[b]{0.48\textwidth}
         \includegraphics[width=\textwidth]{images/position_error_comparison.png}
@@ -1758,14 +1893,22 @@ The HFPD\,+\,PI and feedforward\,+\,PI methods degrade more gradually at
 $v = 1.41\,\mathrm{m/s}$ ($\bar{e}_p = 0.057\,\mathrm{m}$ and
 $0.023\,\mathrm{m}$, respectively), suggesting that integral force correction
 moderates the destabilising effect of high-frequency contact dynamics.
-Above $v \approx 1.5\,\mathrm{m/s}$ all methods diverge, exhibiting catastrophic instability and huge force errors.
+Above $v \approx 1.5\,\mathrm{m/s}$ all methods diverge, exhibiting catastrophic instability.
 
+\subsection{Detailed Analysis at Representative Speeds}
+We now examine the force and motion tracking behavior at representative 
+end-effector speeds. For each selected end effector speed, the force tracking 
+error is defined as $e_F = F_z - F_d$ and reported with sign. A positive error indicates loss of contact or insufficient force application; 
+for example, when the end-effector loses contact entirely, $F_z = 0\,\mathrm{N}$ 
+and the error reaches $e_F = 0 - (-8) = +8\,\mathrm{N}$. Conversely, a negative 
+error indicates excessive force against the surface; for example, $F_z = -10\,\mathrm{N}$ 
+yields $e_F = -10 - (-8) = -2\,\mathrm{N}$.
 \begin{figure}[htbp]
     \centering
     % Row 1
     \begin{subfigure}[b]{0.9\textwidth}
         \includegraphics[width=\textwidth]{images/speed_3.4/force_tracking.png}
-        \caption{}
+        \caption{signed force error $e_F = F_z - F_d$ for all controllers}
         \label{fig:speed_3.4/force_tracking}
     \end{subfigure}
 
@@ -1775,46 +1918,23 @@ Above $v \approx 1.5\,\mathrm{m/s}$ all methods diverge, exhibiting catastrophic
     
     \begin{subfigure}[b]{0.9\textwidth}
         \includegraphics[width=\textwidth]{images/speed_3.4/position_tracking_xyz.png}
-        \caption{}
+        \caption{end-effector position tracking in $x$, $y$, $z$}
         \label{fig:speed_3.4/position_tracking}
     \end{subfigure}
 
-    \caption{force position details 3.4}
+    \caption{Force tracking error and end-effector trajectory at 
+$v \approx 1.07\,\mathrm{m/s}$ ($\omega = 3.4\pi\,\mathrm{rad/s}$)}
     \label{fig:force_position_details_3.4}
 \end{figure}
 
-\begin{figure}[htbp]
-    \centering
-    % Row 1
-    \begin{subfigure}[b]{0.9\textwidth}
-        \includegraphics[width=\textwidth]{images/speed_3.8/force_tracking.png}
-        \caption{}
-        \label{fig:speed_3.8/force_tracking}
-    \end{subfigure}
-
-    \vspace{0.5em}  % vertical gap between rows
-
-    % Row 2
-
-    \begin{subfigure}[b]{0.9\textwidth}
-        \includegraphics[width=\textwidth]{images/speed_3.8/position_tracking_xyz.png}
-        \caption{}
-        \label{fig:speed_3.8/position_tracking}
-    \end{subfigure}
-
-    \caption{force position details 3.8}
-    \label{fig:force_position_details_3.8}
-\end{figure}
-
-Figure~\ref{fig:speed_3.4/position_tracking} presents the force tracking performance at an end-effector 
-speed of $v = 1.068\,\mathrm{m/s}$, corresponding to an angular speed multiplier 
-of $3.4$ (i.e., $3.4$ full circles per second). The position tracking results 
-confirm that all controllers maintain accurate trajectory following throughout the 
+Figure~\ref{fig:speed_3.4/position_tracking} presents the position tracking 
+performance at $v = 1.068\,\mathrm{m/s}$ ($\omega \approx 3.4\pi\,\mathrm{rad/s}$). All controllers maintain accurate trajectory following throughout the 
 motion. A transient deviation is observed during the first $0.5\,\mathrm{s}$, 
 attributable to the approach phase prior to surface contact, after which all 
 methods converge to the desired trajectory.
 
-The force tracking results in Figure ~\ref{fig:speed_3.4/force_tracking} reveal significant differences among the controllers 
+The corresponding force tracking results, shown in 
+Figure~\ref{fig:speed_3.4/force_tracking}, reveal significant differences among the controllers 
 at this speed. The pure feedforward ($F_\text{des}$) controller fails to maintain 
 stable contact, exhibiting force errors up to $8\,\mathrm{N}$, which means complete loss of contact. The PD controller, or down to $-20\,\mathrm{N}$, which means
 excessive surface penetration. The PD controller
@@ -1828,15 +1948,72 @@ In contrast, HFPD controller and its PI-augmented variant
 HFPD + PI attains a mean force error of $0.235\,\mathrm{N}$ and a maximum force 
 error of $0.524\,\mathrm{N}$, demonstrating (to be filled).
 
-In summary, the HFPD and its PI variant provide
-consistently superior force tracking relative to the other strategies across the
-full stable operating range, with HFPD\,+\,PI achieving the lowest
-steady-state force error at every speed.
+\begin{figure}[htbp]
+    \centering
+    % Row 1
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/speed_3.8/force_tracking.png}
+        \caption{signed force error $e_F = F_z - F_d$ for all controllers}
+        \label{fig:speed_3.8/force_tracking}
+    \end{subfigure}
 
-For HFPD to maintain a good force tracking, without losing contact or extreme penetration force, the speed limit in drawing circle scenario with r=0.1m is approximately
-$v \approx 1.10\,\mathrm{m/s}$ ($\omega \approx 3.5\pi\,\mathrm{rad/s}$). Between $v \approx 1.10\,\mathrm{m/s}$ ($\omega \approx 3.5\pi\,\mathrm{rad/s}$) and $v \approx 1.38\,\mathrm{m/s}$ ($\omega \approx 4.4\pi\,\mathrm{rad/s}$), HFPD Will lose contact of the surface sometimes, but won't result in massive penetration force. 
-Beyond $v \approx 1.38\,\mathrm{m/s}$, trajectory tracking and force tracking degrade irrecoverably for HFPD, and of course for all evaluated
-methods.
+    \vspace{0.5em}  % vertical gap between rows
+
+    % Row 2
+
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/speed_3.8/position_tracking_xyz.png}
+        \caption{end-effector position tracking in $x$, $y$, $z$}
+        \label{fig:speed_3.8/position_tracking}
+    \end{subfigure}
+
+    \caption{Force tracking error and end-effector trajectory at 
+$v \approx 1.10\,\mathrm{m/s}$ ($\omega = 3.8\pi\,\mathrm{rad/s}$)}
+    \label{fig:force_position_details_3.8}
+\end{figure}
+
+Based on the speed sweep results, three distinct operating regimes are identified 
+for the HFPD and HFPD+PI controllers within the circular drawing scenario at 
+radius $r = 0.1\,\mathrm{m}$. Below $v \approx 1.07\,\mathrm{m/s}$ 
+($\omega \approx 3.4\pi\,\mathrm{rad/s}$), both controllers maintain stable 
+contact and accurate force tracking without loss of contact or excessive surface 
+penetration. In the intermediate regime, 
+$1.07 \lesssim v \lesssim 1.38\,\mathrm{m/s}$ 
+($3.4\pi \lesssim \omega \lesssim 4.4\pi\,\mathrm{rad/s}$), intermittent loss 
+of contact occurs; however, the controllers recover without producing dangerous 
+penetration forces, as illustrated in Figure~\ref{fig:force_position_details_3.8}. 
+Beyond $v \approx 1.38\,\mathrm{m/s}$ ($\omega \approx 4.4\pi\,\mathrm{rad/s}$), 
+force tracking degrades irrecoverably for all evaluated methods and precise 
+trajectory following can no longer be maintained, as shown in 
+Figure~\ref{fig:force_position_details_4.4}.
+
+In summary, HFPD and HFPD+PI provide consistently superior force tracking 
+relative to all other evaluated controllers across the full stable operating 
+range, with HFPD+PI achieving the lowest steady-state force error at every speed within operational range.
+
+\begin{figure}[htbp]
+    \centering
+    % Row 1
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/speed_4.4/force_tracking.png}
+        \caption{signed force error $e_F = F_z - F_d$ for all controllers}
+        \label{fig:speed_4.4/force_tracking}
+    \end{subfigure}
+
+    \vspace{0.5em}  % vertical gap between rows
+
+    % Row 2
+
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/speed_4.4/position_tracking_xyz.png}
+        \caption{end-effector position tracking in $x$, $y$, $z$}
+        \label{fig:speed_4.4/position_tracking}
+    \end{subfigure}
+
+    \caption{Force tracking error and end-effector trajectory at 
+$v \approx 1.38\,\mathrm{m/s}$ ($\omega = 4.4\pi\,\mathrm{rad/s}$)}
+    \label{fig:force_position_details_4.4}
+\end{figure}
 
 
 
@@ -1844,8 +2021,7 @@ methods.
 
 
 
-
-\section{Effect of Friction}
+\section{Simulation: Flat Surface — With Surface Friction}
 
 % TODO (FILL): Show how friction degrades force tracking. Explain the role
 % of tangential friction force in the constraint subspace and how it differs
