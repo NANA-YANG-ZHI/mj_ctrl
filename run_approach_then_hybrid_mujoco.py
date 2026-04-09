@@ -137,6 +137,27 @@ def main() -> None:
         help="Override the sliding friction coefficient (first value in friction='mu ...'). "
              "Requires --robot fr3_friction. Generates a temp XML with the specified value."
     )
+    parser.add_argument(
+        "--no-control-force-compensation",
+        dest="use_control_force_compensation",
+        action="store_false",
+        default=True,
+        help="Disable the control force compensation term in F_ctrl_constraint (paper method only)"
+    )
+    parser.add_argument(
+        "--no-contact-force-compensation",
+        dest="use_contact_force_compensation",
+        action="store_false",
+        default=True,
+        help="Disable the contact force compensation term in F_ctrl_constraint (paper method only)"
+    )
+    parser.add_argument(
+        "--no-velocity-term",
+        dest="use_velocity_term",
+        action="store_false",
+        default=True,
+        help="Disable the velocity term in F_ctrl_constraint (paper method only)"
+    )
     args = parser.parse_args()
 
     # ============================================================
@@ -215,6 +236,9 @@ def main() -> None:
         hybrid_config.Ki_force = args.ki_force
     if args.kd_force is not None:
         hybrid_config.Kd_force = args.kd_force
+    hybrid_config.use_control_force_compensation = args.use_control_force_compensation
+    hybrid_config.use_contact_force_compensation = args.use_contact_force_compensation
+    hybrid_config.use_velocity_term = args.use_velocity_term
 
     # Initial joint configuration (before approach)
     q0 = np.array([0.0225, 0.7064, -0.0243, -2.3135, -0.0095, 3.0422, -0.2441])
@@ -456,7 +480,15 @@ def main() -> None:
                 position_error = np.empty(0)
 
             ee_linear_speed = 0.1 * args.angular_speed  # circle radius = 0.1 m
-            fname = f"data_{args.multiplier:.1f}.npz"
+            disabled_parts = []
+            if not args.use_control_force_compensation:
+                disabled_parts.append("no_ctrl")
+            if not args.use_contact_force_compensation:
+                disabled_parts.append("no_contact")
+            if not args.use_velocity_term:
+                disabled_parts.append("no_vel")
+            comp_suffix = ("_" + "_".join(disabled_parts)) if disabled_parts else "_all"
+            fname = f"data_{args.multiplier:.1f}{comp_suffix}.npz"
             fpath = _os.path.join(args.data_dir, fname)
             np.savez(
                 fpath,
