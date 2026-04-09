@@ -70,6 +70,9 @@ def parse_args():
                         help="Directory to save the comparison plot")
     parser.add_argument("--data-dir", type=str, default="",
                         help="Directory for per-run .npz files. Uses a temp dir if empty.")
+    parser.add_argument("--surface-friction", type=float, default=None,
+                        dest="surface_friction",
+                        help="Override sliding friction coefficient (requires --robot fr3_friction)")
     return parser.parse_args()
 
 
@@ -90,6 +93,8 @@ def build_run_cmd(args, extra_flags, data_dir):
     ]
     if not math.isnan(args.angular_speed):
         cmd += ["--angular-speed", str(args.angular_speed)]
+    if args.surface_friction is not None:
+        cmd += ["--surface-friction", str(args.surface_friction)]
     if args.headless:
         cmd.append("--headless")
     cmd.extend(extra_flags)
