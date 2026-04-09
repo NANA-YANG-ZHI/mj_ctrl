@@ -9,6 +9,8 @@ import argparse
 import mujoco
 import mujoco.viewer
 import numpy as np
+import os
+import re
 import time
 import pinocchio as pino
 from scipy.spatial.transform import Rotation
@@ -127,12 +129,70 @@ def main() -> None:
         default=0.0,
         help="Angular speed multiplier (omega/pi); used as part of the saved data filename"
     )
+    parser.add_argument(
+        "--surface-friction",
+        type=float,
+        default=None,
+        dest="surface_friction",
+        help="Override the sliding friction coefficient (first value in friction='mu ...'). "
+             "Requires --robot fr3_friction. Generates a temp XML with the specified value."
+    )
     args = parser.parse_args()
 
     # ============================================================
     # 1. Get Robot Configuration
     # ============================================================
     robot_cfg = get_robot_config(args.robot)
+
+    # If --surface-friction is given, generate a temp MuJoCo XML with the overridden value.
+    # Pinocchio only needs kinematics, so its XML stays unchanged.
+    if args.surface_friction is not None:
+        mu = args.surface_friction
+        base_xml = robot_cfg.pinocchio_xml_path
+        with open(base_xml, 'r') as _f:
+            robot_xml_str = _f.read()
+        # Make meshdir absolute so the temp XML can live anywhere
+        assets_dir = os.path.abspath(os.path.join(os.path.dirname(base_xml), 'assets'))
+        robot_xml_str = robot_xml_str.replace('meshdir="assets"', f'meshdir="{assets_dir}"')
+        # Replace first friction coefficient: friction="<old> 0.02 0.01"
+        robot_xml_str = re.sub(
+            r'(friction=")[0-9.]+( [0-9.]+ [0-9.]+")',
+            rf'\g<1>{mu:.4f}\2',
+            robot_xml_str
+        )
+        # Unique temp dir per friction value — safe for parallel runs
+        tmp_dir = f"/tmp/mj_ctrl_friction_{mu:.4f}"
+        os.makedirs(tmp_dir, exist_ok=True)
+        robot_tmp_path = os.path.join(tmp_dir, "robot.xml")
+        with open(robot_tmp_path, 'w') as _f:
+            _f.write(robot_xml_str)
+        scene_tmp_content = (
+            '<mujoco model="fr3 scene">\n'
+            '  <include file="robot.xml"/>\n\n'
+            '  <statistic center="0.2 0 0.4" extent=".8"/>\n\n'
+            '  <visual>\n'
+            '    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>\n'
+            '    <rgba haze="0.15 0.25 0.35 1"/>\n'
+            '    <global azimuth="120" elevation="-20"/>\n'
+            '  </visual>\n\n'
+            '  <asset>\n'
+            '    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>\n'
+            '    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"\n'
+            '      markrgb="0.8 0.8 0.8" width="300" height="300"/>\n'
+            '    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>\n'
+            '  </asset>\n\n'
+            '  <worldbody>\n'
+            '    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>\n'
+            '    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>\n'
+            '  </worldbody>\n'
+            '</mujoco>\n'
+        )
+        scene_tmp_path = os.path.join(tmp_dir, "scene.xml")
+        with open(scene_tmp_path, 'w') as _f:
+            _f.write(scene_tmp_content)
+        robot_cfg.mujoco_scene_xml_path = scene_tmp_path
+        print(f"[CONFIG] Surface friction override: mu={mu:.4f}")
+
     print(f"\n[CONFIG] Using robot: {robot_cfg.name}")
     print(f"[CONFIG] Pinocchio XML: {robot_cfg.pinocchio_xml_path}")
     print(f"[CONFIG] MuJoCo XML: {robot_cfg.mujoco_scene_xml_path}")

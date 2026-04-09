@@ -1,35 +1,35 @@
 #!/usr/bin/env bash
-# Sweep angular_speed from pi*0.1 to pi*5.0 in steps of 0.1,
-# run run_approach_then_hybrid_mujoco.py headless for each,
-# collect avg force Z error, then plot angular_speed vs avg error.
-# Saves individual simulation plots only at multipliers: 0.1, 0.5, 1.0, 1.5, ...
+# Sweep surface sliding friction coefficient from 0.1 to 1.0 in steps of 0.1 (10 values).
+# Runs run_approach_then_hybrid_mujoco.py headless for each value,
+# collects avg |force Z error|, variance, avg position error, variance,
+# then generates a summary plot.
 # Runs NUM_WORKERS simulations in parallel.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${SCRIPT_DIR}/.."
-PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
+PLOT_SCRIPT="${SCRIPT_DIR}/plot_friction_sweep.py"
 
 # ---------------------------------------------------------------
 # Configure the sweep here
 # Results and sweep plot will be saved to:
-#   angular_speed_sweep/plots/<SWEEP_NAME>/
-# Individual speed plots:
-#   angular_speed_sweep/plots/<SWEEP_NAME>/speed_<mult>pi/
+#   friction_sweep/plots/<SWEEP_NAME>/
 #
 # FORCE_CONTROL_METHOD: "paper" | "pd" | "feedforward"
-# USE_PI: "true" to add PI correction on top of the method, "false" otherwise
+# USE_PI: "true" to add PI correction, "false" otherwise
+# ANGULAR_SPEED: fixed angular speed in rad/s (default: pi*2)
 # NUM_WORKERS: how many simulations to run in parallel
 # ---------------------------------------------------------------
-SWEEP_NAME="${SWEEP_NAME:-feedforward_pi}"
-FORCE_CONTROL_METHOD="${FORCE_CONTROL_METHOD:-feedforward}"
-USE_PI="${USE_PI:-true}"
-KP_FORCE="${KP_FORCE:-2.0}"   # e.g. "5.0" — passed as --kp-force; empty = use default
-KD_FORCE="${KD_FORCE:-}"      # e.g. "0.5" — passed as --kd-force; empty = use default
-KI_FORCE="${KI_FORCE:-5.0}"   # e.g. "5.0" — passed as --ki-force; empty = use default
+SWEEP_NAME="${SWEEP_NAME:-paper}"
+FORCE_CONTROL_METHOD="${FORCE_CONTROL_METHOD:-paper}"
+USE_PI="${USE_PI:-false}"
+KP_FORCE="${KP_FORCE:-}"
+KD_FORCE="${KD_FORCE:-}"
+KI_FORCE="${KI_FORCE:-}"
 NUM_WORKERS="${NUM_WORKERS:-10}"
 SKIP_SECONDS="${SKIP_SECONDS:-1.0}"
+ANGULAR_SPEED="${ANGULAR_SPEED:-6.283185307179586}"  # pi*2
 
 OUTPUT_DIR="${SCRIPT_DIR}/plots/${SWEEP_NAME}"
 TMP_DIR="${OUTPUT_DIR}/tmp_results"
@@ -37,38 +37,16 @@ DATA_DIR="${OUTPUT_DIR}/data"
 RESULTS_CSV="${OUTPUT_DIR}/sweep_results.csv"
 mkdir -p "${OUTPUT_DIR}" "${TMP_DIR}" "${DATA_DIR}"
 
-# Angular speed multipliers that trigger saving individual plots
-SAVE_PLOT_MULTIPLIERS="0.1 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0"
-# SAVE_PLOT_MULTIPLIERS="0.1 0.5 1.0"
-
 # ---------------------------------------------------------------
-# Worker function: runs one speed, writes result to a temp file.
-# Called in a subshell via & so must not share state.
+# Worker function: runs one friction value, writes result to temp file.
 # ---------------------------------------------------------------
 run_one() {
     local i=$1
 
-    local MULTIPLIER
-    MULTIPLIER=$(python3 -c "print(f'{$i * 0.1:.1f}')")
-    local ANGULAR_SPEED
-    ANGULAR_SPEED=$(python3 -c "import math; print(math.pi * $i * 0.1)")
-    local EE_LINEAR_SPEED
-    EE_LINEAR_SPEED=$(python3 -c "import math; print(0.1 * math.pi * $i * 0.1)")
+    local MU
+    MU=$(python3 -c "print(f'{$i * 0.1:.1f}')")
 
-    # Check if this multiplier is in the save-plot list
-    local SAVE_FLAG=""
-    local PLOT_DIR_FLAG=""
-    local SPEED_DIR=""
-    for m in $SAVE_PLOT_MULTIPLIERS; do
-        if [ "$MULTIPLIER" = "$m" ]; then
-            SPEED_DIR="${OUTPUT_DIR}/speed_${MULTIPLIER}pi"
-            SAVE_FLAG="--save-plots"
-            PLOT_DIR_FLAG="--plot-dir ${SPEED_DIR}"
-            break
-        fi
-    done
-
-    echo "[worker ${i}] angular_speed = pi * ${MULTIPLIER} = ${ANGULAR_SPEED} rad/s  (v = ${EE_LINEAR_SPEED} m/s)"
+    echo "[worker ${i}] surface_friction mu = ${MU}"
 
     local PI_FLAG=""
     [ "${USE_PI}" = "true" ] && PI_FLAG="--use-pi"
@@ -81,10 +59,11 @@ run_one() {
     local OUTPUT
     OUTPUT=$(python3 "${REPO_DIR}/run_approach_then_hybrid_mujoco.py" \
         --robot fr3_friction \
+        --surface-friction "${MU}" \
         --headless \
         --angular-speed "${ANGULAR_SPEED}" \
         --force-control-method "${FORCE_CONTROL_METHOD}" \
-        --multiplier "${MULTIPLIER}" \
+        --multiplier "${MU}" \
         --skip-seconds "${SKIP_SECONDS}" \
         --save-data \
         --data-dir "${DATA_DIR}" \
@@ -92,8 +71,6 @@ run_one() {
         ${KP_FLAG} \
         ${KD_FLAG} \
         ${KI_FLAG} \
-        ${SAVE_FLAG} \
-        ${PLOT_DIR_FLAG} \
         2>&1)
 
     # Extract metrics
@@ -107,43 +84,40 @@ run_one() {
     [ -z "$AVG_POS_ERROR"   ] && AVG_POS_ERROR="nan"
     [ -z "$VAR_POS_ERROR"   ] && VAR_POS_ERROR="nan"
 
-    # Write to per-run temp file (no shared file = no race condition)
-    echo "${MULTIPLIER},${ANGULAR_SPEED},${EE_LINEAR_SPEED},${AVG_FORCE_ERROR},${VAR_FORCE_ERROR},${AVG_POS_ERROR},${VAR_POS_ERROR}" \
+    echo "${MU},${AVG_FORCE_ERROR},${VAR_FORCE_ERROR},${AVG_POS_ERROR},${VAR_POS_ERROR}" \
         > "${TMP_DIR}/result_${i}.csv"
 
-    echo "[worker ${i}] done — avg_force_z_error=${AVG_FORCE_ERROR}  var=${VAR_FORCE_ERROR}  avg_pos_error=${AVG_POS_ERROR}  var=${VAR_POS_ERROR}"
+    echo "[worker ${i}] done — mu=${MU}  avg_force_z_error=${AVG_FORCE_ERROR}  var=${VAR_FORCE_ERROR}  avg_pos_error=${AVG_POS_ERROR}  var_pos=${VAR_POS_ERROR}"
 }
 
 export -f run_one
-export OUTPUT_DIR TMP_DIR DATA_DIR REPO_DIR FORCE_CONTROL_METHOD USE_PI KP_FORCE KD_FORCE KI_FORCE SKIP_SECONDS SAVE_PLOT_MULTIPLIERS
+export OUTPUT_DIR TMP_DIR DATA_DIR REPO_DIR FORCE_CONTROL_METHOD USE_PI KP_FORCE KD_FORCE KI_FORCE SKIP_SECONDS ANGULAR_SPEED
 
 # ---------------------------------------------------------------
 # Dispatch workers with a simple job-pool (no GNU parallel needed)
 # ---------------------------------------------------------------
-echo "Starting sweep with NUM_WORKERS=${NUM_WORKERS} (50 speeds total)..."
+echo "Starting friction sweep with NUM_WORKERS=${NUM_WORKERS} (10 values: mu=0.1 to 1.0)..."
 active_jobs=0
 
-for i in $(seq 1 50); do
+for i in $(seq 1 10); do
     run_one "$i" &
     active_jobs=$(( active_jobs + 1 ))
 
-    # When the pool is full, wait for any one job to finish before launching the next
     if [ "$active_jobs" -ge "$NUM_WORKERS" ]; then
-        wait -n 2>/dev/null || wait   # wait -n requires bash 4.3+; fall back to wait
+        wait -n 2>/dev/null || wait
         active_jobs=$(( active_jobs - 1 ))
     fi
 done
 
-# Wait for all remaining jobs
 wait
 echo ""
 echo "All workers finished. Merging results..."
 
 # ---------------------------------------------------------------
-# Merge temp files in order (i=1..50 → multiplier 0.1..5.0)
+# Merge temp files in order (i=1..10 → mu=0.1..1.0)
 # ---------------------------------------------------------------
-echo "multiplier,angular_speed_rad_s,ee_linear_speed_m_s,avg_force_z_error,var_force_z_error,avg_position_error,var_position_error" > "${RESULTS_CSV}"
-for i in $(seq 1 50); do
+echo "friction_coeff,avg_force_z_error,var_force_z_error,avg_position_error,var_position_error" > "${RESULTS_CSV}"
+for i in $(seq 1 10); do
     cat "${TMP_DIR}/result_${i}.csv" >> "${RESULTS_CSV}"
 done
 rm -rf "${TMP_DIR}"

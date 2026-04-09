@@ -1,7 +1,7 @@
-"""Plot EE linear speed vs force/position error metrics from sweep CSV.
+"""Plot surface friction coefficient vs force/position error metrics from sweep CSV.
 
-X-axis: EE linear speed  v = r × ω  (m/s,  r = 0.1 m)
-Four subplots: avg force error | var force error | avg position error | var position error
+X-axis: sliding friction coefficient μ
+Four subplots: avg |force Z error| | var force Z error | avg position error | var position error
 """
 import sys
 import os
@@ -15,7 +15,7 @@ def _parse_col(val: str) -> float:
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: python plot_angular_speed_sweep.py <results_csv> <output_dir>")
+        print("Usage: python plot_friction_sweep.py <results_csv> <output_dir>")
         sys.exit(1)
 
     csv_path = sys.argv[1]
@@ -24,7 +24,7 @@ def main():
         print(f"File not found: {csv_path}")
         sys.exit(1)
 
-    ee_linear_speeds = []
+    friction_coeffs = []
     avg_force_errors = []
     var_force_errors = []
     avg_pos_errors = []
@@ -35,31 +35,35 @@ def main():
             if i == 0:
                 continue  # skip header
             parts = line.strip().split(",")
-            # columns: multiplier, angular_speed, ee_linear_speed,
-            #          avg_force_z_error, var_force_z_error,
+            # columns: friction_coeff, avg_force_z_error, var_force_z_error,
             #          avg_position_error, var_position_error
-            if len(parts) < 5:
+            if len(parts) < 2:
                 continue
             try:
-                ee_linear_speeds.append(float(parts[2]))
-                avg_force_errors.append(_parse_col(parts[3]))
-                var_force_errors.append(_parse_col(parts[4]) if len(parts) > 4 else float("nan"))
-                avg_pos_errors.append(_parse_col(parts[5]) if len(parts) > 5 else float("nan"))
-                var_pos_errors.append(_parse_col(parts[6]) if len(parts) > 6 else float("nan"))
+                friction_coeffs.append(float(parts[0]))
+                avg_force_errors.append(_parse_col(parts[1]))
+                var_force_errors.append(_parse_col(parts[2]) if len(parts) > 2 else float("nan"))
+                avg_pos_errors.append(_parse_col(parts[3]) if len(parts) > 3 else float("nan"))
+                var_pos_errors.append(_parse_col(parts[4]) if len(parts) > 4 else float("nan"))
             except (ValueError, IndexError):
                 continue
 
-    v = np.array(ee_linear_speeds)
+    mu = np.array(friction_coeffs)
     avg_fe = np.array(avg_force_errors)
     var_fe = np.array(var_force_errors)
     avg_pe = np.array(avg_pos_errors)
     var_pe = np.array(var_pos_errors)
 
+    # Sort by friction coefficient in case parallel workers finished out of order
+    order = np.argsort(mu)
+    mu, avg_fe, var_fe, avg_pe, var_pe = (
+        mu[order], avg_fe[order], var_fe[order], avg_pe[order], var_pe[order]
+    )
+
     os.makedirs(output_dir, exist_ok=True)
 
-    fig, axes = plt.subplots(4, 1, figsize=(12, 14), sharex=True)
-    fig.suptitle("EE Linear Speed Sweep — Controller Performance", fontsize=14)
-    xlabel = "EE Linear Speed  v = r·ω  (m/s,  r = 0.1 m)"
+    fig, axes = plt.subplots(4, 1, figsize=(10, 14), sharex=True)
+    fig.suptitle("Surface Friction Sweep — HFPD Controller Performance", fontsize=14)
 
     specs = [
         (avg_fe, "Avg |Force Z Error| (N)",  "tab:blue"),
@@ -71,13 +75,14 @@ def main():
 
     for ax, (data, ylabel, color), marker in zip(axes, specs, markers):
         valid = ~np.isnan(data)
-        ax.plot(v[valid], data[valid], f"{marker}-", linewidth=1.5, markersize=5, color=color)
+        ax.plot(mu[valid], data[valid], f"{marker}-", linewidth=1.5, markersize=6, color=color)
         ax.set_ylabel(ylabel)
+        ax.set_xticks(np.round(np.arange(0.1, 1.05, 0.1), 1))
         ax.grid(True, alpha=0.3)
 
-    axes[-1].set_xlabel(xlabel)
+    axes[-1].set_xlabel("Sliding Friction Coefficient μ")
     plt.tight_layout()
-    out_path = os.path.join(output_dir, "angular_speed_sweep.png")
+    out_path = os.path.join(output_dir, "friction_sweep.png")
     fig.savefig(out_path, dpi=150)
     print(f"[PLOT] Sweep plot saved to {out_path}")
 
