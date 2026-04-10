@@ -791,102 +791,15 @@ unmodelled dynamics.
 \label{chap:methodology}
 % ==================================================================
 
-\section{System Overview}
-
-This section describes the simulation environment, the real-robot hardware
-interface, and the unified software architecture that allows the same
-controller code to run in both settings with minimum modification.
-
-\subsection{Simulation Setup (MuJoCo)}
-\label{sec:mujoco_setup}
-
-All simulation experiments are conducted in MuJoCo~\cite{mujoco} using the
-Franka Research~3 (FR3) robot model.
-The simulation scene is constructed via an MJCF description\cite{Zakka_MuJoCo_Menagerie_A_2022}.
-
-The contact model is configured at the end-effector attachment geom with
-\texttt{condim=6} (enabling full 6-dimensional friction forces) and
-\texttt{friction="1~0.02~0.01"} (sliding, torsional, rolling friction
-coefficients).
-To study the effect of surface friction, alternative XML variants set
-\texttt{condim=1}, which disables tangential friction.
-The simulation timestep is set to \(1\,\mathrm{ms}\),
-matching the \(1\,\mathrm{kHz}\) control rate of the real robot.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Simulation scene screenshot: FR3 approaching
-    % slope/flat board in MuJoCo.
-    \missingfigure{MuJoCo simulation scene: FR3 approaching slope/flat board}
-    \caption{MuJoCo simulation scene showing the FR3 robot approaching the
-             slope/flat board.}
-    \label{fig:mujoco_scene}
-\end{figure}
-
-\subsection{Real-Robot Setup (Franka FR3 + libfranka)}
-\label{sec:real_robot_setup}
-
-The real-robot experiments use a Franka Research~3 (FR3) manipulator
-controlled via \texttt{libfranka}.
-The \texttt{libfranka} interface exposes a \(1\,\mathrm{kHz}\) torque control
-loop: at each millisecond tick, the controller reads the current
-\texttt{RobotState} (joint positions, velocities, external force estimate, and
-previous commanded torques) and returns a new torque command.
-
-Robot dynamics — Jacobian, joint inertia matrix, Coriolis matrix, and gravity
-vector — are computed using Pinocchio~\cite{pinocchio} with the FR3 URDF model.
-Pinocchio is used almost identically in both simulation and real-robot code: it
-receives the current joint configuration \(q\) and velocity \(\dot{q}\) from
-the robot state and returns the required kinematic and dynamic quantities.
-This ensures that the controller does not depend on MuJoCo's internal dynamics
-and that simulation-to-real transfer requires no algorithmic changes. Only one exception is FR3 already has gravity compensation and don't need to calculate from Pinocchio.
-
-\subsection{Unified Software Architecture}
-\label{sec:unified_arch}
-
-A key design goal of this work is to run the same controller code in
-simulation and on the real robot.
-This is achieved through the \texttt{MujocoRobotInterface} wrapper, which
-mimics the \texttt{libfranka} \texttt{Robot} and \texttt{RobotState}
-interfaces.
-\texttt{MujocoRobotInterface} exposes the same fields as a libfranka
-\texttt{RobotState}:
-\begin{itemize}
-    \item \texttt{q} — joint positions (\(\mathbb{R}^7\))
-    \item \texttt{dq} — joint velocities (\(\mathbb{R}^7\))
-    \item \texttt{O\_T\_EE} — end-effector homogeneous transformation in the
-          base frame, flattened in column-major order (\(\mathbb{R}^{16}\))
-    \item \texttt{O\_F\_ext\_hat\_K} — estimated external wrench (force and
-          torque) in the stiffness frame (\(\mathbb{R}^6\))
-    \item \texttt{tau\_J\_d} — last commanded joint torques (\(\mathbb{R}^7\))
-\end{itemize}
-Because both environments expose this unified \texttt{RobotState} interface,
-the \texttt{HybridController} and \texttt{CartesianSpacePDController} classes
-operate identically in simulation and on hardware without any
-environment-specific branching.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (DIAGRAM): Software architecture:
-    % libfranka / MujocoRobotInterface → unified RobotState →
-    % controller stack (CartesianSpacePDController → HybridController)
-    \missingfigure{Software architecture: libfranka\,/\,MujocoRobotInterface
-                   $\to$ unified RobotState $\to$ controller stack
-                   (CartesianSpacePDController $\to$ HybridController)}
-    \caption{Software architecture showing how \texttt{libfranka} and
-             \texttt{MujocoRobotInterface} both expose a unified
-             \texttt{RobotState}, which feeds into the controller stack
-             (\texttt{CartesianSpacePDController} $\to$
-             \texttt{HybridController}).}
-    \label{fig:system_architecture}
-\end{figure}
-
-
 \section{Task Definition}
+\label{sec:task_definition}
 
 Two contact tasks are studied in this work, both consisting of drawing a
-horizontal circle while maintaining a constant normal contact force against a
-surface.
+circle while maintaining a constant normal contact force against a surface.
+Full experimental details — hardware setup, software architecture, and
+results — are given in Chapter~\ref{chap:experiments}; here the task geometry
+is introduced because it directly determines the constraint-frame construction
+developed in the following sections.
 
 \paragraph{Task 1 — Flat surface.}
 The end-effector draws a circle on a flat horizontal surface
@@ -898,8 +811,7 @@ spans the \(xy\)-plane and all three rotation axes.
 The end-effector draws a circle on a surface inclined at \(30^\circ\)
 (\(\texttt{euler} = [30^\circ, 0^\circ, 0^\circ]\)).
 The constraint direction is the surface normal, obtained by rotating the
-world \(z\)-axis by the slope rotation matrix \(R\).
-TODO: slope angle is an variable
+world \(z\)-axis by the slope rotation matrix \(R_\text{slope}\).
 
 \paragraph{Trajectory parametrisation.}
 In both tasks the circle has radius \(r = 0.1\,\mathrm{m}\), centred at a
@@ -923,7 +835,7 @@ The desired end-effector position, velocity, and acceleration at time \(t\) are
               \end{bmatrix},
 \end{align}
 where \(p_c\) is the circle centre in the world frame and \(R_\text{slope}\)
-is the slope rotation matrix.
+is the slope rotation matrix (identity for the flat surface).
 The desired orientation is kept constant throughout the circle motion.
 
 \begin{figure}[htbp]
@@ -946,6 +858,59 @@ The desired orientation is kept constant throughout the circle motion.
              frame (normal to surface), and motion frame (tangent plane).}
     \label{fig:coord_frames}
 \end{figure}
+
+
+\section{Constraint Frame and Selection Matrices}
+\label{sec:constraint_frame}
+
+This section develops the constraint-frame formalism using the flat-surface
+circle-drawing task (Task~1) as a running example.
+The robot end-effector presses against a \textbf{flat horizontal surface} at
+height $z = 0.2\,\mathrm{m}$ in the base frame while drawing a circle of
+radius $r = 0.1\,\mathrm{m}$ in the $xy$-plane.
+It is required to maintain a constant normal contact force of
+$\lambda_d = 10\,\mathrm{N}$ in the $z$-direction.
+Only one direction is constrained ($m = 1$); the end-effector remains free
+to translate in $x$ and $y$ and to rotate about all three axes
+($6 - m = 5$ free directions).
+
+% ------------------------------------------------------------------
+% Holonomic constraint
+% ------------------------------------------------------------------
+\subsection*{Holonomic constraint}
+
+When the end-effector is in physical contact with the surface, the environment
+imposes a geometric restriction on the reachable configurations.
+Assuming the constraint depends only on the joint configuration
+$\mathbf{q}$ (holonomic), it takes the form
+%
+\begin{equation}
+    \boldsymbol{\phi}(\mathbf{q}) = \mathbf{0},
+    \label{eq:constraint}
+\end{equation}
+%
+where $\boldsymbol{\phi}: \mathbb{R}^n \to \mathbb{R}^m$ and $m$ is the number
+of independent constraints.
+
+\begin{tcolorbox}[
+    colback=gray!8, colframe=gray!45,
+    title={Example~1 — Constraint equation \eqref{eq:constraint}},
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
+\small
+With $m = 1$ and the surface at $z = 0.2\,\mathrm{m}$, the single
+constraint equation is:
+\begin{equation*}
+    \phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.2 = 0
+\end{equation*}
+When $\phi = 0$ the end-effector sits exactly on the surface.
+When $\phi > 0$ it is above the surface (contact lost);
+$\phi < 0$ is physically impossible (penetration).
+\end{tcolorbox}
+
+% ------------------------------------------------------------------
+% Constraint Jacobian
+% ------------------------------------------------------------------
+\subsection*{Constraint Jacobian}
 
 Differentiating \eqref{eq:constraint} with respect to time yields a
 velocity-level constraint on the admissible joint velocities:
@@ -984,104 +949,46 @@ $z$-velocity at the end-effector; the robot may only move
 in $x$, $y$, and rotationally while maintaining contact.
 \end{tcolorbox}
 
-
-\section{Constraint Frame and Selection Matrices}
-\label{sec:constraint_frame}
-
-Throughout this section the following concrete setup is used to
-illustrate each equation.
-The robot end-effector presses against a \textbf{flat horizontal
-surface} located at height $z = 0.2\,\mathrm{m}$ in the base
-frame, and is required to maintain a constant normal contact force
-of $\lambda_d = 10\,\mathrm{N}$ in the $z$-direction.
-Only one direction is constrained ($m = 1$); the end-effector
-remains free to translate in $x$ and $y$ and to rotate about all
-three axes ($6 - m = 5$ free directions).
+% ------------------------------------------------------------------
+% Force selection matrix S_f
+% ------------------------------------------------------------------
+\subsection*{Force selection matrix \(\mathbf{S}_f\)}
 
 The hybrid force/velocity controller partitions the six-dimensional
-end-effector space into a one-dimensional \emph{force subspace}
-(the constraint direction, normal to the contact surface) and a
-five-dimensional \emph{motion subspace} (the tangent plane and all
-rotational directions).
-This partitioning is encoded by two constant selection matrices,
-\(S_f \in \mathbb{R}^{6 \times 1}\) and \(S_v \in \mathbb{R}^{6 \times 5}\),
-which satisfy \(S_f^\top S_v = 0\) and together span all six Cartesian
-directions.
-
-When a robot end-effector is in physical contact with an environment,
-its motion is no longer unconstrained. The environment imposes geometric
-restrictions on the reachable end-effector configurations, which can be
-described by a set of holonomic constraint equations. Assuming that these
-constraints depend only on the joint configuration $\mathbf{q}$ and not
-explicitly on time, they take the form
+end-effector space into a \emph{force subspace} (constrained directions)
+and a \emph{motion subspace} (free directions).
+For a surface whose outward normal is aligned with a fixed base-frame axis,
+the constraint Jacobian $\mathbf{J}_{\phi}$ picks out only the corresponding
+row of the full Jacobian, and the force selection vector
+$\mathbf{S}_f \in \mathbb{R}^{6 \times 1}$ reduces to the matching standard
+basis vector — a \emph{constant} that can be written by inspection.
+For the flat horizontal surface with the normal in the $z$-direction:
 %
 \begin{equation}
-    \boldsymbol{\phi}(\mathbf{q}) = \mathbf{0},
-    \label{eq:constraint}
+    \mathbf{S}_{f}
+    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix}
+    \in \mathbb{R}^{6\times 1}.
+    \label{eq:Sf_flat}
 \end{equation}
-%
-where $\boldsymbol{\phi}: \mathbb{R}^n \to \mathbb{R}^m$ is a
-vector-valued function with shape $(m \times 1)$ and $m$ is the number
-of independent constraints imposed by the contact surface.
-Each scalar component of $\boldsymbol{\phi}$ corresponds to one
-independent geometric restriction.
 
 \begin{tcolorbox}[
     colback=gray!8, colframe=gray!45,
-    title={Example~1 — Constraint equation \eqref{eq:constraint}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-With $m = 1$ and the surface at $z = 0.2\,\mathrm{m}$, the single
-constraint equation is:
-\begin{equation*}
-    \phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.2 = 0
-\end{equation*}
-When $\phi = 0$ the end-effector sits exactly on the surface.
-When $\phi > 0$ it is above the surface (contact lost);
-$\phi < 0$ is physically impossible (penetration).
-\end{tcolorbox}
-
-
-% ------------------------------------------------------------------
-% Step 2 — Simplification for axis-aligned flat surfaces
-% ------------------------------------------------------------------
-\subparagraph{Simplification for axis-aligned flat surfaces.}
-For a contact surface whose outward normal is aligned with a fixed
-base-frame axis, the constraint Jacobian $\mathbf{J}_{\phi}$ reduces to a
-single row of the full Jacobian — namely the row corresponding to the
-normal direction — and the product $\mathbf{J}^{-T}\mathbf{J}_{\phi}^T$
-collapses to the corresponding standard basis vector.
-As a result, $\mathbf{S}_f$ becomes a \emph{constant} matrix that can be
-written by inspection, with no dependence on the robot configuration.
-This simplification is exact (not an approximation) whenever the contact
-normal is constant and expressed in the fixed base frame.
-Treating $\mathbf{S}_f$ as time-invariant is therefore valid for flat
-stationary surfaces, and it is adopted throughout this section to allow
-the selection matrices and the compliance matrix $\mathbf{C}$ to be
-treated as constants in the subsequent differentiation steps.
-
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~4 — Force selection matrix and end-effector wrench
-           \eqref{eq:ee_force}--\eqref{eq:Sf}},
+    title={Example~4 — Force selection matrix and end-effector wrench},
     fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
 \small
 For a flat horizontal surface with the contact normal aligned with
-the base-frame $z$-axis, the constraint Jacobian picks out only the
-$z$-row of $\mathbf{J}$, and the formula \eqref{eq:Sf} reduces to:
+the base-frame $z$-axis:
 \begin{equation*}
     \mathbf{S}_{f}
-    = \mathbf{J}^{-T}\,\mathbf{J}_{\phi}^{T}
     = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix}
     \in \mathbb{R}^{6\times 1}
 \end{equation*}
-This constant vector can be written by inspection: it simply
-selects the $z$-force component of the end-effector wrench.
-With $\lambda = 10\,\mathrm{N}$, the resulting $6$-dimensional
-end-effector wrench is:
+This vector selects the $z$-force component of the end-effector wrench.
+With $\lambda_d = 10\,\mathrm{N}$, the $6$-dimensional end-effector
+wrench mapped into joint torques is:
 \begin{equation*}
     \mathbf{h}_e
-    = \mathbf{S}_f\,\lambda
+    = \mathbf{S}_f\,\lambda_d
     = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix} \cdot 10
     = \begin{bmatrix}0\\0\\10\\0\\0\\0\end{bmatrix}\,\mathrm{N}
 \end{equation*}
@@ -1091,49 +998,57 @@ with no forces or moments in the five unconstrained directions.
 \end{tcolorbox}
 
 % ------------------------------------------------------------------
-% Step 3 — Velocity-controlled subspace and S_v
+% Motion selection matrix S_v
 % ------------------------------------------------------------------
-\subparagraph{Velocity-controlled subspace and $\mathbf{S}_v$.}
-The complementary \emph{velocity-controlled subspace} captures all
-end-effector motions that are not blocked by the constraint.
-It is spanned by the columns of a matrix
-$\mathbf{S}_{v}(\mathbf{q}) \in \mathbb{R}^{6\times(6-m)}$, which must
-satisfy the \emph{reciprocity condition}
+\subsection*{Motion selection matrix \(\mathbf{S}_v\)}
+
+The complementary \emph{motion-controlled subspace} is spanned by the columns
+of $\mathbf{S}_{v} \in \mathbb{R}^{6\times(6-m)}$, which must satisfy the
+\emph{reciprocity condition}
 %
 \begin{equation}
-    \mathbf{S}_{f}^{T}(\mathbf{q})\,\mathbf{S}_{v}(\mathbf{q}) = \mathbf{O}.
+    \mathbf{S}_{f}^{T}\,\mathbf{S}_{v} = \mathbf{O}.
     \label{eq:reciprocity}
 \end{equation}
 %
-Equation~\eqref{eq:reciprocity} is not a statement of geometric
-orthogonality — forces and velocities belong to different vector spaces
-— but rather the \emph{power-duality} (reciprocity) condition: contact
-forces in $\mathcal{R}(\mathbf{S}_f)$ do no work on end-effector
-velocities in $\mathcal{R}(\mathbf{S}_v)$, consistent with a rigid,
-frictionless constraint. In practice, $\mathbf{S}_v$ is any full-column-rank
-matrix whose columns span the null space of $\mathbf{S}_{f}^{T}$; for simple
-geometries it can be written by inspection. The end-effector velocity in the
-unconstrained directions is then parametrised as
+This is the \emph{power-duality} (reciprocity) condition: contact forces in
+$\mathcal{R}(\mathbf{S}_f)$ do no work on velocities in
+$\mathcal{R}(\mathbf{S}_v)$, consistent with a rigid frictionless constraint.
+For the flat surface ($m = 1$, normal in $z$), the canonical choices are
 %
 \begin{equation}
-    \mathbf{v}_e = \mathbf{S}_{v}(\mathbf{q})\,\boldsymbol{\nu},
-    \label{eq:ve_Sv}
+    \mathbf{S}_{f,c}
+    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix},
+    \qquad
+    \mathbf{S}_{v,c} =
+    \begin{bmatrix}
+        1 & 0 & 0 & 0 & 0 \\
+        0 & 1 & 0 & 0 & 0 \\
+        0 & 0 & 0 & 0 & 0 \\
+        0 & 0 & 1 & 0 & 0 \\
+        0 & 0 & 0 & 1 & 0 \\
+        0 & 0 & 0 & 0 & 1
+    \end{bmatrix}
+    \in \mathbb{R}^{6 \times 5}.
+    \label{eq:Sv_flat}
 \end{equation}
 %
-where $\boldsymbol{\nu} \in \mathbb{R}^{6-m}$ is the velocity vector in the
-motion subspace.
+The five columns of $\mathbf{S}_{v,c}$ correspond to the five unconstrained
+directions: translation in $x$ (row~0) and $y$ (row~1), and rotation about
+$r_x$ (row~3), $r_y$ (row~4), and $r_z$ (row~5).
+Note that yaw $r_z$ is deliberately placed in the motion subspace; fixing it
+would over-constrain the orientation and cause yaw drift during circular motion.
 
 \begin{tcolorbox}[
     colback=gray!8, colframe=gray!45,
-    title={Example~5 — Velocity-controlled subspace $\mathbf{S}_v$ and
+    title={Example~5 — Motion selection matrix $\mathbf{S}_v$ and
            reciprocity \eqref{eq:reciprocity}},
     fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
 \small
-With the contact normal in the $z$-direction ($m = 1$), the null space
-of $\mathbf{S}_f^T = [0,0,1,0,0,0]$ consists of all six-vectors whose
-third entry is zero. A basis for this null space is:
+With $\mathbf{S}_f^T = [0,0,1,0,0,0]$, the null space consists of all
+six-vectors whose third entry is zero. The canonical basis is:
 \begin{equation*}
-    \mathbf{S}_v =
+    \mathbf{S}_{v,c} =
     \begin{bmatrix}
         1 & 0 & 0 & 0 & 0 \\
         0 & 1 & 0 & 0 & 0 \\
@@ -1144,89 +1059,141 @@ third entry is zero. A basis for this null space is:
     \end{bmatrix}
     \in \mathbb{R}^{6\times 5}
 \end{equation*}
-The five columns correspond to the five unconstrained directions:
-translation in $x$ and $y$, and rotation about all three axes
-(roll, pitch, yaw). The reciprocity condition is verified:
+Rows: $v_x$ (circle tangential), $v_y$ (circle tangential), $v_z$
+(zero — constrained), $\omega_x$, $\omega_y$, $\omega_z$.
+Reciprocity check:
 \begin{equation*}
-    \mathbf{S}_f^T \mathbf{S}_v
+    \mathbf{S}_{f,c}^T\,\mathbf{S}_{v,c}
     = \begin{bmatrix}0&0&1&0&0&0\end{bmatrix}
-      \mathbf{S}_v
+      \mathbf{S}_{v,c}
     = \mathbf{0}_{1\times 5}
 \end{equation*}
-This confirms that a normal contact force in $z$ performs no work on
-any of the five free end-effector motions — the two subspaces are
-reciprocal, and neither channel interferes with the other.
+The normal contact force performs no work on any of the five free
+end-effector motions — the two subspaces are reciprocal.
+During circle drawing, the velocity command $\boldsymbol{\nu}(t) =
+[\dot{x}_d,\,\dot{y}_d,\,0,\,0,\,0]^\top$ is carried entirely within
+$\mathcal{R}(\mathbf{S}_{v,c})$, confirming that motion and force
+channels are decoupled by construction.
 \end{tcolorbox}
 
-\paragraph{Canonical selection matrices.}
-For a flat horizontal surface the constraint direction is the world
-\(z\)-axis, so the canonical force selection vector is
-\begin{equation}
-    S_{f,c} = \begin{bmatrix}0&0&1&0&0&0\end{bmatrix}^\top \in \mathbb{R}^{6},
-\end{equation}
-and the canonical motion selection matrix selects the remaining five
-directions: \(x\) tangential (row~0), \(y\) tangential (row~1), and the
-three rotation axes \(r_x\) (row~3), \(r_y\) (row~4), \(r_z\) (row~5):
-\begin{equation}
-    S_{v,c} =
-    \begin{bmatrix}
-        1 & 0 & 0 & 0 & 0 \\
-        0 & 1 & 0 & 0 & 0 \\
-        0 & 0 & 0 & 0 & 0 \\
-        0 & 0 & 1 & 0 & 0 \\
-        0 & 0 & 0 & 1 & 0 \\
-        0 & 0 & 0 & 0 & 1
-    \end{bmatrix} \in \mathbb{R}^{6 \times 5}.
-\end{equation}
-Note that \(r_z\) (yaw around the surface normal) is deliberately included in
-the motion subspace rather than the force subspace; fixing it would
-over-constrain the orientation and cause drift in the yaw direction.
+% ------------------------------------------------------------------
+% Projected Jacobians
+% ------------------------------------------------------------------
+\subsection*{Constraint and motion Jacobians}
 
-\paragraph{Slope generalisation via block-diagonal rotation.}
-For the \(30^\circ\) inclined slope, the constraint direction is no longer
-aligned with the world \(z\)-axis.
-The surface normal in the world frame is obtained by rotating the
-canonical normal \([0,0,1]^\top\) by the slope's Euler-angle rotation
-matrix \(R_\text{slope} \in \mathrm{SO}(3)\).
-The full \(6 \times 6\) block-diagonal rotation mapping both translational and
-rotational components is
-\begin{equation}
-    \mathbf{R} =
-    \begin{bmatrix} R_\text{slope} & 0 \\ 0 & R_\text{slope} \end{bmatrix}
-    \in \mathbb{R}^{6 \times 6},
-\end{equation}
-and the world-frame selection matrices are
-\begin{equation}
-    S_f = \mathbf{R}\,S_{f,c}, \qquad S_v = \mathbf{R}\,S_{v,c}.
-\end{equation}
-
-\paragraph{Constraint and motion Jacobians.}
 The projected Jacobians used by the controller are
 \begin{equation}
-    J_\Phi = S_f^\top J, \qquad J_\text{motion} = S_v^\top J,
+    J_\Phi = \mathbf{S}_{f,c}^\top J, \qquad
+    J_\text{motion} = \mathbf{S}_{v,c}^\top J,
+    \label{eq:proj_jacobians}
 \end{equation}
-where \(J \in \mathbb{R}^{6 \times 7}\) is the full geometric Jacobian of
+where $J \in \mathbb{R}^{6 \times 7}$ is the full geometric Jacobian of
 the end-effector.
-
-\paragraph{Key simplification for planar surfaces.}
-Because \(S_f\) and \(\mathbf{R}\) depend only on the surface geometry — not
-on the robot configuration — they are \emph{constant} throughout the motion.
-This implies \(\dot{J}_\Phi \approx \dot{S}_f^\top J + S_f^\top \dot{J}
-= S_f^\top \dot{J}\), and in the force dynamics derivation the term
-\(\dot{J}_\Phi\) can be treated as arising solely from the Jacobian
-time-derivative \(\dot{J}\).
+Because $\mathbf{S}_{f,c}$ and $\mathbf{S}_{v,c}$ depend only on the surface
+geometry and not on the robot configuration, they are \emph{constant}
+throughout the circle motion.
+This implies $\dot{J}_\Phi = \mathbf{S}_{f,c}^\top \dot{J}$, so in the
+force dynamics derivation the term $\dot{J}_\Phi$ arises solely from the
+Jacobian time-derivative $\dot{J}$.
 This simplification does \emph{not} hold for curved surfaces (e.g.\ a sphere),
 where the normal direction rotates as the end-effector moves.
 
 \begin{figure}[htbp]
     \centering
     % TODO (PLOT): Visual: selection matrix S_f (6×1) and S_v (6×5)
-    % structures for flat vs. slope.
-    \missingfigure{Selection matrix structures $S_f$ (6×1) and $S_v$ (6×5) for flat vs.\ slope}
-    \caption{Structure of the selection matrices $S_f$ ($6\times1$) and
-             $S_v$ ($6\times5$) for the flat surface (left) and the slope
-             surface (right).}
+    % structures for flat surface.
+    \missingfigure{Selection matrix structures $S_{f,c}$ (6×1) and $S_{v,c}$ (6×5) for flat surface}
+    \caption{Structure of the canonical selection matrices $\mathbf{S}_{f,c}$
+             ($6\times1$) and $\mathbf{S}_{v,c}$ ($6\times5$) for the flat
+             horizontal surface.}
     \label{fig:selection_matrices}
+\end{figure}
+
+
+% ==================================================================
+\section{Slope Surface: Constraint Frame via Block-Diagonal Rotation}
+\label{sec:slope_frame}
+% ==================================================================
+
+For the inclined surface (Task~2), the constraint direction is no longer
+aligned with the world $z$-axis.
+The approach taken here is to rotate the canonical flat-surface matrices
+by the surface inclination, which requires no re-derivation of the
+selection-matrix theory.
+
+\subsection*{Block-diagonal rotation matrix}
+
+Let $R_\text{slope} \in \mathrm{SO}(3)$ be the rotation matrix that maps
+the world frame into the surface frame (i.e.\ the $z$-axis of the surface
+frame is the outward surface normal).
+To rotate a full $6$-dimensional end-effector vector — which concatenates
+linear and angular parts — both halves must be rotated independently.
+The full $6\times 6$ block-diagonal rotation is
+\begin{equation}
+    \mathbf{R} =
+    \begin{bmatrix} R_\text{slope} & \mathbf{0} \\ \mathbf{0} & R_\text{slope} \end{bmatrix}
+    \in \mathbb{R}^{6 \times 6}.
+    \label{eq:R_block}
+\end{equation}
+The world-frame selection matrices for the slope are then
+\begin{equation}
+    \mathbf{S}_f = \mathbf{R}\,\mathbf{S}_{f,c}, \qquad
+    \mathbf{S}_v = \mathbf{R}\,\mathbf{S}_{v,c}.
+    \label{eq:slope_selection}
+\end{equation}
+
+\subsection*{Concrete numbers for a \(30^\circ\) slope}
+
+For a surface inclined at $\alpha = 30^\circ$ about the $x$-axis,
+the slope rotation matrix is
+\begin{equation}
+    R_\text{slope} =
+    \begin{bmatrix}
+        1 & 0 & 0 \\
+        0 & \cos 30^\circ & -\sin 30^\circ \\
+        0 & \sin 30^\circ &  \cos 30^\circ
+    \end{bmatrix}
+    =
+    \begin{bmatrix}
+        1 & 0 & 0 \\
+        0 & \tfrac{\sqrt{3}}{2} & -\tfrac{1}{2} \\
+        0 & \tfrac{1}{2} & \tfrac{\sqrt{3}}{2}
+    \end{bmatrix}.
+\end{equation}
+Applying \eqref{eq:slope_selection} to the canonical force selection vector
+$\mathbf{S}_{f,c} = [0,0,1,0,0,0]^\top$ yields the slope surface normal in
+the world frame:
+\begin{equation}
+    \mathbf{S}_f =
+    \mathbf{R}\,\mathbf{S}_{f,c}
+    =
+    \begin{bmatrix}
+        0 \\ -\tfrac{1}{2} \\ \tfrac{\sqrt{3}}{2} \\ 0 \\ -\tfrac{1}{2} \\ \tfrac{\sqrt{3}}{2}
+    \end{bmatrix}
+    \approx
+    \begin{bmatrix}
+        0 \\ -0.500 \\ 0.866 \\ 0 \\ -0.500 \\ 0.866
+    \end{bmatrix}
+    \in \mathbb{R}^{6}.
+\end{equation}
+The full motion selection matrix $\mathbf{S}_v = \mathbf{R}\,\mathbf{S}_{v,c}$
+follows by multiplying each column of $\mathbf{S}_{v,c}$ by $\mathbf{R}$.
+Because $\mathbf{R}$ is fixed for a planar slope (the surface normal is
+constant in the world frame), both $\mathbf{S}_f$ and $\mathbf{S}_v$ are
+\emph{constant} throughout the experiment — the same simplification that
+holds for the flat surface.
+The projected Jacobians are computed identically to \eqref{eq:proj_jacobians}
+using the rotated matrices in place of the canonical ones.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Visual: selection matrix structures for 30° slope vs flat.
+    \missingfigure{Selection matrix structures $S_f$ (6×1) and $S_v$ (6×5) for the 30° slope surface}
+    \caption{Structure of the selection matrices $\mathbf{S}_f$ ($6\times1$)
+             and $\mathbf{S}_v$ ($6\times5$) for the $30^\circ$ slope surface,
+             obtained by applying the block-diagonal rotation
+             \eqref{eq:R_block} to the canonical flat-surface matrices.}
+    \label{fig:selection_matrices_slope}
 \end{figure}
 
 
