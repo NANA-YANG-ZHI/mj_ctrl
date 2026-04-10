@@ -252,7 +252,7 @@ The external wrench $F^{\text{ext}} \in \mathbb{R}^{m}$, denoting the force and 
 \end{equation}
 where $m = 6$ when the full Cartesian space is considered. The Jacobian also relates joint velocities to end-effector velocities in operational space via $\dot{y} = J(q)\dot{q}$, where $\dot{y} \in \mathbb{R}^{m}$ contains the translational and rotational end-effector velocities.
 
-The reference paper by Iskandar~et~al.~\cite{ref2} adopts a simplified version of this model, omitting friction terms:
+The reference paper by Iskandar~et~al.~\cite{iskandar_hybrid_2023} adopts a simplified version of this model, omitting friction terms:
 \begin{equation}
     M(q)\ddot{q} + C(q,\dot{q})\dot{q} + g(q) = \tau + \tau^{\text{ext}}.
     \label{eq:joint_dynamics_simple}
@@ -348,295 +348,113 @@ Section~\ref{sec:hybrid_force_frameworks}.
 \section{Constraint Jacobian and Selection Matrices}
 \label{sec:constraints_selection}
 % ==================================================================
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): constraint visualisation like paper
-    \missingfigure{constraint visualisation like paper}
-    \caption{Schematic relating joint space $q$ to Cartesian task space $x$
-             via Jacobian $J$.}
-    \label{fig:constraint visualisation like paper}
-\end{figure}
-% ------------------------------------------------------------------
-% RUNNING EXAMPLE SETUP — introduced once at the top
-% ------------------------------------------------------------------
-\begin{tcolorbox}[
-    colback  = blue!5,
-    colframe = blue!40,
-    title    = {Running Example: Flat-Surface Contact Task},
-    fonttitle= \bfseries\small,
-    left=6pt, right=6pt, top=4pt, bottom=4pt
-]
-\small
-Throughout this section the following concrete setup is used to
-illustrate each equation.
-The robot end-effector presses against a \textbf{flat horizontal
-surface} located at height $z = 0.2\,\mathrm{m}$ in the base
-frame, and is required to maintain a constant normal contact force
-of $\lambda_d = 10\,\mathrm{N}$ in the $z$-direction.
-Only one direction is constrained ($m = 1$); the end-effector
-remains free to translate in $x$ and $y$ and to rotate about all
-three axes ($6 - m = 5$ free directions).
-\end{tcolorbox}
 
-\bigskip
+\subsection{Holonomic Constraints and Constraint Jacobian}
+\label{subsec:holonomic_constraints}
 
-When a robot end-effector is in physical contact with an environment,
-its motion is no longer unconstrained. The environment imposes geometric
-restrictions on the reachable end-effector configurations, which can be
-described by a set of holonomic constraint equations. Assuming that these
-constraints depend only on the joint configuration $\mathbf{q}$ and not
-explicitly on time, they take the form
+A central concept in the hybrid force-impedance control framework presented by
+Iskandar et al.~\cite{iskandar2023hybrid} is the explicit treatment of kinematic
+constraints imposed by the environment on the robot end-effector.
+When the end-effector comes into contact with a surface, the surface restricts
+end-effector motion in certain directions while leaving others free.
+The framework captures this mathematically by introducing holonomic constraints.
+
+Specifically, the kinematic, holonomic constraints
+$\boldsymbol{\Phi}(\mathbf{q}) \in \mathbb{R}^{c}$
+at the end-effector are formulated as
 %
 \begin{equation}
-    \boldsymbol{\phi}(\mathbf{q}) = \mathbf{0},
-    \label{eq:constraint}
+    \boldsymbol{\Phi}(\mathbf{q}) = \mathbf{0},
+    \label{eq:holonomic_constraint}
 \end{equation}
 %
-where $\boldsymbol{\phi}: \mathbb{R}^n \to \mathbb{R}^m$ is a
-vector-valued function with shape $(m \times 1)$ and $m$ is the number
-of independent constraints imposed by the contact surface.
-Each scalar component of $\boldsymbol{\phi}$ corresponds to one
-independent geometric restriction.
-
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~1 — Constraint equation \eqref{eq:constraint}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-With $m = 1$ and the surface at $z = 0.2\,\mathrm{m}$, the single
-constraint equation is:
-\begin{equation*}
-    \phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.2 = 0
-\end{equation*}
-When $\phi = 0$ the end-effector sits exactly on the surface.
-When $\phi > 0$ it is above the surface (contact lost);
-$\phi < 0$ is physically impossible (penetration).
-\end{tcolorbox}
-
-\bigskip
-
-Differentiating \eqref{eq:constraint} with respect to time yields a
-velocity-level constraint on the admissible joint velocities:
+where $\boldsymbol{\Phi}(\mathbf{q})$ is a continuously differentiable,
+twice-differentiable function of the joint configuration $\mathbf{q}$, and $c$
+denotes the number of constrained directions.
+Without loss of generality, a rigid environment is assumed.
+Differentiating this constraint with respect to time yields the velocity-level
+constraint
 %
 \begin{equation}
-    \mathbf{J}_{\phi}(\mathbf{q})\,\dot{\mathbf{q}} = \mathbf{0},
-    \label{eq:vel_constraint}
+    \mathbf{J}_{\dot{\Phi}}(\mathbf{q})\,\dot{\mathbf{q}} = \mathbf{0},
+    \label{eq:velocity_constraint}
 \end{equation}
 %
-where $\mathbf{J}_{\phi}(\mathbf{q}) = \partial\boldsymbol{\phi}/\partial\mathbf{q}
-\in \mathbb{R}^{m \times n}$ is the \emph{constraint Jacobian}, assumed to
-have full row rank $m$ in the neighbourhood of the operating point.
-Equation~\eqref{eq:vel_constraint} states that joint velocities must lie
-in the null space of $\mathbf{J}_{\phi}$; equivalently, for any virtual
-joint displacement $\delta\mathbf{q}$,
+where
+$\mathbf{J}_{\dot{\Phi}}(\mathbf{q})
+  = \dfrac{\partial\boldsymbol{\Phi}(\mathbf{q})}{\partial\mathbf{q}}
+  \in \mathbb{R}^{c \times n}$
+is the \emph{constraint Jacobian}.
+This matrix maps joint velocities into the constraint subspace; when the
+constraint is active, the product $\mathbf{J}_{\dot{\Phi}}\dot{\mathbf{q}}$
+must remain zero, enforcing zero velocity in the constrained direction(s).
+
+The remaining, unconstrained operational-space coordinates
+$\mathbf{x}(\mathbf{q}) \in \mathbb{R}^{m-c}$ are described by a complementary
+Jacobian
+$\mathbf{J}_{\dot{x}}(\mathbf{q}) = \partial\mathbf{x}(\mathbf{q})/\partial\mathbf{q}$.
+Together with a null-space Jacobian $\mathbf{J}_{v}(\mathbf{q})$ for
+kinematically redundant motion, these form a stacked Jacobian matrix
+$\bar{\mathbf{J}}(\mathbf{q}) \in \mathbb{R}^{n \times n}$ that partitions the
+full joint-velocity space into constraint, motion, and null-space subspaces.
+This decomposition is the foundation of the control law: force is directly
+commanded in the constraint subspace while impedance control governs the motion
+subspace.
+
+Importantly, while the role of the constraint Jacobian $\mathbf{J}_{\dot{\Phi}}$
+is clearly defined in this framework---namely as the partial derivative of the
+constraint function $\boldsymbol{\Phi}$ with respect to the joint coordinates---the
+paper does not detail a general procedure for constructing it for arbitrary contact
+geometries.
+The constraint function $\boldsymbol{\Phi}(\mathbf{q})$ must be provided based on
+knowledge of the environment geometry, and the constraint Jacobian follows from its
+gradient.
+How this is done in practice for specific surface geometries is the subject of
+subsequent sections.
+
+\subsection{Selection Matrix Framework}
+
+To address the computation of the constraint Jacobian for specific task geometries, textbook by Siciliano et al.~\cite{Siciliano_Sciavicco_Villani_Oriolo_2009} provides a constructive path to identifying the force and motion subspaces, based on the concept of \emph{selection matrices}.
+This approach begins from the same holonomic constraint representation~\eqref{eq:holonomic_constraint}, where $\boldsymbol{\Phi}(\boldsymbol{q}) = \boldsymbol{0}$ with $\boldsymbol{J}_{\dot{\Phi}}(\boldsymbol{q}) = \partial\boldsymbol{\Phi}/\partial\boldsymbol{q}$ referred to explicitly as the \emph{constraint Jacobian}. 
+
+In the absence of friction, any reaction force arising at the end-effector from contact with
+the environment must point in a direction that is normal to the constraint surface. Consequently, even though the end-effector wrench $\boldsymbol{h}_e \in \mathbb{R}^6$,
+has six components in general, the contact with the environment can only produce wrenches in the directions dictated by the constraint geometry. This is captured by the decomposition
+\begin{equation}
+    \boldsymbol{h}_e = \boldsymbol{S}_f(\boldsymbol{q})\,\boldsymbol{\lambda},
+    \label{eq:reaction_force}
+\end{equation}
+where $\boldsymbol{\lambda} \in \mathbb{R}^m$ is a vector of \emph{constraint
+forces} encoding the magnitude of the contact along each of the $m$ constrained directions,
+and $\boldsymbol{S}_f(\boldsymbol{q}) \in \mathbb{R}^{6 \times m}$ is the
+\emph{force selection matrix}, defined as
+\begin{equation}
+    \boldsymbol{S}_f(\boldsymbol{q}) = \boldsymbol{J}^{-T}(\boldsymbol{q})\,
+    \boldsymbol{J}_\varphi^T(\boldsymbol{q}).
+    \label{eq:Sf_def}
+\end{equation}
+Each column of $\boldsymbol{S}_f$ is a unit wrench vector aligned with the normal to one
+constraint hypersurface, expressed in the six-dimensional space of end-effector forces and
+torques. The matrix thus acts as a \emph{direction encoder}: it takes the scalar contact
+magnitudes in $\boldsymbol{\lambda}$ and maps them into the correct directions in wrench
+space. For a robot pressing on a frictionless flat surface, for instance, $\boldsymbol{S}_f$
+reduces to a single column containing the surface normal, and $\lambda$ is simply the
+scalar contact force. A key result is that, for a given selection matrix $\mathbf{S}_{f}$, the constraint
+Jacobian can be recovered as
 %
 \begin{equation}
-    \mathbf{J}_{\phi}(\mathbf{q})\,\delta\mathbf{q} = \mathbf{0}.
-    \label{eq:virt_constraint}
-\end{equation}
-
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~2 — Constraint Jacobian \eqref{eq:vel_constraint}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-Differentiating $\phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.2$ gives:
-\begin{equation*}
-    \mathbf{J}_{\phi}(\mathbf{q})\,\dot{\mathbf{q}}
-    = \frac{\partial z_{ee}}{\partial \mathbf{q}}\,\dot{\mathbf{q}}
-    = \dot{z}_{ee} = 0
-\end{equation*}
-This is a $(1 \times 6)$ row vector — one row because $m = 1$.
-It states that no joint motion is allowed to produce a
-$z$-velocity at the end-effector; the robot may only move
-in $x$, $y$, and rotationally while maintaining contact.
-\end{tcolorbox}
-
-\paragraph{Contact forces via the principle of virtual work.}
-In the absence of friction, the environment exerts purely normal
-forces on the end-effector whenever the robot tends to violate the
-constraint. A fundamental property of frictionless constraints is
-that reaction forces act perpendicular to the constraint surface and
-therefore perform no work over any displacement consistent with the
-constraint. Formally, $\delta W_\text{reaction} = 0$ for all
-$\delta\mathbf{q}$ satisfying \eqref{eq:virt_constraint}.
-
-Applying the principle of virtual work to the joint torques
-$\boldsymbol{\tau}$ requires that
-$\boldsymbol{\tau}^{T}\delta\mathbf{q} = 0$ holds for every admissible
-virtual displacement. Since all such $\delta\mathbf{q}$ belong to the
-null space of $\mathbf{J}_{\phi}$, the torque vector must lie in the
-row space of $\mathbf{J}_{\phi}$. This leads directly to the
-parametrisation
-%
-\begin{equation}
-    \boldsymbol{\tau} = \mathbf{J}_{\phi}^{T}(\mathbf{q})\,\boldsymbol{\lambda},
-    \label{eq:joint_torque}
+    \mathbf{J}_{\varphi}(\mathbf{q}) = \mathbf{S}_{f}^{\top}\,\mathbf{J}(\mathbf{q}),
+    \label{eq:constraint_jacobian_from_selection}
 \end{equation}
 %
-where $\boldsymbol{\lambda} \in \mathbb{R}^{m}$ is the vector of
-Lagrange multipliers, physically representing the contact force
-magnitude in each constrained direction.
 
-% ------------------------------------------------------------------
-% Step 1 — General definition of S_f from constraint geometry
-% ------------------------------------------------------------------
-\subparagraph{General definition of $\mathbf{S}_f(\mathbf{q})$.}
-Using the standard Jacobian-transpose relationship
-$\boldsymbol{\tau} = \mathbf{J}^{T}(\mathbf{q})\,\mathbf{h}_e$,
-where $\mathbf{h}_e \in \mathbb{R}^{6}$ is the physical contact wrench at the
-end-effector, and assuming a non-singular Jacobian $\mathbf{J}$,
-the end-effector wrench can be expressed as
-%
-\begin{equation}
-    \mathbf{h}_e
-    = \mathbf{J}^{-T}(\mathbf{q})\,\boldsymbol{\tau}
-    = \mathbf{J}^{-T}(\mathbf{q})\,\mathbf{J}_{\phi}^{T}(\mathbf{q})\,
-      \boldsymbol{\lambda}
-    =: \mathbf{S}_{f}(\mathbf{q})\,\boldsymbol{\lambda},
-    \label{eq:ee_force}
-\end{equation}
-%
-where the \emph{force selection matrix} is defined as
-%
-\begin{equation}
-    \mathbf{S}_{f}(\mathbf{q})
-    = \mathbf{J}^{-T}(\mathbf{q})\,\mathbf{J}_{\phi}^{T}(\mathbf{q})
-    \;\in\mathbb{R}^{6 \times m}.
-    \label{eq:Sf}
-\end{equation}
-%
-The $m$ columns of $\mathbf{S}_{f}(\mathbf{q})$ span the
-\emph{force-controlled subspace} $\mathcal{R}(\mathbf{S}_f)$: the set of
-Cartesian wrench directions that the environment is able to exert on the
-end-effector consistent with the constraint geometry.
-Because both $\mathbf{J}$ and $\mathbf{J}_{\phi}$ depend on the joint
-configuration, $\mathbf{S}_{f}$ is in general configuration-dependent.
-Note also that the constraint Jacobian can always be recovered from
-$\mathbf{S}_f$ via
-$\mathbf{J}_{\phi}(\mathbf{q}) = \mathbf{S}_{f}^{T}(\mathbf{q})\,\mathbf{J}(\mathbf{q})$,
-so the constraint equations \eqref{eq:vel_constraint} can equivalently be written
-as $\mathbf{S}_{f}^{T}(\mathbf{q})\,\mathbf{v}_e = \mathbf{0}$, where
-$\mathbf{v}_e = \mathbf{J}(\mathbf{q})\,\dot{\mathbf{q}}$ is the end-effector
-velocity.
+Complementary to the force selection matrix, a \emph{velocity selection matrix} $\boldsymbol{S}_v(\boldsymbol{q})$ of dimension $6 \times (6 - m)$ can be defined, satisfying the orthogonality condition $\boldsymbol{S}_f^T(\boldsymbol{q})\boldsymbol{S}_v(\boldsymbol{q}) = \boldsymbol{O}$, such that its column space $\mathcal{R}(\boldsymbol{S}_v)$ spans the \emph{velocity-controlled.} Together, $\boldsymbol{S}_f$ and $\boldsymbol{S}_v$ constitute a complete decomposition of the end-effector task space into force-controlled and velocity-controlled subspaces, which is the foundational structure of hybrid motion/force control.
 
-% ------------------------------------------------------------------
-% Step 2 — Simplification for axis-aligned flat surfaces
-% ------------------------------------------------------------------
-\subparagraph{Simplification for axis-aligned flat surfaces.}
-For a contact surface whose outward normal is aligned with a fixed
-base-frame axis, the constraint Jacobian $\mathbf{J}_{\phi}$ reduces to a
-single row of the full Jacobian — namely the row corresponding to the
-normal direction — and the product $\mathbf{J}^{-T}\mathbf{J}_{\phi}^T$
-collapses to the corresponding standard basis vector.
-As a result, $\mathbf{S}_f$ becomes a \emph{constant} matrix that can be
-written by inspection, with no dependence on the robot configuration.
-This simplification is exact (not an approximation) whenever the contact
-normal is constant and expressed in the fixed base frame.
-Treating $\mathbf{S}_f$ as time-invariant is therefore valid for flat
-stationary surfaces, and it is adopted throughout this section to allow
-the selection matrices and the compliance matrix $\mathbf{C}$ to be
-treated as constants in the subsequent differentiation steps.
+For practical task specification, the framework introduces the \emph{constraint frame} $O_c$-$x_cy_cz_c$, an orthogonal reference frame aligned with the geometry of the contact.
 
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~4 — Force selection matrix and end-effector wrench
-           \eqref{eq:ee_force}--\eqref{eq:Sf}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-For a flat horizontal surface with the contact normal aligned with
-the base-frame $z$-axis, the constraint Jacobian picks out only the
-$z$-row of $\mathbf{J}$, and the formula \eqref{eq:Sf} reduces to:
-\begin{equation*}
-    \mathbf{S}_{f}
-    = \mathbf{J}^{-T}\,\mathbf{J}_{\phi}^{T}
-    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix}
-    \in \mathbb{R}^{6\times 1}
-\end{equation*}
-This constant vector can be written by inspection: it simply
-selects the $z$-force component of the end-effector wrench.
-With $\lambda = 10\,\mathrm{N}$, the resulting $6$-dimensional
-end-effector wrench is:
-\begin{equation*}
-    \mathbf{h}_e
-    = \mathbf{S}_f\,\lambda
-    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix} \cdot 10
-    = \begin{bmatrix}0\\0\\10\\0\\0\\0\end{bmatrix}\,\mathrm{N}
-\end{equation*}
-Only the $z$-component is nonzero, confirming that the environment
-exerts a purely normal force of $10\,\mathrm{N}$ on the end-effector
-with no forces or moments in the five unconstrained directions.
-\end{tcolorbox}
+% \subsection{Relation to the Dynamic Hybrid Control Formulation}
 
-\bigskip
-
-% ------------------------------------------------------------------
-% Step 3 — Velocity-controlled subspace and S_v
-% ------------------------------------------------------------------
-\subparagraph{Velocity-controlled subspace and $\mathbf{S}_v$.}
-The complementary \emph{velocity-controlled subspace} captures all
-end-effector motions that are not blocked by the constraint.
-It is spanned by the columns of a matrix
-$\mathbf{S}_{v}(\mathbf{q}) \in \mathbb{R}^{6\times(6-m)}$, which must
-satisfy the \emph{reciprocity condition}
-%
-\begin{equation}
-    \mathbf{S}_{f}^{T}(\mathbf{q})\,\mathbf{S}_{v}(\mathbf{q}) = \mathbf{O}.
-    \label{eq:reciprocity}
-\end{equation}
-%
-Equation~\eqref{eq:reciprocity} is not a statement of geometric
-orthogonality — forces and velocities belong to different vector spaces
-— but rather the \emph{power-duality} (reciprocity) condition: contact
-forces in $\mathcal{R}(\mathbf{S}_f)$ do no work on end-effector
-velocities in $\mathcal{R}(\mathbf{S}_v)$, consistent with a rigid,
-frictionless constraint. In practice, $\mathbf{S}_v$ is any full-column-rank
-matrix whose columns span the null space of $\mathbf{S}_{f}^{T}$; for simple
-geometries it can be written by inspection. The end-effector velocity in the
-unconstrained directions is then parametrised as
-%
-\begin{equation}
-    \mathbf{v}_e = \mathbf{S}_{v}(\mathbf{q})\,\boldsymbol{\nu},
-    \label{eq:ve_Sv}
-\end{equation}
-%
-where $\boldsymbol{\nu} \in \mathbb{R}^{6-m}$ is the velocity vector in the
-motion subspace.
-
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~5 — Velocity-controlled subspace $\mathbf{S}_v$ and
-           reciprocity \eqref{eq:reciprocity}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-With the contact normal in the $z$-direction ($m = 1$), the null space
-of $\mathbf{S}_f^T = [0,0,1,0,0,0]$ consists of all six-vectors whose
-third entry is zero. A basis for this null space is:
-\begin{equation*}
-    \mathbf{S}_v =
-    \begin{bmatrix}
-        1 & 0 & 0 & 0 & 0 \\
-        0 & 1 & 0 & 0 & 0 \\
-        0 & 0 & 0 & 0 & 0 \\
-        0 & 0 & 1 & 0 & 0 \\
-        0 & 0 & 0 & 1 & 0 \\
-        0 & 0 & 0 & 0 & 1
-    \end{bmatrix}
-    \in \mathbb{R}^{6\times 5}
-\end{equation*}
-The five columns correspond to the five unconstrained directions:
-translation in $x$ and $y$, and rotation about all three axes
-(roll, pitch, yaw). The reciprocity condition is verified:
-\begin{equation*}
-    \mathbf{S}_f^T \mathbf{S}_v
-    = \begin{bmatrix}0&0&1&0&0&0\end{bmatrix}
-      \mathbf{S}_v
-    = \mathbf{0}_{1\times 5}
-\end{equation*}
-This confirms that a normal contact force in $z$ performs no work on
-any of the five free end-effector motions — the two subspaces are
-reciprocal, and neither channel interferes with the other.
-\end{tcolorbox}
+% A further related perspective is provided by Yoshikawa~\cite{yoshikawa1987dynamic}, who proposed a dynamic hybrid position/force control scheme in which the end-effector constraint is described by a set of constraint hypersurfaces expressed in the end-effector coordinate frame. The constraint is characterized via the matrix $E_F \in \mathbb{R}^{m \times 6}$, whose rows are the unit normals to the constraint surfaces, yielding the constraint condition $E_F \dot{r} = 0$. The complementary subspace of unconstrained motion directions is spanned by $E_P \in \mathbb{R}^{(6-m) \times 6}$, which together with $E_F$ defines the \emph{constraint frame} for hybrid control~\cite{yoshikawa1987dynamic}. This formulation is notably related to the selection matrix approach, with $E_F^T$ playing a role analogous to $\boldsymbol{S}_f$ and $E_P^T$ to $\boldsymbol{S}_v$. The key contribution of Yoshikawa's work is the rigorous incorporation of robot dynamics into the hybrid control law, showing that, away from singularities, the desired position and force trajectories can be simultaneously realized, and deriving the corresponding joint driving forces from the constrained dynamics~\cite{yoshikawa1987dynamic}.
 
 % ==================================================================
 % ==================================================================
@@ -656,64 +474,29 @@ inverse-dynamics linearisation; and (iii)~hybrid force-impedance control
 \cite{iskandar_hybrid_2023}, which additionally compensates inertial cross-coupling
 and velocity-dependent terms. 
 
-% ==================================================================
 \subsection{Impedance Control and Force Superposition}
-\label{sec:impedance_control}
+\label{sec:impedance_control_force_superposition}
 
-Impedance control does not
-directly regulate force or position in isolation. Instead, it shapes the
-\emph{dynamic relationship} between the end-effector motion and the contact
-force — specifying a desired mechanical impedance: a target mass–spring–damper behaviour. 
-
-Let $\tilde{\mathbf{y}} = \mathbf{y} - \mathbf{y}_d$ denote the
-position error between the current end-effector pose $\mathbf{y}$ and the
-desired pose $\mathbf{y}_d$, both expressed in Cartesian space. The potential
-energy stored in the virtual spring is $V(\tilde{\mathbf{y}})$, and the
-gradient $\partial V / \partial \mathbf{y}$ gives the restoring force.
-The desired Cartesian wrench is
-%
-\begin{equation}
-    \mathbf{F}_{\text{imp}}
-    = -\left(\frac{\partial V(\tilde{\mathbf{y}})}{\partial \mathbf{y}}
-      \right)^T
-      - \mathbf{D}_{y}\,\dot{\mathbf{y}},
-    \label{eq:F_imp}
-\end{equation}
-%
-where $\mathbf{D}_{y}$ is a positive definite damping matrix. For a quadratic
-potential $V = \tfrac{1}{2}\tilde{\mathbf{y}}^T\mathbf{K}_y\tilde{\mathbf{y}}$
-this reduces to the standard spring–damper:
-$\mathbf{F}_{\text{imp}} = -\mathbf{K}_y\tilde{\mathbf{y}} - \mathbf{D}_y\dot{\mathbf{y}}$.
-
-This wrench is mapped to joint torques via the Jacobian transpose, with gravity
-compensation added:
+Impedance control shapes the dynamic relationship between end-effector motion
+and contact force, specifying a desired mass--spring--damper behaviour rather
+than regulating force or position directly. This approach adds simply a force tracking term on top. The impedance
+wrench can be provided as $\mathbf{F}_{\text{imp}} = -\mathbf{K}_y\tilde{\mathbf{y}} -
+\mathbf{D}_y\dot{\mathbf{y}}$ $\mathbf{F}_{\text{imp}} = -(\partial V / \partial \mathbf{y})^T -
+\mathbf{D}_y\dot{\mathbf{y}}$, with virtual
+spring potential and a damping matrix. The corresponding joint torques are
 %
 \begin{equation}
     \boldsymbol{\tau}_{\text{imp}}
-    = \mathbf{J}(\mathbf{q})^T\,\mathbf{F}_{\text{imp}}
-      + \mathbf{g}(\mathbf{q}).
+    = \mathbf{J}^T\mathbf{F}_{\text{imp}} + \mathbf{g}(\mathbf{q}),
     \label{eq:tau_imp}
 \end{equation}
 %
-Equations~\eqref{eq:F_imp}--\eqref{eq:tau_imp} constitute the basic impedance
-control law. Note that the inertia matrix $\mathbf{M}$ and the
-Coriolis/centrifugal matrix $\mathbf{C}$ do not appear.
-
-\paragraph{Limitation.}
-A straightforward extension is to superimpose a desired contact force
-$\mathbf{F}^{\text{des}}$ on top of the impedance torque. The combined
-control law is
-%
-\begin{align}
-    \boldsymbol{\tau} &= \boldsymbol{\tau}_{\text{imp}}
-                          + \boldsymbol{\tau}_{f}, \label{eq:tau_total} \\
-    \boldsymbol{\tau}_{f} &= \mathbf{J}(\mathbf{q})^T\,\mathbf{F}^{\text{des}}.
-    \label{eq:tau_f}
-\end{align}
-%
-The term $\boldsymbol{\tau}_{f}$ can be purely feed-forward
-($\mathbf{F}^{\text{des}}$ is the desired force magnitude), or it can include
-closed-loop force feedback with PI gain to reduce steady-state error.
+which involves no explicit inertia or Coriolis compensation compared to \eqref{eq:joint_dynamics_simple}. A straightforward extension is to superimpose a desired contact force $\mathbf{F}^{\text{des}}$ on top of the
+impedance torque. The combined control law is:
+$\boldsymbol{\tau} = \boldsymbol{\tau}_{\text{imp}} +
+\mathbf{J}^T\mathbf{F}^{\text{des}}$,
+where the force term may be purely feed-forward or augmented with PI feedback
+to reduce steady-state error.
 
 \paragraph{Limitation.}
 Because $\mathbf{M}(\mathbf{q})\ddot{\mathbf{q}}$ and
@@ -726,118 +509,56 @@ A more principled decoupling — and explicit compensation of inertial and
 Coriolis terms — is provided by the methods described in the following
 subsections.
 
-% ==================================================================
 \subsection{Hybrid Force/Velocity Control}
 \label{sec:hybrid_force_velocity}
-% ==================================================================
 
-The scheme regulates a desired contact force $\boldsymbol{\lambda}_d(t)$
-in the constrained directions and a desired end-effector velocity
-$\boldsymbol{\nu}_d(t)$ in the unconstrained directions.
-The velocity reference is a natural
-choice here since the robot slides along the surface rather than
-targeting a fixed Cartesian point.
+This scheme is proposed by \cite{Siciliano_Sciavicco_Villani_Oriolo_2009} and regulates a desired contact force $\boldsymbol{\lambda}_d(t)$ in
+the constrained directions and a desired end-effector velocity $\boldsymbol{\nu}_d(t)$
+in the unconstrained directions.
 
 \paragraph{Inverse-dynamics linearisation.}
-Starting from the operational-space dynamics \eqref{eq:op_dynamics},
-the control input is chosen as the inverse-dynamics law
-%
-\begin{equation}
-    \boldsymbol{\gamma}_e
-    = \mathbf{B}_e(\mathbf{q})\,\boldsymbol{\alpha}
-      + \mathbf{n}_e(\mathbf{q},\dot{\mathbf{q}})
-      + \mathbf{h}_e,
-    \label{eq:inv_dyn}
-\end{equation}
-%
-which cancels $\mathbf{B}_e$, $\mathbf{n}_e$, and $\mathbf{h}_e$ exactly
-and reduces the closed-loop end-effector dynamics to
-$\dot{\mathbf{v}}_e = \boldsymbol{\alpha}$, where $\boldsymbol{\alpha}$ is
-a free auxiliary input in Cartesian space.
+Starting from the \emph{operational-space dynamics} \eqref{eq:op_dynamics}, the inverse-dynamics control input
+$\boldsymbol{\gamma}_e = \mathbf{B}_e\boldsymbol{\alpha} + \mathbf{n}_e + \mathbf{h}_e$
+cancels all nonlinear terms and reduces the closed-loop end-effector dynamics to
+$\dot{\mathbf{v}}_e = \boldsymbol{\alpha}$, where $\boldsymbol{\alpha}$ is a
+free auxiliary input in Cartesian space.
 
-\paragraph{Task-space decomposition for a compliant environment.}
-When the contact surface has finite stiffness, a change in contact
-force $\boldsymbol{\lambda}$ produces a measurable surface deformation
-$\delta\mathbf{x} = \mathbf{C}\,\mathbf{S}_{f}\,\boldsymbol{\lambda}$,
-where $\mathbf{C}$ is the environmental compliance matrix. Accounting
-for this coupling, the end-effector velocity can be decomposed into a
-free-motion component and a compliance-induced component:
-%
-\begin{equation}
-    \mathbf{v}_e
-    = \mathbf{S}_{v}\,\boldsymbol{\nu}
-    + \mathbf{C}\,\mathbf{S}_{f}\,\dot{\boldsymbol{\lambda}},
-    \label{eq:vel_decomp}
-\end{equation}
-%
-where $\boldsymbol{\nu}$ denotes the end-effector velocity in the
-motion subspace and $\dot{\boldsymbol{\lambda}}$ reflects the rate of
-change of the contact force. Assuming the reference frame, the
-selection matrices, and the compliance matrix to be
-\textbf{time-invariant} (valid for a flat stationary surface expressed
-in the fixed base frame), differentiating \eqref{eq:vel_decomp} yields
-the acceleration-level decomposition
-%
-\begin{equation}
-    \dot{\mathbf{v}}_e
-    = \mathbf{S}_{v}\,\dot{\boldsymbol{\nu}}
-    + \mathbf{C}\,\mathbf{S}_{f}\,\ddot{\boldsymbol{\lambda}}.
-    \label{eq:acc_decomp}
-\end{equation}
-
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~6 — Velocity decomposition \eqref{eq:vel_decomp}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-Suppose at some instant the robot is sliding along the surface at
-$\boldsymbol{\nu} = [0.1,\;0,\;0,\;0,\;0]^T\,\mathrm{m/s}$
-(moving in $x$ only) while the contact force is building up at
-$\dot{\lambda} = 2\,\mathrm{N/s}$.
-With surface stiffness $k = 1000\,\mathrm{N/m}$ (compliance
-$C = 1/k = 0.001\,\mathrm{m/N}$), the end-effector velocity is:
-\begin{equation*}
-    \mathbf{v}_e
-    = \underbrace{\mathbf{S}_v\,\boldsymbol{\nu}}_{\text{sliding in }x}
-    + \underbrace{C\,\mathbf{S}_f\,\dot{\lambda}}_{\text{surface deformation in }z}
-    = \begin{bmatrix}0.1\\0\\0\\0\\0\\0\end{bmatrix}
-    + \begin{bmatrix}0\\0\\0.002\\0\\0\\0\end{bmatrix}
-    = \begin{bmatrix}0.1\\0\\0.002\\0\\0\\0\end{bmatrix}\,\mathrm{m/s}
-\end{equation*}
-The small $z$-velocity ($0.002\,\mathrm{m/s}$) comes entirely from
-the surface compressing as the contact force increases —
-not from a commanded motion.
-\end{tcolorbox}
+\paragraph{Task-space decomposition.}
+For a compliant environment with compliance matrix $\mathbf{C}$, a changing
+contact force induces a surface deformation, so the end-effector velocity
+decomposes as
+$\mathbf{v}_e = \mathbf{S}_v\boldsymbol{\nu} + \mathbf{C}\mathbf{S}_f\dot{\boldsymbol{\lambda}}$,
+where the first term is the free sliding motion and the second is the
+compliance-induced deformation velocity. Assuming the selection matrices and
+$\mathbf{C}$ to be time-invariant (valid for a flat stationary surface in the
+fixed base frame), differentiation gives
+$\dot{\mathbf{v}}_e = \mathbf{S}_v\dot{\boldsymbol{\nu}} + \mathbf{C}\mathbf{S}_f\ddot{\boldsymbol{\lambda}}$.
 
 \paragraph{Decoupled control laws.}
-Applying an inverse-dynamics control law to linearise the end-effector
-dynamics reduces the closed-loop system to
-$\dot{\mathbf{v}}_e = \boldsymbol{\alpha}$, where
-$\boldsymbol{\alpha}$ is a new auxiliary input in Cartesian space.
-Choosing
+Choosing the auxiliary input as
+$\boldsymbol{\alpha} = \mathbf{S}_v\boldsymbol{\alpha}_\nu + \mathbf{C}\mathbf{S}_f\mathbf{f}_\lambda$
+achieves complete decoupling:
 %
 \begin{equation}
-    \boldsymbol{\alpha}
-    = \mathbf{S}_{v}\,\boldsymbol{\alpha}_{\nu}
-    + \mathbf{C}\,\mathbf{S}_{f}\,\mathbf{f}_{\lambda}
-    \label{eq:alpha}
+    \dot{\boldsymbol{\nu}} = \boldsymbol{\alpha}_\nu, \qquad
+    \ddot{\boldsymbol{\lambda}} = \mathbf{f}_\lambda.
+    \label{eq:decoupled}
 \end{equation}
 %
-and substituting \eqref{eq:acc_decomp} into the closed-loop equation
-achieves complete decoupling between the two subspaces:
-%
-\begin{align}
-    \dot{\boldsymbol{\nu}} &= \boldsymbol{\alpha}_{\nu},
-    \label{eq:motion_dyn} \\
-    \ddot{\boldsymbol{\lambda}} &= \mathbf{f}_{\lambda}.
-    \label{eq:force_dyn}
-\end{align}
+The motion input $\boldsymbol{\alpha}_\nu$ and force input $\mathbf{f}_\lambda$
+act on independent channels, so a feedforward-PD controller can be designed
+for the velocity subspace and a PD/PI controller for the force subspace
+without cross-channel interference.
 
-Commanding $\boldsymbol{\alpha}_{\nu}$ accelerates the sliding motion independently
-of the contact force. $\mathbf{f}_{\lambda}$ directly commands the force
-acceleration. Neither channel affects the other, so independent
-controllers can be designed for the motion subspace (feedforward-PD on
-velocity) and the force subspace (PD or PI on contact force).
+\paragraph{Limitations.}
+The decoupling relies on exact inverse-dynamics cancellation, requiring an
+accurate dynamic model. The compliance matrix $\mathbf{C}$ is environment-dependent
+and difficult to identify precisely. More fundamentally, the time-invariance
+assumption on $\mathbf{S}_f$ and $\mathbf{S}_v$ restricts the method to flat,
+stationary surfaces; on curved surfaces the contact frame rotates during motion,
+rendering the selection matrices configuration-dependent and invalidating the
+decomposition. Additionally, the control law mixes geometric and analytic
+Jacobians across the force and motion channels, adding implementation complexity.
 
 \paragraph{Comments.}
 1. selection matrices related Jacobian should be geometrical jacobian, however the operational space dynamic forces should be computed using analytical jacobians. A mixture of jacobians are used in the final control law. - complicated
@@ -847,8 +568,8 @@ velocity) and the force subspace (PD or PI on contact force).
 \subsection{Hybrid Force-Impedance Control}
 \label{sec:hybrid_force_impedance}
 
-This framework derives the force control law directly from the full constrained joint-space
-dynamics.
+This framework derives the force control law directly from the full constrained \emph{joint-space
+dynamics.}
 % Unlike the superposition approach in Section~\ref{sec:hybrid_force_velocity},
 % it explicitly accounts for inertial cross-coupling between the force and
 % motion subspaces, making the scheme valid for fast end-effector motions.
@@ -1064,24 +785,6 @@ $\mathbf{F}_{\text{PI}} = -k_{P}(\mathbf{F}^{\text{ext}}_{\dot{\Phi}} -
 can be added to \eqref{eq:F_ctrl_force} to reject steady-state errors from
 unmodelled dynamics.
 
-\section{Friction in Contact Tasks}
-
-% TODO (FILL): Briefly introduce Coulomb + viscous friction models. Explain
-% how tangential friction forces appear in the force subspace and complicate
-% contact force regulation.
-% Reference: Adaptive Control Based Friction Estimation (Huang et al., 2025).
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Illustration: normal force vs. tangential friction force on
-    % a surface, and their interaction with J_motion and J_φ.
-    \missingfigure{Normal force vs.\ tangential friction force on a surface}
-    \caption{Illustration of normal force versus tangential friction force on
-             a surface, and their interaction with $J_\text{motion}$ and
-             $J_\Phi$.}
-    \label{fig:friction}
-\end{figure}
-
 
 % ==================================================================
 \chapter{Methodology and Controller Design}
@@ -1244,9 +947,56 @@ The desired orientation is kept constant throughout the circle motion.
     \label{fig:coord_frames}
 \end{figure}
 
+Differentiating \eqref{eq:constraint} with respect to time yields a
+velocity-level constraint on the admissible joint velocities:
+%
+\begin{equation}
+    \mathbf{J}_{\phi}(\mathbf{q})\,\dot{\mathbf{q}} = \mathbf{0},
+    \label{eq:vel_constraint}
+\end{equation}
+%
+where $\mathbf{J}_{\phi}(\mathbf{q}) = \partial\boldsymbol{\phi}/\partial\mathbf{q}
+\in \mathbb{R}^{m \times n}$ is the \emph{constraint Jacobian}, assumed to
+have full row rank $m$ in the neighbourhood of the operating point.
+Equation~\eqref{eq:vel_constraint} states that joint velocities must lie
+in the null space of $\mathbf{J}_{\phi}$; equivalently, for any virtual
+joint displacement $\delta\mathbf{q}$,
+%
+\begin{equation}
+    \mathbf{J}_{\phi}(\mathbf{q})\,\delta\mathbf{q} = \mathbf{0}.
+    \label{eq:virt_constraint}
+\end{equation}
+
+\begin{tcolorbox}[
+    colback=gray!8, colframe=gray!45,
+    title={Example~2 — Constraint Jacobian \eqref{eq:vel_constraint}},
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
+\small
+Differentiating $\phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.2$ gives:
+\begin{equation*}
+    \mathbf{J}_{\phi}(\mathbf{q})\,\dot{\mathbf{q}}
+    = \frac{\partial z_{ee}}{\partial \mathbf{q}}\,\dot{\mathbf{q}}
+    = \dot{z}_{ee} = 0
+\end{equation*}
+This is a $(1 \times 6)$ row vector — one row because $m = 1$.
+It states that no joint motion is allowed to produce a
+$z$-velocity at the end-effector; the robot may only move
+in $x$, $y$, and rotationally while maintaining contact.
+\end{tcolorbox}
+
 
 \section{Constraint Frame and Selection Matrices}
 \label{sec:constraint_frame}
+
+Throughout this section the following concrete setup is used to
+illustrate each equation.
+The robot end-effector presses against a \textbf{flat horizontal
+surface} located at height $z = 0.2\,\mathrm{m}$ in the base
+frame, and is required to maintain a constant normal contact force
+of $\lambda_d = 10\,\mathrm{N}$ in the $z$-direction.
+Only one direction is constrained ($m = 1$); the end-effector
+remains free to translate in $x$ and $y$ and to rotate about all
+three axes ($6 - m = 5$ free directions).
 
 The hybrid force/velocity controller partitions the six-dimensional
 end-effector space into a one-dimensional \emph{force subspace}
@@ -1257,6 +1007,156 @@ This partitioning is encoded by two constant selection matrices,
 \(S_f \in \mathbb{R}^{6 \times 1}\) and \(S_v \in \mathbb{R}^{6 \times 5}\),
 which satisfy \(S_f^\top S_v = 0\) and together span all six Cartesian
 directions.
+
+When a robot end-effector is in physical contact with an environment,
+its motion is no longer unconstrained. The environment imposes geometric
+restrictions on the reachable end-effector configurations, which can be
+described by a set of holonomic constraint equations. Assuming that these
+constraints depend only on the joint configuration $\mathbf{q}$ and not
+explicitly on time, they take the form
+%
+\begin{equation}
+    \boldsymbol{\phi}(\mathbf{q}) = \mathbf{0},
+    \label{eq:constraint}
+\end{equation}
+%
+where $\boldsymbol{\phi}: \mathbb{R}^n \to \mathbb{R}^m$ is a
+vector-valued function with shape $(m \times 1)$ and $m$ is the number
+of independent constraints imposed by the contact surface.
+Each scalar component of $\boldsymbol{\phi}$ corresponds to one
+independent geometric restriction.
+
+\begin{tcolorbox}[
+    colback=gray!8, colframe=gray!45,
+    title={Example~1 — Constraint equation \eqref{eq:constraint}},
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
+\small
+With $m = 1$ and the surface at $z = 0.2\,\mathrm{m}$, the single
+constraint equation is:
+\begin{equation*}
+    \phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.2 = 0
+\end{equation*}
+When $\phi = 0$ the end-effector sits exactly on the surface.
+When $\phi > 0$ it is above the surface (contact lost);
+$\phi < 0$ is physically impossible (penetration).
+\end{tcolorbox}
+
+
+% ------------------------------------------------------------------
+% Step 2 — Simplification for axis-aligned flat surfaces
+% ------------------------------------------------------------------
+\subparagraph{Simplification for axis-aligned flat surfaces.}
+For a contact surface whose outward normal is aligned with a fixed
+base-frame axis, the constraint Jacobian $\mathbf{J}_{\phi}$ reduces to a
+single row of the full Jacobian — namely the row corresponding to the
+normal direction — and the product $\mathbf{J}^{-T}\mathbf{J}_{\phi}^T$
+collapses to the corresponding standard basis vector.
+As a result, $\mathbf{S}_f$ becomes a \emph{constant} matrix that can be
+written by inspection, with no dependence on the robot configuration.
+This simplification is exact (not an approximation) whenever the contact
+normal is constant and expressed in the fixed base frame.
+Treating $\mathbf{S}_f$ as time-invariant is therefore valid for flat
+stationary surfaces, and it is adopted throughout this section to allow
+the selection matrices and the compliance matrix $\mathbf{C}$ to be
+treated as constants in the subsequent differentiation steps.
+
+\begin{tcolorbox}[
+    colback=gray!8, colframe=gray!45,
+    title={Example~4 — Force selection matrix and end-effector wrench
+           \eqref{eq:ee_force}--\eqref{eq:Sf}},
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
+\small
+For a flat horizontal surface with the contact normal aligned with
+the base-frame $z$-axis, the constraint Jacobian picks out only the
+$z$-row of $\mathbf{J}$, and the formula \eqref{eq:Sf} reduces to:
+\begin{equation*}
+    \mathbf{S}_{f}
+    = \mathbf{J}^{-T}\,\mathbf{J}_{\phi}^{T}
+    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix}
+    \in \mathbb{R}^{6\times 1}
+\end{equation*}
+This constant vector can be written by inspection: it simply
+selects the $z$-force component of the end-effector wrench.
+With $\lambda = 10\,\mathrm{N}$, the resulting $6$-dimensional
+end-effector wrench is:
+\begin{equation*}
+    \mathbf{h}_e
+    = \mathbf{S}_f\,\lambda
+    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix} \cdot 10
+    = \begin{bmatrix}0\\0\\10\\0\\0\\0\end{bmatrix}\,\mathrm{N}
+\end{equation*}
+Only the $z$-component is nonzero, confirming that the environment
+exerts a purely normal force of $10\,\mathrm{N}$ on the end-effector
+with no forces or moments in the five unconstrained directions.
+\end{tcolorbox}
+
+% ------------------------------------------------------------------
+% Step 3 — Velocity-controlled subspace and S_v
+% ------------------------------------------------------------------
+\subparagraph{Velocity-controlled subspace and $\mathbf{S}_v$.}
+The complementary \emph{velocity-controlled subspace} captures all
+end-effector motions that are not blocked by the constraint.
+It is spanned by the columns of a matrix
+$\mathbf{S}_{v}(\mathbf{q}) \in \mathbb{R}^{6\times(6-m)}$, which must
+satisfy the \emph{reciprocity condition}
+%
+\begin{equation}
+    \mathbf{S}_{f}^{T}(\mathbf{q})\,\mathbf{S}_{v}(\mathbf{q}) = \mathbf{O}.
+    \label{eq:reciprocity}
+\end{equation}
+%
+Equation~\eqref{eq:reciprocity} is not a statement of geometric
+orthogonality — forces and velocities belong to different vector spaces
+— but rather the \emph{power-duality} (reciprocity) condition: contact
+forces in $\mathcal{R}(\mathbf{S}_f)$ do no work on end-effector
+velocities in $\mathcal{R}(\mathbf{S}_v)$, consistent with a rigid,
+frictionless constraint. In practice, $\mathbf{S}_v$ is any full-column-rank
+matrix whose columns span the null space of $\mathbf{S}_{f}^{T}$; for simple
+geometries it can be written by inspection. The end-effector velocity in the
+unconstrained directions is then parametrised as
+%
+\begin{equation}
+    \mathbf{v}_e = \mathbf{S}_{v}(\mathbf{q})\,\boldsymbol{\nu},
+    \label{eq:ve_Sv}
+\end{equation}
+%
+where $\boldsymbol{\nu} \in \mathbb{R}^{6-m}$ is the velocity vector in the
+motion subspace.
+
+\begin{tcolorbox}[
+    colback=gray!8, colframe=gray!45,
+    title={Example~5 — Velocity-controlled subspace $\mathbf{S}_v$ and
+           reciprocity \eqref{eq:reciprocity}},
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
+\small
+With the contact normal in the $z$-direction ($m = 1$), the null space
+of $\mathbf{S}_f^T = [0,0,1,0,0,0]$ consists of all six-vectors whose
+third entry is zero. A basis for this null space is:
+\begin{equation*}
+    \mathbf{S}_v =
+    \begin{bmatrix}
+        1 & 0 & 0 & 0 & 0 \\
+        0 & 1 & 0 & 0 & 0 \\
+        0 & 0 & 0 & 0 & 0 \\
+        0 & 0 & 1 & 0 & 0 \\
+        0 & 0 & 0 & 1 & 0 \\
+        0 & 0 & 0 & 0 & 1
+    \end{bmatrix}
+    \in \mathbb{R}^{6\times 5}
+\end{equation*}
+The five columns correspond to the five unconstrained directions:
+translation in $x$ and $y$, and rotation about all three axes
+(roll, pitch, yaw). The reciprocity condition is verified:
+\begin{equation*}
+    \mathbf{S}_f^T \mathbf{S}_v
+    = \begin{bmatrix}0&0&1&0&0&0\end{bmatrix}
+      \mathbf{S}_v
+    = \mathbf{0}_{1\times 5}
+\end{equation*}
+This confirms that a normal contact force in $z$ performs no work on
+any of the five free end-effector motions — the two subspaces are
+reciprocal, and neither channel interferes with the other.
+\end{tcolorbox}
 
 \paragraph{Canonical selection matrices.}
 For a flat horizontal surface the constraint direction is the world
@@ -2015,8 +1915,7 @@ $v \approx 1.38\,\mathrm{m/s}$ ($\omega = 4.4\pi\,\mathrm{rad/s}$)}
     \label{fig:force_position_details_4.4}
 \end{figure}
 
-
-
+\subsection{Contact Force Compensation Analysis}
 
 
 
@@ -2025,8 +1924,6 @@ $v \approx 1.38\,\mathrm{m/s}$ ($\omega = 4.4\pi\,\mathrm{rad/s}$)}
 
 \subsection{Effect of Surface Friction on HFPD}
 \label{sec:friction_sweep}
-
-\subsubsection{Experimental Setup}
 
 To characterise the sensitivity of \emph{HFPD} controller to
 surface contact conditions, a parametric simulation study is conducted in
@@ -2129,7 +2026,7 @@ To isolate the effect of surface friction on force tracking performance, a separ
     \label{fig:compensation_term_analysis}
 \end{figure}
 
-
+\subsection{Contact Force Compensation Analysis}
 To further understand the source of this friction-induced degradation, Figure~\ref{fig:compensation_comparison_surface_frictio} isolates the contribution of each compensation term in the force control law under the same frictional conditions ($\mu_s = 0.7$) and at same angular speed $\omega = 2\pi\,\mathrm{rad/s}$. The four variants compared are: the full controller with all terms active, and three cases in which the contact force compensation, velocity term, and control force compensation are each individually removed.
 
 The most significant degradation occurs when either the contact force compensation or the control force compensation is removed. Disabling the contact force compensation raises the average error from 0.880~N to 1.698~N and the peak error from 2.595~N to 6.082~N — nearly doubling the average and more than doubling the peak. This confirms that the contact force compensation, which accounts for tangential contact forces from the motion space projected into the constraint direction, does meaningfully attenuate the disturbance introduced by surface friction. Removing the control force compensation produces an even larger peak error of 8.000~N (average 1.724~N), with large intermittent spikes visible throughout the trajectory. By contrast, disabling the velocity term has a negligible effect: the average error remains virtually unchanged at 0.868~N with a peak of 2.910~N, indicating that Coriolis and Jacobian time-derivative contributions are not a primary factor at this trajectory speed.
@@ -2170,8 +2067,6 @@ Taken together, these results demonstrate that HFPD+PI achieves near-ideal norma
 % more critical.
 
 
-\section{Contact Force Compensation Analysis}
-
 % TODO (FILL): Deep dive into contact_force_compensation = Λ_φ J_φ M⁻¹ Jᵀ_motion F_ext_x.
 % Show its effect when added (+1), subtracted (–1), or zeroed.
 % Conclusion: compensation term destabilises with full friction.
@@ -2185,23 +2080,6 @@ Taken together, these results demonstrate that HFPD+PI achieves near-ideal norma
              \texttt{contact\_force\_compensation}, and \texttt{velocity\_term}
              over time in the force subspace.}
     \label{fig:compensation_components}
-\end{figure}
-
-
-\section{Impedance Gain Sensitivity}
-
-% TODO (FILL): Show how impedance_pos values (100, 500, 1000, 1500) affect
-% EE stability and force tracking. Identify stable operating range.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Force tracking and EE position for impedance_pos ∈
-    % {500, 1000, 1500} — 3-subplot comparison.
-    \missingfigure{Force tracking and EE position for impedance\_pos $\in\{500, 1000, 1500\}$}
-    \caption{Force tracking and end-effector position for
-             $k_\text{imp} \in \{500, 1000, 1500\}$\,N/m --- three-subplot
-             comparison.}
-    \label{fig:impedance_sensitivity}
 \end{figure}
 
 
