@@ -23,28 +23,41 @@ import numpy as np
 
 CONFIGS = [
     {
-        "label": "All compensations ON",
-        "flags": [],
-        "suffix": "_all",
-        "color": "tab:blue",
-    },
-    {
         "label": "No contact force compensation",
         "flags": ["--no-contact-force-compensation"],
         "suffix": "_no_contact",
         "color": "tab:orange",
+        "linestyle": "-",
+        "linewidth": 1.2,
+        "zorder": 2,
     },
     {
         "label": "No velocity term",
         "flags": ["--no-velocity-term"],
         "suffix": "_no_vel",
         "color": "tab:green",
+        "linestyle": "-",
+        "linewidth": 1.2,
+        "zorder": 2,
     },
     {
         "label": "No control force compensation",
         "flags": ["--no-control-force-compensation"],
         "suffix": "_no_ctrl",
         "color": "tab:red",
+        "linestyle": "-",
+        "linewidth": 1.2,
+        "zorder": 2,
+    },
+    # Plotted last so it renders on top of overlapping lines
+    {
+        "label": "All compensations ON",
+        "flags": [],
+        "suffix": "_all",
+        "color": "tab:blue",
+        "linestyle": "--",
+        "linewidth": 1.8,
+        "zorder": 3,
     },
 ]
 
@@ -70,6 +83,9 @@ def parse_args():
                         help="Directory to save the comparison plot")
     parser.add_argument("--data-dir", type=str, default="",
                         help="Directory for per-run .npz files. Uses a temp dir if empty.")
+    parser.add_argument("--surface-friction", type=float, default=None,
+                        dest="surface_friction",
+                        help="Override sliding friction coefficient (requires --robot fr3_friction)")
     return parser.parse_args()
 
 
@@ -90,6 +106,8 @@ def build_run_cmd(args, extra_flags, data_dir):
     ]
     if not math.isnan(args.angular_speed):
         cmd += ["--angular-speed", str(args.angular_speed)]
+    if args.surface_friction is not None:
+        cmd += ["--surface-friction", str(args.surface_friction)]
     if args.headless:
         cmd.append("--headless")
     cmd.extend(extra_flags)
@@ -121,10 +139,14 @@ def make_comparison_plot(args, data_dir):
         d = np.load(fpath)
         force_error = d["force_error"]
         t = np.arange(len(force_error)) * dt
+        n = len(force_error)
         skip = int(args.skip_seconds / dt)
-        avg_abs = np.mean(np.abs(force_error[skip:])) if len(force_error) > skip else float("nan")
-        label = f"{cfg['label']}  (avg |err| = {avg_abs:.3f} N)"
-        ax.plot(t, force_error, linewidth=1.2, color=cfg["color"], label=label)
+        fe_sk = force_error[skip:] if n > skip else force_error
+        avg_abs = np.mean(np.abs(fe_sk))
+        max_abs = np.max(np.abs(fe_sk))
+        label = f"{cfg['label']}  (avg |err| = {avg_abs:.3f} N,  max |err| = {max_abs:.3f} N)"
+        ax.plot(t, force_error, color=cfg["color"], linestyle=cfg["linestyle"],
+                linewidth=cfg["linewidth"], zorder=cfg["zorder"], label=label)
 
     ax.axhline(0, color="black", linestyle="--", linewidth=0.8)
     ax.set_xlabel("Time (s)")

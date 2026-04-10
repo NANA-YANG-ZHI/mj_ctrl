@@ -2021,7 +2021,125 @@ $v \approx 1.38\,\mathrm{m/s}$ ($\omega = 4.4\pi\,\mathrm{rad/s}$)}
 
 
 
-\section{Simulation: Flat Surface — With Surface Friction}
+\section{Simulation: Flat Surface — Effect of Friction}
+
+\subsection{Effect of Surface Friction on HFPD}
+\label{sec:friction_sweep}
+
+\subsubsection{Experimental Setup}
+
+To characterise the sensitivity of \emph{HFPD} controller to
+surface contact conditions, a parametric simulation study is conducted in
+which the sliding friction coefficient $\mu_s$ of the end-effector contact
+geometry is varied systematically.
+The robot model used is the Franka Research~3 (FR3) simulated in
+MuJoCo with a 6-dimensional contact model
+(\texttt{condim}~$= 6$), which models both tangential friction and rolling friction. For the dominant sliding component, the friction model can be simplified as the standard Coulomb friction cone constraint:
+$
+    \|\mathbf{f}_{\mathrm{tan}}\| \leq \mu_s \, f_{\mathrm{n}},
+    \label{eq:friction_cone}
+$
+where $\mathbf{f}_{\mathrm{tan}}$ denotes the tangential
+contact force vector and $f_{\mathrm{n}} \geq 0$ is the contact normal
+force, and $\mu_s$ is the sliding friction coefficient.
+The remaining contact parameters are held constant throughout the sweep:
+torsional friction coefficient $0.02$ and rolling friction coefficient
+$0.01$.
+
+The end-effector is commanded to draw the same circle of radius $r = 0.1\,\mathrm{m}$ in the robot base frame, at a fixed
+angular speed $\omega = 2\pi\,\mathrm{rad/s}$, corresponding to an end-effector
+tangential speed of $v = r\omega \approx 0.628\,\mathrm{m/s}$.
+The desired contact force along the surface normal (the robot $z$-axis
+in the local contact frame) is $F_d = -8\,\mathrm{N}$. The first $t_{\mathrm{skip}} = 1$\,s
+is excluded from metric computation to allow transients to decay.
+
+Two variants of the Hybrid Force–Position–Damping (HFPD) controller are 
+evaluated: 1) \emph{HFPD}, 2)\emph{HFPD+PI}: augmented with PI term with gains $K_p = 2.0$ and $K_i = 5.0$.
+
+The friction coefficient is swept over ten values
+$\mu \in \{0.1,\,0.2,\,\ldots,\,1.0\}$.
+For each value, the following scalar metrics are recorded over the
+post-skip interval:
+mean absolute force tracking error $\overline{|e_F|}$,
+variance of the force error $\sigma^2_{e_F}$,
+mean Euclidean position tracking error $\overline{e_p}$,
+and position error variance $\sigma^2_{e_p}$. 
+
+Given these metrics, two distinct behavioural regimes are evident, separated by a critical
+friction coefficient $\mu^* \approx 0.4$--$0.5$.
+For $\mu_s \geq \mu^*$, both controllers achieve stable force tracking, with
+$\overline{|e_F|}$ below 1\,N.
+The PI augmentation reduces the steady-state error by approximately a factor of
+three (HFPD: $0.977$\,N at $\mu_s=1.0$; HFPD+PI: $0.337$\,N).
+For $\mu_s < \mu^*$, force tracking degrades severely and monotonically as
+$\mu$ decreases: at $\mu = 0.1$, $\overline{|e_F|}$ reaches over $7$\,N
+for both HFPD and HFPD+PI.
+
+\subsubsection{Contact Slip as the Mechanism of Force Tracking Failure}
+
+The large force errors observed at low $\mu_s$ are caused by contact slip. The end-effector is intentionally sliding along the surface in a circular trajectory, which is the desired behaviour. The problem is a different kind of slip: the contact losing its mechanical grounding when the friction cone constraint is violated. To regulate the normal force while moving tangentially, the controller relies on a stable, well-defined contact frame. At $\mu_s = 0.1$ and a desired normal force of $-8\,\mathrm{N}$, the friction cone permits a maximum tangential force of only 0.8 N. Controllers, executing a circular path at $v \approx 0.628\,\mathrm{m/s}$, require tangential forces well above this limit. The cone constraint is therefore violated continuously, and the contact enters a persistent slip regime.
+
+\begin{figure}[htbp]
+    \centering
+    % Row 1
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/tracking_friction_0.7/force_tracking.png}
+        \caption{Force Z tracking error for HFPD and HFPD+PI without and with surface friction ($\mu_s = 0.7$).}
+        \label{fig:force_tracking_wfriction_vs_without_0.7}
+    \end{subfigure}
+
+    \vspace{0.5em}  % vertical gap between rows
+
+    % Row 2
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/tracking_friction_0.7/position_tracking_xyz.png}
+        \caption{End-effector position tracking error in XYZ. All controllers follow the circular trajectory in X and Y, though friction introduces a slight amplitude lag relative to the frictionless baseline. }
+        \label{fig:position_tracking_wfriction_vs_without_0.7}
+    \end{subfigure}
+
+    \caption{Comparison of force and position tracking performance without and with surface friction at $\mu_s = 0.7$. Angular speed is at $\omega = 2\pi\,\mathrm{rad/s}$. The frictionless baseline (condim = 1) serves as a reference to quantify how much surface friction degrades tracking performance.}
+    \label{fig:wfriction_vs_without_0.7}
+\end{figure}
+
+\subsubsection{Frictional Disturbances in the Stable Contact Regime}
+
+Above the critical threshold $\mu_s >= \mu^*$, the contact maintains a stable stick state and force tracking error drops to below 1 N. However, even in this regime, friction is not without cost.
+
+To isolate the effect of surface friction on force tracking performance, a separate experiment is conducted under identical speed and trajectory conditions but with a frictionless contact model (condim = 1). Figure ~\ref{fig:force_tracking_wfriction_vs_without_0.7} shows the force Z error time series for all four controller-friction combinations. In the frictionless case, HFPD achieves an average error of 0.322 N with a smooth, low-amplitude oscillation that follows the circular trajectory frequency. Adding integral action (HFPD+PI) further reduces this to an average of just 0.114 N and a maximum of 0.179 N — demonstrating that the proposed controller is capable of near-perfect normal force tracking when the contact is undisturbed by friction. In comparison, with surface friction present ($\mu_s=0.7$), HFPD alone produces persistent force oscillations at the trajectory frequency, with an average error of 0.942 N and peaks reaching 2.595 N.
+
+\begin{figure}[htbp]
+    \centering
+    % Row 1
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/compensation_comparison/compensation_comparison.png}
+        \caption{Frictionless contact (condim\,=\,1).}
+        \label{fig:compensation_comparison}
+    \end{subfigure}
+
+    \vspace{0.5em}  % vertical gap between rows
+
+    % Row 2
+    \begin{subfigure}[b]{0.9\textwidth}
+        \includegraphics[width=\textwidth]{images/compensation_comparison/compensation_comparison_surface_friction.png}
+        \caption{Frictional contact ($\mu_s = 0.7$).}
+        \label{fig:compensation_comparison_surface_friction}
+    \end{subfigure}
+
+    \caption{Force tracking error time series for each compensation term variant of HFPD, at angular speed $\omega = 2\pi$~rad/s. Each curve removes one term from the full force control law~\eqref{eq:paper_method} while keeping all others active.}
+    \label{fig:compensation_term_analysis}
+\end{figure}
+
+
+To further understand the source of this friction-induced degradation, Figure~\ref{fig:compensation_comparison_surface_frictio} isolates the contribution of each compensation term in the force control law under the same frictional conditions ($\mu_s = 0.7$) and at same angular speed $\omega = 2\pi\,\mathrm{rad/s}$. The four variants compared are: the full controller with all terms active, and three cases in which the contact force compensation, velocity term, and control force compensation are each individually removed.
+
+The most significant degradation occurs when either the contact force compensation or the control force compensation is removed. Disabling the contact force compensation raises the average error from 0.880~N to 1.698~N and the peak error from 2.595~N to 6.082~N — nearly doubling the average and more than doubling the peak. This confirms that the contact force compensation, which accounts for tangential contact forces from the motion space projected into the constraint direction, does meaningfully attenuate the disturbance introduced by surface friction. Removing the control force compensation produces an even larger peak error of 8.000~N (average 1.724~N), with large intermittent spikes visible throughout the trajectory. By contrast, disabling the velocity term has a negligible effect: the average error remains virtually unchanged at 0.868~N with a peak of 2.910~N, indicating that Coriolis and Jacobian time-derivative contributions are not a primary factor at this trajectory speed.
+
+Despite the benefit of these compensation terms, none of them fully eliminates the friction-induced oscillations. All four variants exhibit persistent force error at the circular trajectory frequency, and even the full controller retains an average error of 0.880~N and a peak of 2.595~N under friction — substantially above the frictionless baseline of 0.114~N average. This residual error reflects an inherent limitation of the current formulation: the compensation terms are derived from motion space forces and cannot fully capture Coulomb friction at the contact interface.
+
+Taken together, these results demonstrate that HFPD+PI achieves near-ideal normal force tracking in a frictionless contact environment, with an average error below 0.12~N. The introduction of surface friction degrades this performance, but the contact force and control force compensation terms meaningfully attenuate this effect. The remaining error under friction motivates the learning-based approach presented in the following section, where a reinforcement learning agent is trained to compensate for the residual disturbance that the model-based terms cannot capture.
+
+
+
 
 % TODO (FILL): Show how friction degrades force tracking. Explain the role
 % of tangential friction force in the constraint subspace and how it differs
