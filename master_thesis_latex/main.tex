@@ -193,27 +193,122 @@ on a flat or inclined surface while maintaining a constant normal contact force.
 
 \section{Problem Statement}
 
-% TODO (FILL): Formally state the control problem: controlling end-effector
-% contact force in the constrained (normal) direction while tracking a
-% desired trajectory in the motion directions, on flat and inclined surfaces.
+This thesis addresses the problem of simultaneously regulating contact force
+and tracking a desired end-effector trajectory for a robot manipulator in
+persistent contact with a rigid surface.
+Formally, the task couples two objectives that must be achieved in orthogonal
+subspaces of the end-effector space at all times:
+
+\begin{enumerate}
+    \item \textbf{Force regulation.}
+          In the \emph{constrained} (contact-normal) direction, the measured
+          end-effector contact force $F^\Phi_\text{ext}$ must track a constant
+          desired value $F^\Phi_\text{desired} = 10\,\mathrm{N}$ across a
+          range of end-effector speeds from $0.03$ to $1.57\,\mathrm{m/s}$.
+    \item \textbf{Trajectory tracking.}
+          In the five-dimensional \emph{unconstrained} (tangential) subspace,
+          the end-effector must follow a circular reference trajectory of
+          radius $r = 0.1\,\mathrm{m}$ centred on the surface.
+\end{enumerate}
+
+The central difficulty is \emph{dynamic coupling}: at high end-effector speeds,
+Coriolis forces, centrifugal acceleration, and Jacobian time-variation introduce
+significant cross-coupling between the motion and force subspaces, causing force
+errors to grow with speed even when the nominal decoupling is theoretically exact.
+A secondary difficulty is \emph{surface friction}: tangential friction forces
+from the contact surface couple back into the normal direction and degrade force
+regulation, an effect that worsens as end-effector speed increases.
+
+The problem is studied on two surface geometries:
+\begin{itemize}
+    \item \textbf{Flat surface} — contact normal aligned with the world
+          $z$-axis; constraint frame and selection matrices are canonical.
+    \item \textbf{Slope surface ($30^\circ$)} — contact normal obtained by
+          rotating the canonical normal by the slope's rotation matrix;
+          selection matrices must be adapted to the inclined geometry.
+\end{itemize}
+
+A further challenge is the \emph{construction} of the constraint Jacobian
+$\mathbf{J}_\Phi$ required by the control law.
+The hybrid force-impedance framework of Iskandar et al.~\cite{iskandar2023}
+assumes $\mathbf{J}_\Phi$ is available but does not detail a general
+procedure for deriving it from the surface geometry.
+This thesis closes that gap by developing a constructive route — via the
+force selection matrix — that yields $\mathbf{J}_\Phi$ directly from
+a geometric description of the contact surface.
+
+Finally, this thesis investigates whether the residual force errors that
+persist in the model-based controller — particularly under friction and at
+high speed — can be reduced by a learning-based compensator.
+A Proximal Policy Optimisation (PPO) policy is trained to output an additive
+torque correction on top of the hybrid controller and is compared against
+the model-based approach in both simulation and on the real robot.
 
 
 \section{Contributions}
 
 The main contributions of this thesis are:
 
-\begin{itemize}
-    \item Implementation and evaluation of the Hybrid Force-Impedance Control
-          framework \cite{iskandar2023} in simulation and on real hardware.
-    \item Systematic study of force control methods (\(F_\text{desired}\),
-          PD, PI, velocity-term compensation) on flat and slope surfaces.
-    \item Extension of the controller from a flat surface (\(\Phi = z\))
-          to an inclined surface (slope \(30^\circ\)) using constraint-frame
-          Jacobians.
-    \item Transfer and validation on the Franka Panda real robot using
-          \texttt{libfranka} and Pinocchio.
-    \item Analysis of friction effects on contact force regulation.
-\end{itemize}
+\begin{enumerate}
+
+    \item \textbf{Implementation and evaluation of the Hybrid Force-Impedance
+          Control framework.}
+          The controller of Iskandar et al.~\cite{iskandar2023} is implemented
+          in MuJoCo simulation and deployed on the Franka Research~3 real robot
+          via \texttt{libfranka} and Pinocchio, validating the framework on
+          physical hardware.
+
+    \item \textbf{Unified simulation-to-real software architecture.}
+          A \texttt{MujocoRobotInterface} wrapper is developed that mirrors the
+          \texttt{libfranka} \texttt{RobotState} interface, enabling the same
+          \texttt{HybridController} and trajectory code to run in simulation and
+          on hardware without modification.
+
+    \item \textbf{Constructive derivation of the constraint Jacobian.}
+          Iskandar et al.~\cite{iskandar2023} assume the constraint Jacobian
+          $\mathbf{J}_\Phi$ is provided but do not specify how to construct
+          it for a given contact geometry.
+          This thesis derives a constructive procedure: the force selection
+          matrix $\mathbf{S}_f$ is defined by inspection from the surface
+          normal, and the constraint Jacobian follows directly as
+          $\mathbf{J}_\Phi = \mathbf{S}_f^\top \mathbf{J}$, making the
+          framework applicable to arbitrary planar surfaces.
+
+    \item \textbf{Extension to inclined surfaces via block-diagonal rotation.}
+          The canonical flat-surface selection matrices are generalised to a
+          $30^\circ$ inclined slope by applying a $6\times6$ block-diagonal
+          rotation, yielding a surface-independent construction procedure.
+
+    \item \textbf{Systematic comparison of force control strategies.}
+          Four force control strategies — desired-force feedforward,
+          PD feedback, PI feedback, and the velocity-term compensation
+          (paper method) — are evaluated on flat and slope surfaces across
+          end-effector speeds from $0.03$ to $1.57\,\mathrm{m/s}$, with and
+          without surface friction.
+
+    \item \textbf{Modified motion control law for stable high-speed tracking.}
+          The full paper method requires the projected Coriolis term
+          $\mathbf{C}_x$, which causes instability when omitted naively.
+          A modified Cartesian-space feedforward-PD law is derived that
+          achieves stable circle tracking across the full speed range without
+          requiring $\mathbf{C}_x$.
+
+    \item \textbf{Analysis of friction effects on force regulation.}
+          The interaction between tangential surface friction and the
+          velocity-term compensation is analysed, demonstrating that friction
+          couples into the normal force channel and increases force error in
+          proportion to end-effector speed.
+
+    \item \textbf{Learning-based PPO residual compensation.}
+          A Proximal Policy Optimisation (PPO) policy is trained to output an
+          additive joint-torque correction on top of the model-based hybrid
+          controller, targeting the residual force error that persists under
+          friction and at high speed.
+          The PPO compensator is compared against the paper method in
+          simulation with friction and on the real robot, assessing its
+          ability to bridge the gap left by unmodelled friction dynamics.
+
+\end{enumerate}
 
 
 \section{Thesis Structure}
