@@ -203,10 +203,9 @@ subspaces of the end-effector space at all times:
     \item \textbf{Force regulation.}
           In the \emph{constrained} (contact-normal) direction, the measured
           end-effector contact force $F^\Phi_\text{ext}$ must track a constant
-          desired value $F^\Phi_\text{desired} = 10\,\mathrm{N}$ across a
-          range of end-effector speeds from $0.03$ to $1.57\,\mathrm{m/s}$.
+          desired value $F^\Phi_\text{desired}$at high speed.
     \item \textbf{Trajectory tracking.}
-          In the five-dimensional \emph{unconstrained} (tangential) subspace,
+          In the \emph{unconstrained} (tangential) subspace,
           the end-effector must follow a circular reference trajectory of
           radius $r = 0.1\,\mathrm{m}$ centred on the surface.
 \end{enumerate}
@@ -285,13 +284,6 @@ The main contributions of this thesis are:
           (paper method) — are evaluated on flat and slope surfaces across
           end-effector speeds from $0.03$ to $1.57\,\mathrm{m/s}$, with and
           without surface friction.
-
-    \item \textbf{Modified motion control law for stable high-speed tracking.}
-          The full paper method requires the projected Coriolis term
-          $\mathbf{C}_x$, which causes instability when omitted naively.
-          A modified Cartesian-space feedforward-PD law is derived that
-          achieves stable circle tracking across the full speed range without
-          requiring $\mathbf{C}_x$.
 
     \item \textbf{Analysis of friction effects on force regulation.}
           The interaction between tangential surface friction and the
@@ -935,17 +927,6 @@ The desired orientation is kept constant throughout the circle motion.
 
 \begin{figure}[htbp]
     \centering
-    % TODO (PLOT): 3D trajectory visualisation: desired circle path on flat
-    % and slope surfaces.
-    \missingfigure{3D trajectory: desired circle path on flat surface and on slope}
-    \caption{Three-dimensional trajectory visualisation showing the desired
-             circle path on the flat surface (left) and the slope surface
-             (right).}
-    \label{fig:trajectory_3d}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
     % TODO (PLOT): Coordinate frame diagram: world frame, constraint frame
     % (normal to surface), motion frame (tangent plane).
     \missingfigure{Coordinate frame diagram: world, constraint, and motion frames}
@@ -1420,18 +1401,6 @@ dynamic coupling between the force subspace and other subspaces:
     \label{eq:paper_method}
 \end{equation}
 
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Decomposition plot: F_desired, compensation term,
-    % velocity term, and their sum vs. actual contact force.
-    \missingfigure{Decomposition: $F_\text{desired}$, compensation, velocity term, and sum vs.\ actual force}
-    \caption{Decomposition of the force control signal showing
-             $F_\text{desired}$, the compensation term, the velocity term,
-             and their sum compared with the actual contact force.}
-    \label{fig:force_decomposition}
-\end{figure}
-
-
 \section{Motion Control Law}
 \label{sec:motion_ctrl}
 
@@ -1485,17 +1454,6 @@ The law relies on sufficiently high \(K_p\) and \(K_d\) to suppress
 tracking error, and is found to be stable and accurate for circle drawing
 across the tested speed range (\(\omega = \pi \times 0.1\) to
 \(\pi \times 5\,\mathrm{rad/s}\)).
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): EE position tracking: X, Y, Z vs. time (desired vs.
-    % actual) for slow (π/4) and fast (π) circle speeds.
-    \missingfigure{End-effector position tracking X, Y, Z vs.\ time at $\pi/4$ and $\pi$\,rad/s}
-    \caption{End-effector position tracking (desired vs.\ actual) for the
-             slow ($\pi/4$\,rad/s, top) and fast ($\pi$\,rad/s, bottom)
-             circle speeds.}
-    \label{fig:ee_position_tracking}
-\end{figure}
 
 
 \section{Null-Space Control}
