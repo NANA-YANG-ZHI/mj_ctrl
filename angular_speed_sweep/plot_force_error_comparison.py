@@ -21,7 +21,10 @@ Usage
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import scienceplots
 import matplotlib.ticker as ticker
+
+plt.style.use('science')
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR = os.path.join(SCRIPT_DIR, "plots")
@@ -30,8 +33,8 @@ METHODS = [
     ("Feedforward",      os.path.join(PLOTS_DIR, "feedforward",    "data"), "tab:blue",   "o"),
     ("Feedforward + PI", os.path.join(PLOTS_DIR, "feedforward_pi", "data"), "tab:orange", "s"),
     ("PD",               os.path.join(PLOTS_DIR, "pd",             "data"), "tab:green",  "^"),
-    ("HFPD",            os.path.join(PLOTS_DIR, "paper",          "data"), "tab:red",    "D"),
-    ("HFPD + PI",       os.path.join(PLOTS_DIR, "paper_pi",       "data"), "tab:purple", "P"),
+    ("HFDC",            os.path.join(PLOTS_DIR, "paper",          "data"), "tab:red",    "D"),
+    ("HFDC + PI",       os.path.join(PLOTS_DIR, "paper_pi",       "data"), "tab:purple", "P"),
 ]
 
 # ── Per-metric plot configuration ────────────────────────────────────────────

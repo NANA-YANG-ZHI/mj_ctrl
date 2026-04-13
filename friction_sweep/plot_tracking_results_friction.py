@@ -2,10 +2,10 @@
 
 One set of plots is generated per friction coefficient supplied.  Each set
 contains exactly 4 traces:
-  - HFPD (no friction)     red, solid  — always included
-  - HFPD+PI (no friction)  red, dashed — always included
-  - HFPD   (μ=X)           tab:blue, solid
-  - HFPD+PI(μ=X)           tab:blue, dashed
+  - HFDC (no friction)     red, solid  — always included
+  - HFDC+PI (no friction)  red, dashed — always included
+  - HFDC   (μ=X)           tab:blue, solid
+  - HFDC+PI(μ=X)           tab:blue, dashed
 
 Outputs (one subdirectory per coefficient):
   plots/tracking_friction_<X>/position_tracking_x.png
@@ -27,13 +27,17 @@ import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+from tueplots import bundles
+
+plt.rcParams.update(bundles.neurips2021(usetex=False))
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR  = os.path.join(SCRIPT_DIR, "plots")
 
-DT           = 0.001   # simulation timestep (s)
-SKIP_S       = 0.0     # seconds to skip at start for steady-state metrics
-FORCE_SKIP_S = 1.0     # seconds to skip for force avg/max metrics
+DT             = 0.001   # simulation timestep (s)
+SKIP_S         = 0.0     # seconds to skip at start for steady-state metrics
+FORCE_SKIP_S   = 1.0     # seconds to skip for force avg/max metrics
+PLOT_DURATION_S = 2.0    # only plot this many seconds of data
 
 # Default friction coefficients — overridden by command-line args
 FRICTION_COEFFS = [0.5]
@@ -61,10 +65,10 @@ def coeff_str(coeff: float) -> str:
 def build_datasets(coeff: float) -> list:
     """Return 4-entry list of (label, data, color, linestyle) for one coefficient."""
     entries = [
-        ("HFPD (no friction)",           "paper_wo_surface_friction",    0.0,   "tab:red", "-"),
-        ("HFPD+PI (no friction)",         "paper_pi_wo_surface_friction", 0.0,   "tab:red", "--"),
-        (f"HFPD (μ={coeff_str(coeff)})",    "paper",                        coeff, "tab:blue", "-"),
-        (f"HFPD+PI (μ={coeff_str(coeff)})", "paper_pi",                     coeff, "tab:blue", "--"),
+        ("HFDC (no friction)",           "paper_wo_surface_friction",    0.0,   "tab:red", "-"),
+        ("HFDC+PI (no friction)",         "paper_pi_wo_surface_friction", 0.0,   "tab:red", "--"),
+        (f"HFDC (μ={coeff_str(coeff)})",    "paper",                        coeff, "tab:blue", "-"),
+        (f"HFDC+PI (μ={coeff_str(coeff)})", "paper_pi",                     coeff, "tab:blue", "--"),
     ]
 
     datasets = []
@@ -88,12 +92,12 @@ def plot_position_axis(datasets: list, axis_idx: int, coeff: float, out_dir: str
 
     desired_plotted = False
     for name, data, color, ls in datasets:
-        n = data["actual_positions"].shape[0]
+        n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
         t = make_time_axis(n)
-        ax.plot(t, data["actual_positions"][:, axis_idx],
+        ax.plot(t, data["actual_positions"][:n, axis_idx],
                 color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
         if not desired_plotted:
-            ax.plot(t, data["desired_positions"][:, axis_idx],
+            ax.plot(t, data["desired_positions"][:n, axis_idx],
                     color="black", linestyle=":", linewidth=1.2,
                     label="Desired", alpha=0.7)
             desired_plotted = True
@@ -124,12 +128,12 @@ def plot_position_xyz(datasets: list, coeff: float, out_dir: str) -> None:
         lbl = AXES_LABELS[axis_idx]
         desired_plotted = False
         for name, data, color, ls in datasets:
-            n = data["actual_positions"].shape[0]
+            n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
             t = make_time_axis(n)
-            ax.plot(t, data["actual_positions"][:, axis_idx],
+            ax.plot(t, data["actual_positions"][:n, axis_idx],
                     color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
             if not desired_plotted:
-                ax.plot(t, data["desired_positions"][:, axis_idx],
+                ax.plot(t, data["desired_positions"][:n, axis_idx],
                         color="black", linestyle=":", linewidth=1.2,
                         label="Desired", alpha=0.7)
                 desired_plotted = True
@@ -155,10 +159,10 @@ def plot_force_tracking(datasets: list, coeff: float, out_dir: str) -> None:
     sk       = int(SKIP_S / DT)
     force_sk = int(FORCE_SKIP_S / DT)
 
-    fig, ax = plt.subplots(figsize=(14, 5))
+    fig, ax = plt.subplots()
 
     for name, data, color, ls in datasets:
-        fe  = data["force_error"]
+        fe  = data["force_error"][:int(PLOT_DURATION_S / DT)]
         n   = len(fe)
         t   = make_time_axis(n)
         avg = np.mean(np.abs(fe[sk:]))       if n > sk       else np.mean(np.abs(fe))
@@ -170,9 +174,7 @@ def plot_force_tracking(datasets: list, coeff: float, out_dir: str) -> None:
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Force Z Error (N)")
     ax.set_title(f"Force Tracking — Force Z Error  |  μ={coeff_str(coeff)}")
-    ax.legend(loc="upper right", fontsize=9, framealpha=0.85)
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
+    ax.legend(loc="upper right")
 
     out = os.path.join(out_dir, "force_tracking.png")
     fig.savefig(out, dpi=150, bbox_inches="tight")

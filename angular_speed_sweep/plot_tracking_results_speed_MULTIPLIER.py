@@ -22,6 +22,9 @@ Usage
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from tueplots import bundles
+
+plt.rcParams.update(bundles.icml2024(usetex=False))
 
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR   = os.path.join(SCRIPT_DIR, "plots")
@@ -35,11 +38,12 @@ METHODS = [
     ("Feedforward",       "feedforward",    "tab:blue",   "-",  "o"),
     ("Feedforward + PI",  "feedforward_pi", "tab:purple", "-",  "s"),
     ("PD",                "pd",             "tab:green",  "-",  "^"),
-    ("HFPD",             "paper",          "tab:orange",    "-",  "D"),
-    ("HFPD + PI",        "paper_pi",       "tab:red", "-",  "P"),
+    ("HFDC",             "paper",          "tab:orange",    "-",  "D"),
+    ("HFDC + PI",        "paper_pi",       "tab:red", "-",  "P"),
 ]
 
 AXES_LABELS = ["X", "Y", "Z"]
+PLOT_DURATION_S = 2.0  # only plot this many seconds of data
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -68,12 +72,12 @@ def plot_position_axis(datasets: list, axis_idx: int) -> None:
 
     desired_plotted = False
     for name, data, color, ls, _ in datasets:
-        n = data["actual_positions"].shape[0]
+        n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
         t = make_time_axis(n)
-        ax.plot(t, data["actual_positions"][:, axis_idx],
+        ax.plot(t, data["actual_positions"][:n, axis_idx],
                 color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
         if not desired_plotted:
-            ax.plot(t, data["desired_positions"][:, axis_idx],
+            ax.plot(t, data["desired_positions"][:n, axis_idx],
                     color="black", linestyle="--", linewidth=1.2,
                     label="Desired", alpha=0.7)
             desired_plotted = True
@@ -107,12 +111,12 @@ def plot_position_xyz(datasets: list) -> None:
         label = AXES_LABELS[axis_idx]
         desired_plotted = False
         for name, data, color, ls, _ in datasets:
-            n = data["actual_positions"].shape[0]
+            n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
             t = make_time_axis(n)
-            ax.plot(t, data["actual_positions"][:, axis_idx],
+            ax.plot(t, data["actual_positions"][:n, axis_idx],
                     color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
             if not desired_plotted:
-                ax.plot(t, data["desired_positions"][:, axis_idx],
+                ax.plot(t, data["desired_positions"][:n, axis_idx],
                         color="black", linestyle="--", linewidth=1.2,
                         label="Desired", alpha=0.7)
                 desired_plotted = True
@@ -135,37 +139,31 @@ def plot_position_xyz(datasets: list) -> None:
 
 def plot_force_tracking(datasets: list) -> None:
     """Force error (Z) over time for all 5 methods, with per-method avg |error|."""
-    skip = skip_samples(0)  # will be computed inside
-
-    fig, ax = plt.subplots(figsize=(14, 5))
+    fig, ax = plt.subplots()
 
     for name, data, color, ls, _ in datasets:
-        fe = data["force_error"]
+        fe = data["force_error"][:int(PLOT_DURATION_S / DT)]
         n  = len(fe)
         t  = make_time_axis(n)
         sk = int(SKIP_S / DT)
         avg = np.mean(np.abs(fe[sk:])) if n > sk else np.mean(np.abs(fe))
         sk = int(1.0 / DT)
         max = np.max(np.abs(fe[sk:])) if n > sk else np.max(np.abs(fe))
-        
+
         ax.plot(t, fe, color=color, linestyle=ls, linewidth=1.0, alpha=0.80,
-                label=f"{name}  (avg|err|={avg:.3f} N) (max|err|={max:.3f} N)")
+                label=f"{name}")
 
     ax.axhline(0, color="gray", linestyle="--", linewidth=0.9, alpha=0.6)
-    # ax.axvline(SKIP_S, color="gray", linestyle=":", linewidth=0.9, alpha=0.6,
-    #            label=f"Skip boundary ({SKIP_S} s)")
 
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Force Z Error (N)")
-    ax.set_title(
-        f"Force Tracking — Force Z Error  |  Speed Multiplier {MULTIPLIER}×"
-    )
-    ax.legend(loc="upper right", fontsize=9, framealpha=0.85)
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
+    # ax.set_title(
+    #     f"Force Tracking — Force Z Error  |  Speed Multiplier {MULTIPLIER}×"
+    # )
+    ax.legend(loc="lower right")
 
     out = os.path.join(OUT_DIR, "force_tracking.png")
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=300)
     plt.close(fig)
     print(f"[PLOT] {os.path.relpath(out)}")
 
@@ -175,7 +173,7 @@ def plot_force_tracking(datasets: list) -> None:
 def plot_per_method_detail(datasets: list) -> None:
     """4-row figure per method: X, Y, Z position + force error on one page."""
     for name, data, color, ls, marker in datasets:
-        n  = data["actual_positions"].shape[0]
+        n  = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
         t  = make_time_axis(n)
         sk = int(SKIP_S / DT)
 
@@ -188,16 +186,16 @@ def plot_per_method_detail(datasets: list) -> None:
         for axis_idx in range(3):
             ax = axes[axis_idx]
             label = AXES_LABELS[axis_idx]
-            ax.plot(t, data["actual_positions"][:, axis_idx],
+            ax.plot(t, data["actual_positions"][:n, axis_idx],
                     color=color, linewidth=1.2, label="Actual")
-            ax.plot(t, data["desired_positions"][:, axis_idx],
+            ax.plot(t, data["desired_positions"][:n, axis_idx],
                     color="black", linestyle="--", linewidth=1.2, label="Desired")
             ax.set_ylabel(f"{label} (m)")
             ax.grid(True, alpha=0.3)
             ax.legend(loc="upper right", fontsize=8)
 
         # Force error row
-        fe  = data["force_error"]
+        fe  = data["force_error"][:n]
         avg = np.mean(np.abs(fe[sk:])) if n > sk else np.mean(np.abs(fe))
         axes[3].plot(t, fe, color=color, linewidth=1.0,
                      label=f"Force Z error  (avg|err|={avg:.3f} N)")
@@ -240,9 +238,9 @@ def main():
 
     print(f"\nGenerating plots → {OUT_DIR}\n")
 
-    # Per-axis position comparison
-    for axis_idx in range(3):
-        plot_position_axis(datasets, axis_idx)
+    # # Per-axis position comparison
+    # for axis_idx in range(3):
+    #     plot_position_axis(datasets, axis_idx)
 
     # Combined XYZ position comparison
     plot_position_xyz(datasets)
@@ -250,8 +248,8 @@ def main():
     # Force tracking comparison
     plot_force_tracking(datasets)
 
-    # Per-method detail (position + force)
-    plot_per_method_detail(datasets)
+    # # Per-method detail (position + force)
+    # plot_per_method_detail(datasets)
 
     print(f"\nDone. All plots saved to: {OUT_DIR}")
 
