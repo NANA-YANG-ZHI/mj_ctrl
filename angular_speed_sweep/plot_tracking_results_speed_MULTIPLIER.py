@@ -112,7 +112,7 @@ def plot_position_xyz(datasets: list) -> None:
         print(f"{name:<20s} {np.mean(pe):>18.4f} {np.max(pe):>18.4f}")
     print()
 
-    with plt.rc_context(bundles.icml2024(usetex=False, nrows=3, column="full")):
+    with plt.rc_context(bundles.icml2024(usetex=False, nrows=3)):
         fig, axes = plt.subplots(3, 1, sharex=True)
         fig.suptitle(f"Position Tracking (X, Y, Z)  |  Speed Multiplier {MULTIPLIER}×")
 
@@ -132,7 +132,7 @@ def plot_position_xyz(datasets: list) -> None:
 
             ax.set_ylabel(f"{label} (m)")
             if axis_idx == 0:
-                ax.legend(loc="upper right", ncol=3)
+                ax.legend(loc="upper right", ncol=1)
 
         axes[-1].set_xlabel("Time (s)")
 
