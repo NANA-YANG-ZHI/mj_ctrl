@@ -18,7 +18,10 @@ import sys
 import tempfile
 
 import matplotlib.pyplot as plt
+import scienceplots
 import numpy as np
+
+plt.style.use('science')
 
 
 CONFIGS = [
@@ -137,7 +140,7 @@ def make_comparison_plot(args, data_dir):
             continue
 
         d = np.load(fpath)
-        force_error = d["force_error"]
+        force_error = d["force_error"][:int(3.0 / dt)]
         t = np.arange(len(force_error)) * dt
         n = len(force_error)
         skip = int(args.skip_seconds / dt)

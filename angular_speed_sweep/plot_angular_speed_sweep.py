@@ -7,6 +7,9 @@ import sys
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import scienceplots
+
+plt.style.use('science')
 
 
 def _parse_col(val: str) -> float:

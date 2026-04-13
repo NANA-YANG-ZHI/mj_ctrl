@@ -22,6 +22,9 @@ Usage
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import scienceplots
+
+plt.style.use('science')
 
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR   = os.path.join(SCRIPT_DIR, "plots")
@@ -40,6 +43,7 @@ METHODS = [
 ]
 
 AXES_LABELS = ["X", "Y", "Z"]
+PLOT_DURATION_S = 3.0  # only plot this many seconds of data
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -68,12 +72,12 @@ def plot_position_axis(datasets: list, axis_idx: int) -> None:
 
     desired_plotted = False
     for name, data, color, ls, _ in datasets:
-        n = data["actual_positions"].shape[0]
+        n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
         t = make_time_axis(n)
-        ax.plot(t, data["actual_positions"][:, axis_idx],
+        ax.plot(t, data["actual_positions"][:n, axis_idx],
                 color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
         if not desired_plotted:
-            ax.plot(t, data["desired_positions"][:, axis_idx],
+            ax.plot(t, data["desired_positions"][:n, axis_idx],
                     color="black", linestyle="--", linewidth=1.2,
                     label="Desired", alpha=0.7)
             desired_plotted = True
@@ -107,12 +111,12 @@ def plot_position_xyz(datasets: list) -> None:
         label = AXES_LABELS[axis_idx]
         desired_plotted = False
         for name, data, color, ls, _ in datasets:
-            n = data["actual_positions"].shape[0]
+            n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
             t = make_time_axis(n)
-            ax.plot(t, data["actual_positions"][:, axis_idx],
+            ax.plot(t, data["actual_positions"][:n, axis_idx],
                     color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
             if not desired_plotted:
-                ax.plot(t, data["desired_positions"][:, axis_idx],
+                ax.plot(t, data["desired_positions"][:n, axis_idx],
                         color="black", linestyle="--", linewidth=1.2,
                         label="Desired", alpha=0.7)
                 desired_plotted = True
@@ -140,7 +144,7 @@ def plot_force_tracking(datasets: list) -> None:
     fig, ax = plt.subplots(figsize=(14, 5))
 
     for name, data, color, ls, _ in datasets:
-        fe = data["force_error"]
+        fe = data["force_error"][:int(PLOT_DURATION_S / DT)]
         n  = len(fe)
         t  = make_time_axis(n)
         sk = int(SKIP_S / DT)
@@ -175,7 +179,7 @@ def plot_force_tracking(datasets: list) -> None:
 def plot_per_method_detail(datasets: list) -> None:
     """4-row figure per method: X, Y, Z position + force error on one page."""
     for name, data, color, ls, marker in datasets:
-        n  = data["actual_positions"].shape[0]
+        n  = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
         t  = make_time_axis(n)
         sk = int(SKIP_S / DT)
 
@@ -188,16 +192,16 @@ def plot_per_method_detail(datasets: list) -> None:
         for axis_idx in range(3):
             ax = axes[axis_idx]
             label = AXES_LABELS[axis_idx]
-            ax.plot(t, data["actual_positions"][:, axis_idx],
+            ax.plot(t, data["actual_positions"][:n, axis_idx],
                     color=color, linewidth=1.2, label="Actual")
-            ax.plot(t, data["desired_positions"][:, axis_idx],
+            ax.plot(t, data["desired_positions"][:n, axis_idx],
                     color="black", linestyle="--", linewidth=1.2, label="Desired")
             ax.set_ylabel(f"{label} (m)")
             ax.grid(True, alpha=0.3)
             ax.legend(loc="upper right", fontsize=8)
 
         # Force error row
-        fe  = data["force_error"]
+        fe  = data["force_error"][:n]
         avg = np.mean(np.abs(fe[sk:])) if n > sk else np.mean(np.abs(fe))
         axes[3].plot(t, fe, color=color, linewidth=1.0,
                      label=f"Force Z error  (avg|err|={avg:.3f} N)")

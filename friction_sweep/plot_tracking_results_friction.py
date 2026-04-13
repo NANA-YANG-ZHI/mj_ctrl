@@ -27,13 +27,17 @@ import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import scienceplots
+
+plt.style.use('science')
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR  = os.path.join(SCRIPT_DIR, "plots")
 
-DT           = 0.001   # simulation timestep (s)
-SKIP_S       = 0.0     # seconds to skip at start for steady-state metrics
-FORCE_SKIP_S = 1.0     # seconds to skip for force avg/max metrics
+DT             = 0.001   # simulation timestep (s)
+SKIP_S         = 0.0     # seconds to skip at start for steady-state metrics
+FORCE_SKIP_S   = 1.0     # seconds to skip for force avg/max metrics
+PLOT_DURATION_S = 3.0    # only plot this many seconds of data
 
 # Default friction coefficients — overridden by command-line args
 FRICTION_COEFFS = [0.5]
@@ -88,12 +92,12 @@ def plot_position_axis(datasets: list, axis_idx: int, coeff: float, out_dir: str
 
     desired_plotted = False
     for name, data, color, ls in datasets:
-        n = data["actual_positions"].shape[0]
+        n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
         t = make_time_axis(n)
-        ax.plot(t, data["actual_positions"][:, axis_idx],
+        ax.plot(t, data["actual_positions"][:n, axis_idx],
                 color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
         if not desired_plotted:
-            ax.plot(t, data["desired_positions"][:, axis_idx],
+            ax.plot(t, data["desired_positions"][:n, axis_idx],
                     color="black", linestyle=":", linewidth=1.2,
                     label="Desired", alpha=0.7)
             desired_plotted = True
@@ -124,12 +128,12 @@ def plot_position_xyz(datasets: list, coeff: float, out_dir: str) -> None:
         lbl = AXES_LABELS[axis_idx]
         desired_plotted = False
         for name, data, color, ls in datasets:
-            n = data["actual_positions"].shape[0]
+            n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
             t = make_time_axis(n)
-            ax.plot(t, data["actual_positions"][:, axis_idx],
+            ax.plot(t, data["actual_positions"][:n, axis_idx],
                     color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
             if not desired_plotted:
-                ax.plot(t, data["desired_positions"][:, axis_idx],
+                ax.plot(t, data["desired_positions"][:n, axis_idx],
                         color="black", linestyle=":", linewidth=1.2,
                         label="Desired", alpha=0.7)
                 desired_plotted = True
@@ -158,7 +162,7 @@ def plot_force_tracking(datasets: list, coeff: float, out_dir: str) -> None:
     fig, ax = plt.subplots(figsize=(14, 5))
 
     for name, data, color, ls in datasets:
-        fe  = data["force_error"]
+        fe  = data["force_error"][:int(PLOT_DURATION_S / DT)]
         n   = len(fe)
         t   = make_time_axis(n)
         avg = np.mean(np.abs(fe[sk:]))       if n > sk       else np.mean(np.abs(fe))
