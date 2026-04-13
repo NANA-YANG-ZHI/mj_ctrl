@@ -101,15 +101,17 @@ def plot_position_axis(datasets: list, axis_idx: int) -> None:
 
 def plot_position_xyz(datasets: list) -> None:
     """3-row figure: one row per axis, all methods overlaid, shared time axis."""
-    # Print per-method position error summary to terminal
-    print(f"\n{'Method':<20s} {'Avg |pos err| (m)':>18s} {'Max |pos err| (m)':>18s}")
-    print("-" * 58)
-    for name, data, color, ls, _ in datasets:
-        n  = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
-        pe = np.linalg.norm(
-            data["actual_positions"][:n] - data["desired_positions"][:n], axis=1
-        )
-        print(f"{name:<20s} {np.mean(pe):>18.4f} {np.max(pe):>18.4f}")
+    # Print per-axis position error summary to terminal
+    col_w = 20
+    for axis_idx, axis_label in enumerate(AXES_LABELS):
+        print(f"\n  {axis_label} axis — avg / max |error| (m)")
+        print(f"  {'Method':<{col_w}}  {'Avg':>10}  {'Max':>10}")
+        print("  " + "-" * (col_w + 24))
+        for name, data, color, ls, _ in datasets:
+            n  = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
+            pe = np.abs(data["actual_positions"][:n, axis_idx]
+                        - data["desired_positions"][:n, axis_idx])
+            print(f"  {name:<{col_w}}  {np.mean(pe):>10.4f}  {np.max(pe):>10.4f}")
     print()
 
     with plt.rc_context(bundles.icml2024(usetex=False, nrows=3)):
