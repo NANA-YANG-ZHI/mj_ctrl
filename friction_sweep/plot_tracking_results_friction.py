@@ -37,7 +37,7 @@ PLOTS_DIR  = os.path.join(SCRIPT_DIR, "plots")
 DT             = 0.001   # simulation timestep (s)
 SKIP_S         = 0.0     # seconds to skip at start for steady-state metrics
 FORCE_SKIP_S   = 1.0     # seconds to skip for force avg/max metrics
-PLOT_DURATION_S = 3.0    # only plot this many seconds of data
+PLOT_DURATION_S = 2.0    # only plot this many seconds of data
 
 # Default friction coefficients — overridden by command-line args
 FRICTION_COEFFS = [0.5]

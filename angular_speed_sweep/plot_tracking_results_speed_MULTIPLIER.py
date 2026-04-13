@@ -24,7 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scienceplots
 
-plt.style.use('science')
+plt.style.use(['science', 'no-latex'])
 
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR   = os.path.join(SCRIPT_DIR, "plots")
@@ -43,7 +43,7 @@ METHODS = [
 ]
 
 AXES_LABELS = ["X", "Y", "Z"]
-PLOT_DURATION_S = 3.0  # only plot this many seconds of data
+PLOT_DURATION_S = 2.0  # only plot this many seconds of data
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
