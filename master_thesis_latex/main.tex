@@ -1778,9 +1778,9 @@ range $v \lesssim 1.0\,\mathrm{m/s}$. This behaviour is characteristic of PD con
 
 The \emph{feedforward} controller, which relies solely on the desired force command, accumulates the largest errors. The force error grows the most rapidly as the velocity increases as plot 1 shows. The PI augmentation (\emph{feedforward\,+\,PI}) reduces this substantially: $\bar{e}_F$ of feedforward\,+\,PI grows from $0.25\,\mathrm{N}$ at $v = 0.4\,\mathrm{m/s}$ to $1.8\,\mathrm{N}$ at $v = 1.07\,\mathrm{m/s}$ 
 
-The \emph{HFPD} controller achieves lower errors than feedforward\,+\,PI in the
-mid-to-high speed regime. Over the same speed regime from $0.4\,\mathrm{m/s}$ to $1.07\,\mathrm{m/s}$, $\bar{e}_F$ of HFPD grows from $0.23\,\mathrm{N}$ to $0.72\,\mathrm{N}$.
-The addition of PI correction (\emph{HFPD\,+\,PI}) yields the best overall
+The \emph{HFDC} controller achieves lower errors than feedforward\,+\,PI in the
+mid-to-high speed regime. Over the same speed regime from $0.4\,\mathrm{m/s}$ to $1.07\,\mathrm{m/s}$, $\bar{e}_F$ of HFDC grows from $0.23\,\mathrm{N}$ to $0.72\,\mathrm{N}$.
+The addition of PI correction (\emph{HFDC\,+\,PI}) yields the best overall
 force tracking: $\bar{e}_F = 0.08\,\mathrm{N}$ at $v = 0.4\,\mathrm{m/s}$,
 increasing to only $0.23\,\mathrm{N}$ at $v = 1.07\,\mathrm{m/s}$, and maintain $\bar{e}_F$ as $2.3\,\mathrm{N}$ even when $v = 1.35\,\mathrm{m/s}$,  representing
 the best absolute performance across all methods.
@@ -1809,7 +1809,7 @@ $v \approx 1.38$--$1.41\,\mathrm{m/s}$, indicating loss of trajectory tracking.
 The PD controller degrades first, with $\bar{e}_p$ jumping from
 $0.018\,\mathrm{m}$ to $0.112\,\mathrm{m}$ at $v = 1.38\,\mathrm{m/s}$
 ($\omega \approx 13.8\,\mathrm{rad/s}$).
-The HFPD\,+\,PI and feedforward\,+\,PI methods degrade more gradually at
+The HFDC\,+\,PI and feedforward\,+\,PI methods degrade more gradually at
 $v = 1.41\,\mathrm{m/s}$ ($\bar{e}_p = 0.057\,\mathrm{m}$ and
 $0.023\,\mathrm{m}$, respectively), suggesting that integral force correction
 moderates the destabilising effect of high-frequency contact dynamics.
@@ -1863,9 +1863,9 @@ at this end-effector speed. Both the PD controller and the feedforward with PI
 ($F_\text{des}$ + PI) exhibit a mean force error exceeding $1.5\,\mathrm{N}$ and 
 peak errors of approximately $4\,\mathrm{N}$.
 
-In contrast, HFPD controller and its PI-augmented variant 
-(HFPD + PI) achieve substantially reduced force tracking errors. In particular, 
-HFPD + PI attains a mean force error of $0.235\,\mathrm{N}$ and a maximum force 
+In contrast, HFDC controller and its PI-augmented variant 
+(HFDC + PI) achieve substantially reduced force tracking errors. In particular, 
+HFDC + PI attains a mean force error of $0.235\,\mathrm{N}$ and a maximum force 
 error of $0.524\,\mathrm{N}$, demonstrating (to be filled).
 
 \begin{figure}[htbp]
@@ -1893,7 +1893,7 @@ $v \approx 1.10\,\mathrm{m/s}$ ($\omega = 3.8\pi\,\mathrm{rad/s}$)}
 \end{figure}
 
 Based on the speed sweep results, three distinct operating regimes are identified 
-for the HFPD and HFPD+PI controllers within the circular drawing scenario at 
+for the HFDC and HFDC+PI controllers within the circular drawing scenario at 
 radius $r = 0.1\,\mathrm{m}$. Below $v \approx 1.07\,\mathrm{m/s}$ 
 ($\omega \approx 3.4\pi\,\mathrm{rad/s}$), both controllers maintain stable 
 contact and accurate force tracking without loss of contact or excessive surface 
@@ -1907,9 +1907,9 @@ force tracking degrades irrecoverably for all evaluated methods and precise
 trajectory following can no longer be maintained, as shown in 
 Figure~\ref{fig:force_position_details_4.4}.
 
-In summary, HFPD and HFPD+PI provide consistently superior force tracking 
+In summary, HFDC and HFDC+PI provide consistently superior force tracking 
 relative to all other evaluated controllers across the full stable operating 
-range, with HFPD+PI achieving the lowest steady-state force error at every speed within operational range.
+range, with HFDC+PI achieving the lowest steady-state force error at every speed within operational range.
 
 \begin{figure}[htbp]
     \centering
@@ -1942,10 +1942,10 @@ $v \approx 1.38\,\mathrm{m/s}$ ($\omega = 4.4\pi\,\mathrm{rad/s}$)}
 
 \section{Simulation: Flat Surface — Effect of Friction}
 
-\subsection{Effect of Surface Friction on HFPD}
+\subsection{Effect of Surface Friction on HFDC}
 \label{sec:friction_sweep}
 
-To characterise the sensitivity of \emph{HFPD} controller to
+To characterise the sensitivity of \emph{HFDC} controller to
 surface contact conditions, a parametric simulation study is conducted in
 which the sliding friction coefficient $\mu_s$ of the end-effector contact
 geometry is varied systematically.
@@ -1970,8 +1970,8 @@ The desired contact force along the surface normal (the robot $z$-axis
 in the local contact frame) is $F_d = -8\,\mathrm{N}$. The first $t_{\mathrm{skip}} = 1$\,s
 is excluded from metric computation to allow transients to decay.
 
-Two variants of the Hybrid Force–Position–Damping (HFPD) controller are 
-evaluated: 1) \emph{HFPD}, 2)\emph{HFPD+PI}: augmented with PI term with gains $K_p = 2.0$ and $K_i = 5.0$.
+Two variants of the Hybrid Force–Position–Damping (HFDC) controller are 
+evaluated: 1) \emph{HFDC}, 2)\emph{HFDC+PI}: augmented with PI term with gains $K_p = 2.0$ and $K_i = 5.0$.
 
 The friction coefficient is swept over ten values
 $\mu \in \{0.1,\,0.2,\,\ldots,\,1.0\}$.
@@ -1987,10 +1987,10 @@ friction coefficient $\mu^* \approx 0.4$--$0.5$.
 For $\mu_s \geq \mu^*$, both controllers achieve stable force tracking, with
 $\overline{|e_F|}$ below 1\,N.
 The PI augmentation reduces the steady-state error by approximately a factor of
-three (HFPD: $0.977$\,N at $\mu_s=1.0$; HFPD+PI: $0.337$\,N).
+three (HFDC: $0.977$\,N at $\mu_s=1.0$; HFDC+PI: $0.337$\,N).
 For $\mu_s < \mu^*$, force tracking degrades severely and monotonically as
 $\mu$ decreases: at $\mu = 0.1$, $\overline{|e_F|}$ reaches over $7$\,N
-for both HFPD and HFPD+PI.
+for both HFDC and HFDC+PI.
 
 \subsubsection{Contact Slip as the Mechanism of Force Tracking Failure}
 
@@ -2001,7 +2001,7 @@ The large force errors observed at low $\mu_s$ are caused by contact slip. The e
     % Row 1
     \begin{subfigure}[b]{0.9\textwidth}
         \includegraphics[width=\textwidth]{images/tracking_friction_0.7/force_tracking.png}
-        \caption{Force Z tracking error for HFPD and HFPD+PI without and with surface friction ($\mu_s = 0.7$).}
+        \caption{Force Z tracking error for HFDC and HFDC+PI without and with surface friction ($\mu_s = 0.7$).}
         \label{fig:force_tracking_wfriction_vs_without_0.7}
     \end{subfigure}
 
@@ -2022,7 +2022,7 @@ The large force errors observed at low $\mu_s$ are caused by contact slip. The e
 
 Above the critical threshold $\mu_s >= \mu^*$, the contact maintains a stable stick state and force tracking error drops to below 1 N. However, even in this regime, friction is not without cost.
 
-To isolate the effect of surface friction on force tracking performance, a separate experiment is conducted under identical speed and trajectory conditions but with a frictionless contact model (condim = 1). Figure ~\ref{fig:force_tracking_wfriction_vs_without_0.7} shows the force Z error time series for all four controller-friction combinations. In the frictionless case, HFPD achieves an average error of 0.322 N with a smooth, low-amplitude oscillation that follows the circular trajectory frequency. Adding integral action (HFPD+PI) further reduces this to an average of just 0.114 N and a maximum of 0.179 N — demonstrating that the proposed controller is capable of near-perfect normal force tracking when the contact is undisturbed by friction. In comparison, with surface friction present ($\mu_s=0.7$), HFPD alone produces persistent force oscillations at the trajectory frequency, with an average error of 0.942 N and peaks reaching 2.595 N.
+To isolate the effect of surface friction on force tracking performance, a separate experiment is conducted under identical speed and trajectory conditions but with a frictionless contact model (condim = 1). Figure ~\ref{fig:force_tracking_wfriction_vs_without_0.7} shows the force Z error time series for all four controller-friction combinations. In the frictionless case, HFDC achieves an average error of 0.322 N with a smooth, low-amplitude oscillation that follows the circular trajectory frequency. Adding integral action (HFDC+PI) further reduces this to an average of just 0.114 N and a maximum of 0.179 N — demonstrating that the proposed controller is capable of near-perfect normal force tracking when the contact is undisturbed by friction. In comparison, with surface friction present ($\mu_s=0.7$), HFDC alone produces persistent force oscillations at the trajectory frequency, with an average error of 0.942 N and peaks reaching 2.595 N.
 
 \begin{figure}[htbp]
     \centering
@@ -2042,7 +2042,7 @@ To isolate the effect of surface friction on force tracking performance, a separ
         \label{fig:compensation_comparison_surface_friction}
     \end{subfigure}
 
-    \caption{Force tracking error time series for each compensation term variant of HFPD, at angular speed $\omega = 2\pi$~rad/s. Each curve removes one term from the full force control law~\eqref{eq:paper_method} while keeping all others active.}
+    \caption{Force tracking error time series for each compensation term variant of HFDC, at angular speed $\omega = 2\pi$~rad/s. Each curve removes one term from the full force control law~\eqref{eq:paper_method} while keeping all others active.}
     \label{fig:compensation_term_analysis}
 \end{figure}
 
@@ -2053,7 +2053,7 @@ The most significant degradation occurs when either the contact force compensati
 
 Despite the benefit of these compensation terms, none of them fully eliminates the friction-induced oscillations. All four variants exhibit persistent force error at the circular trajectory frequency, and even the full controller retains an average error of 0.880~N and a peak of 2.595~N under friction — substantially above the frictionless baseline of 0.114~N average. This residual error reflects an inherent limitation of the current formulation: the compensation terms are derived from motion space forces and cannot fully capture Coulomb friction at the contact interface.
 
-Taken together, these results demonstrate that HFPD+PI achieves near-ideal normal force tracking in a frictionless contact environment, with an average error below 0.12~N. The introduction of surface friction degrades this performance, but the contact force and control force compensation terms meaningfully attenuate this effect. The remaining error under friction motivates the learning-based approach presented in the following section, where a reinforcement learning agent is trained to compensate for the residual disturbance that the model-based terms cannot capture.
+Taken together, these results demonstrate that HFDC+PI achieves near-ideal normal force tracking in a frictionless contact environment, with an average error below 0.12~N. The introduction of surface friction degrades this performance, but the contact force and control force compensation terms meaningfully attenuate this effect. The remaining error under friction motivates the learning-based approach presented in the following section, where a reinforcement learning agent is trained to compensate for the residual disturbance that the model-based terms cannot capture.
 
 
 

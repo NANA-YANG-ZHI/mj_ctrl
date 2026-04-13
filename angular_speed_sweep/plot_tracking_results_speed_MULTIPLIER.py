@@ -24,7 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tueplots import bundles
 
-plt.rcParams.update(bundles.neurips2021(usetex=False))
+plt.rcParams.update(bundles.icml2024(usetex=False))
 
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR   = os.path.join(SCRIPT_DIR, "plots")
@@ -38,8 +38,8 @@ METHODS = [
     ("Feedforward",       "feedforward",    "tab:blue",   "-",  "o"),
     ("Feedforward + PI",  "feedforward_pi", "tab:purple", "-",  "s"),
     ("PD",                "pd",             "tab:green",  "-",  "^"),
-    ("HFPD",             "paper",          "tab:orange",    "-",  "D"),
-    ("HFPD + PI",        "paper_pi",       "tab:red", "-",  "P"),
+    ("HFDC",             "paper",          "tab:orange",    "-",  "D"),
+    ("HFDC + PI",        "paper_pi",       "tab:red", "-",  "P"),
 ]
 
 AXES_LABELS = ["X", "Y", "Z"]
@@ -151,19 +151,19 @@ def plot_force_tracking(datasets: list) -> None:
         max = np.max(np.abs(fe[sk:])) if n > sk else np.max(np.abs(fe))
 
         ax.plot(t, fe, color=color, linestyle=ls, linewidth=1.0, alpha=0.80,
-                label=f"{name}  (avg|err|={avg:.3f} N) (max|err|={max:.3f} N)")
+                label=f"{name}")
 
     ax.axhline(0, color="gray", linestyle="--", linewidth=0.9, alpha=0.6)
 
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Force Z Error (N)")
-    ax.set_title(
-        f"Force Tracking — Force Z Error  |  Speed Multiplier {MULTIPLIER}×"
-    )
-    ax.legend(loc="upper right")
+    # ax.set_title(
+    #     f"Force Tracking — Force Z Error  |  Speed Multiplier {MULTIPLIER}×"
+    # )
+    ax.legend(loc="lower right")
 
     out = os.path.join(OUT_DIR, "force_tracking.png")
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=300)
     plt.close(fig)
     print(f"[PLOT] {os.path.relpath(out)}")
 
@@ -238,9 +238,9 @@ def main():
 
     print(f"\nGenerating plots → {OUT_DIR}\n")
 
-    # Per-axis position comparison
-    for axis_idx in range(3):
-        plot_position_axis(datasets, axis_idx)
+    # # Per-axis position comparison
+    # for axis_idx in range(3):
+    #     plot_position_axis(datasets, axis_idx)
 
     # Combined XYZ position comparison
     plot_position_xyz(datasets)
@@ -248,8 +248,8 @@ def main():
     # Force tracking comparison
     plot_force_tracking(datasets)
 
-    # Per-method detail (position + force)
-    plot_per_method_detail(datasets)
+    # # Per-method detail (position + force)
+    # plot_per_method_detail(datasets)
 
     print(f"\nDone. All plots saved to: {OUT_DIR}")
 

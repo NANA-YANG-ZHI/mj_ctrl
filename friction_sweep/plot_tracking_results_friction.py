@@ -2,10 +2,10 @@
 
 One set of plots is generated per friction coefficient supplied.  Each set
 contains exactly 4 traces:
-  - HFPD (no friction)     red, solid  — always included
-  - HFPD+PI (no friction)  red, dashed — always included
-  - HFPD   (μ=X)           tab:blue, solid
-  - HFPD+PI(μ=X)           tab:blue, dashed
+  - HFDC (no friction)     red, solid  — always included
+  - HFDC+PI (no friction)  red, dashed — always included
+  - HFDC   (μ=X)           tab:blue, solid
+  - HFDC+PI(μ=X)           tab:blue, dashed
 
 Outputs (one subdirectory per coefficient):
   plots/tracking_friction_<X>/position_tracking_x.png
@@ -65,10 +65,10 @@ def coeff_str(coeff: float) -> str:
 def build_datasets(coeff: float) -> list:
     """Return 4-entry list of (label, data, color, linestyle) for one coefficient."""
     entries = [
-        ("HFPD (no friction)",           "paper_wo_surface_friction",    0.0,   "tab:red", "-"),
-        ("HFPD+PI (no friction)",         "paper_pi_wo_surface_friction", 0.0,   "tab:red", "--"),
-        (f"HFPD (μ={coeff_str(coeff)})",    "paper",                        coeff, "tab:blue", "-"),
-        (f"HFPD+PI (μ={coeff_str(coeff)})", "paper_pi",                     coeff, "tab:blue", "--"),
+        ("HFDC (no friction)",           "paper_wo_surface_friction",    0.0,   "tab:red", "-"),
+        ("HFDC+PI (no friction)",         "paper_pi_wo_surface_friction", 0.0,   "tab:red", "--"),
+        (f"HFDC (μ={coeff_str(coeff)})",    "paper",                        coeff, "tab:blue", "-"),
+        (f"HFDC+PI (μ={coeff_str(coeff)})", "paper_pi",                     coeff, "tab:blue", "--"),
     ]
 
     datasets = []

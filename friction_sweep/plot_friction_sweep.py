@@ -66,7 +66,7 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     fig, axes = plt.subplots(4, 1, figsize=(10, 14), sharex=True)
-    fig.suptitle("Surface Friction Sweep — HFPD Controller Performance", fontsize=14)
+    fig.suptitle("Surface Friction Sweep — HFDC Controller Performance", fontsize=14)
 
     specs = [
         (avg_fe, "Avg |Force Z Error| (N)",  "tab:blue"),
