@@ -101,38 +101,45 @@ def plot_position_axis(datasets: list, axis_idx: int) -> None:
 
 def plot_position_xyz(datasets: list) -> None:
     """3-row figure: one row per axis, all methods overlaid, shared time axis."""
-    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
-    fig.suptitle(
-        f"Position Tracking (X, Y, Z)  |  Speed Multiplier {MULTIPLIER}×",
-        fontsize=13,
-    )
+    # Print per-method position error summary to terminal
+    print(f"\n{'Method':<20s} {'Avg |pos err| (m)':>18s} {'Max |pos err| (m)':>18s}")
+    print("-" * 58)
+    for name, data, color, ls, _ in datasets:
+        n  = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
+        pe = np.linalg.norm(
+            data["actual_positions"][:n] - data["desired_positions"][:n], axis=1
+        )
+        print(f"{name:<20s} {np.mean(pe):>18.4f} {np.max(pe):>18.4f}")
+    print()
 
-    for axis_idx, ax in enumerate(axes):
-        label = AXES_LABELS[axis_idx]
-        desired_plotted = False
-        for name, data, color, ls, _ in datasets:
-            n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
-            t = make_time_axis(n)
-            ax.plot(t, data["actual_positions"][:n, axis_idx],
-                    color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
-            if not desired_plotted:
-                ax.plot(t, data["desired_positions"][:n, axis_idx],
-                        color="black", linestyle="--", linewidth=1.2,
-                        label="Desired", alpha=0.7)
-                desired_plotted = True
+    with plt.rc_context(bundles.icml2024(usetex=False, nrows=3, column="full")):
+        fig, axes = plt.subplots(3, 1, sharex=True)
+        fig.suptitle(f"Position Tracking (X, Y, Z)  |  Speed Multiplier {MULTIPLIER}×")
 
-        ax.set_ylabel(f"{label} (m)")
-        ax.grid(True, alpha=0.3)
-        if axis_idx == 0:
-            ax.legend(loc="upper right", fontsize=8.5, framealpha=0.85, ncol=3)
+        for axis_idx, ax in enumerate(axes):
+            label = AXES_LABELS[axis_idx]
+            desired_plotted = False
+            for name, data, color, ls, _ in datasets:
+                n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
+                t = make_time_axis(n)
+                ax.plot(t, data["actual_positions"][:n, axis_idx],
+                        color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
+                if not desired_plotted:
+                    ax.plot(t, data["desired_positions"][:n, axis_idx],
+                            color="black", linestyle="--", linewidth=1.2,
+                            label="Desired", alpha=0.7)
+                    desired_plotted = True
 
-    axes[-1].set_xlabel("Time (s)")
-    plt.tight_layout()
+            ax.set_ylabel(f"{label} (m)")
+            if axis_idx == 0:
+                ax.legend(loc="upper right", ncol=3)
 
-    out = os.path.join(OUT_DIR, "position_tracking_xyz.png")
-    fig.savefig(out, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"[PLOT] {os.path.relpath(out)}")
+        axes[-1].set_xlabel("Time (s)")
+
+        out = os.path.join(OUT_DIR, "position_tracking_xyz.png")
+        fig.savefig(out, dpi=300)
+        plt.close(fig)
+        print(f"[PLOT] {os.path.relpath(out)}")
 
 
 # ── force tracking plot ───────────────────────────────────────────────────────
