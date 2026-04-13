@@ -27,9 +27,9 @@ import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import scienceplots
+from tueplots import bundles
 
-plt.style.use('science')
+plt.rcParams.update(bundles.neurips2021(usetex=False))
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR  = os.path.join(SCRIPT_DIR, "plots")
@@ -159,7 +159,7 @@ def plot_force_tracking(datasets: list, coeff: float, out_dir: str) -> None:
     sk       = int(SKIP_S / DT)
     force_sk = int(FORCE_SKIP_S / DT)
 
-    fig, ax = plt.subplots(figsize=(14, 5))
+    fig, ax = plt.subplots()
 
     for name, data, color, ls in datasets:
         fe  = data["force_error"][:int(PLOT_DURATION_S / DT)]
@@ -174,9 +174,7 @@ def plot_force_tracking(datasets: list, coeff: float, out_dir: str) -> None:
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Force Z Error (N)")
     ax.set_title(f"Force Tracking — Force Z Error  |  μ={coeff_str(coeff)}")
-    ax.legend(loc="upper right", fontsize=9, framealpha=0.85)
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
+    ax.legend(loc="upper right")
 
     out = os.path.join(out_dir, "force_tracking.png")
     fig.savefig(out, dpi=150, bbox_inches="tight")

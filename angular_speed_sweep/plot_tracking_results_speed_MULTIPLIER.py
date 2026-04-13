@@ -22,9 +22,9 @@ Usage
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import scienceplots
+from tueplots import bundles
 
-plt.style.use(['science', 'no-latex'])
+plt.rcParams.update(bundles.neurips2021(usetex=False))
 
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR   = os.path.join(SCRIPT_DIR, "plots")
@@ -139,9 +139,7 @@ def plot_position_xyz(datasets: list) -> None:
 
 def plot_force_tracking(datasets: list) -> None:
     """Force error (Z) over time for all 5 methods, with per-method avg |error|."""
-    skip = skip_samples(0)  # will be computed inside
-
-    fig, ax = plt.subplots(figsize=(14, 5))
+    fig, ax = plt.subplots()
 
     for name, data, color, ls, _ in datasets:
         fe = data["force_error"][:int(PLOT_DURATION_S / DT)]
@@ -151,22 +149,18 @@ def plot_force_tracking(datasets: list) -> None:
         avg = np.mean(np.abs(fe[sk:])) if n > sk else np.mean(np.abs(fe))
         sk = int(1.0 / DT)
         max = np.max(np.abs(fe[sk:])) if n > sk else np.max(np.abs(fe))
-        
+
         ax.plot(t, fe, color=color, linestyle=ls, linewidth=1.0, alpha=0.80,
                 label=f"{name}  (avg|err|={avg:.3f} N) (max|err|={max:.3f} N)")
 
     ax.axhline(0, color="gray", linestyle="--", linewidth=0.9, alpha=0.6)
-    # ax.axvline(SKIP_S, color="gray", linestyle=":", linewidth=0.9, alpha=0.6,
-    #            label=f"Skip boundary ({SKIP_S} s)")
 
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Force Z Error (N)")
     ax.set_title(
         f"Force Tracking — Force Z Error  |  Speed Multiplier {MULTIPLIER}×"
     )
-    ax.legend(loc="upper right", fontsize=9, framealpha=0.85)
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
+    ax.legend(loc="upper right")
 
     out = os.path.join(OUT_DIR, "force_tracking.png")
     fig.savefig(out, dpi=150, bbox_inches="tight")
