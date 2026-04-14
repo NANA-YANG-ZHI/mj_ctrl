@@ -18,10 +18,10 @@ import sys
 import tempfile
 
 import matplotlib.pyplot as plt
-import scienceplots
+from tueplots import bundles
 import numpy as np
 
-plt.style.use('science')
+plt.rcParams.update(bundles.icml2024(usetex=False))
 
 
 CONFIGS = [
@@ -130,7 +130,10 @@ def run_all_configs(args, data_dir):
 def make_comparison_plot(args, data_dir):
     dt = 0.001  # matches ControllerConfig.dt
 
-    fig, ax = plt.subplots(figsize=(12, 5))
+    print(f"\n{'Config':<35s}  {'Avg |err| (N)':>14}  {'Max |err| (N)':>14}")
+    print("-" * 67)
+
+    fig, ax = plt.subplots()
 
     for cfg in CONFIGS:
         fname = f"data_0.0{cfg['suffix']}.npz"
@@ -147,21 +150,19 @@ def make_comparison_plot(args, data_dir):
         fe_sk = force_error[skip:] if n > skip else force_error
         avg_abs = np.mean(np.abs(fe_sk))
         max_abs = np.max(np.abs(fe_sk))
-        label = f"{cfg['label']}  (avg |err| = {avg_abs:.3f} N,  max |err| = {max_abs:.3f} N)"
+        print(f"{cfg['label']:<35s}  {avg_abs:>14.3f}  {max_abs:>14.3f}")
         ax.plot(t, force_error, color=cfg["color"], linestyle=cfg["linestyle"],
-                linewidth=cfg["linewidth"], zorder=cfg["zorder"], label=label)
+                linewidth=cfg["linewidth"], zorder=cfg["zorder"], label=cfg["label"])
 
+    print()
     ax.axhline(0, color="black", linestyle="--", linewidth=0.8)
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Force Error Z (N)")
-    ax.set_title("Force Tracking Error: Contribution of Each Compensation Term")
-    ax.legend(loc="upper right", fontsize=9, framealpha=0.85)
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
+    ax.legend(loc="upper right")
 
     os.makedirs(args.plot_dir, exist_ok=True)
     out_path = os.path.join(args.plot_dir, "compensation_comparison_surface_friction.png")
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=300)
     print(f"\n[PLOT] Comparison plot saved to: {out_path}")
     plt.show()
 
