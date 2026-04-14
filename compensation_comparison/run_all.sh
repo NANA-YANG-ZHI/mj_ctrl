@@ -15,10 +15,6 @@ python "$SCRIPT_DIR/run_experiments.py" \
     --circle-duration 10.0 \
     --data-dir "$SCRIPT_DIR/data/frictionless"
 
-python "$SCRIPT_DIR/plot_comparison.py" \
-    --data-dir "$SCRIPT_DIR/data/frictionless" \
-    --plot-dir "$SCRIPT_DIR/plots/frictionless"
-
 # ── Run 2: Surface friction μ=0.7 ─────────────────────────────────────
 echo ""
 echo "=========================================================="
@@ -32,13 +28,3 @@ python "$SCRIPT_DIR/run_experiments.py" \
     --surface-friction 0.7 \
     --data-dir "$SCRIPT_DIR/data/friction_0.7"
 
-python "$SCRIPT_DIR/plot_comparison.py" \
-    --data-dir "$SCRIPT_DIR/data/friction_0.7" \
-    --plot-dir "$SCRIPT_DIR/plots/friction_0.7"
-
-echo ""
-echo "=========================================================="
-echo " Done. Plots saved to:"
-echo "   $SCRIPT_DIR/plots/frictionless/compensation_comparison.png"
-echo "   $SCRIPT_DIR/plots/friction_0.7/compensation_comparison.png"
-echo "=========================================================="
