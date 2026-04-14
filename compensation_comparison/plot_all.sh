@@ -1,3 +1,7 @@
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 python "$SCRIPT_DIR/plot_comparison.py" \
     --data-dir "$SCRIPT_DIR/data/frictionless" \
     --plot-dir "$SCRIPT_DIR/plots/frictionless"
