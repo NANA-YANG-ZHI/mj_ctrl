@@ -1403,6 +1403,18 @@ dynamic coupling between the force subspace and other subspaces:
     \label{eq:paper_method}
 \end{equation}
 
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Decomposition plot: F_desired, compensation term,
+    % velocity term, and their sum vs. actual contact force.
+    \missingfigure{Decomposition: $F_\text{desired}$, compensation, velocity term, and sum vs.\ actual force}
+    \caption{Decomposition of the force control signal showing
+             $F_\text{desired}$, the compensation term, the velocity term,
+             and their sum compared with the actual contact force.}
+    \label{fig:force_decomposition}
+\end{figure}
+
+
 \section{Motion Control Law}
 \label{sec:motion_ctrl}
 
@@ -1456,6 +1468,17 @@ The law relies on sufficiently high \(K_p\) and \(K_d\) to suppress
 tracking error, and is found to be stable and accurate for circle drawing
 across the tested speed range (\(\omega = \pi \times 0.1\) to
 \(\pi \times 5\,\mathrm{rad/s}\)).
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): EE position tracking: X, Y, Z vs. time (desired vs.
+    % actual) for slow (π/4) and fast (π) circle speeds.
+    \missingfigure{End-effector position tracking X, Y, Z vs.\ time at $\pi/4$ and $\pi$\,rad/s}
+    \caption{End-effector position tracking (desired vs.\ actual) for the
+             slow ($\pi/4$\,rad/s, top) and fast ($\pi$\,rad/s, bottom)
+             circle speeds.}
+    \label{fig:ee_position_tracking}
+\end{figure}
 
 
 \section{Null-Space Control}
@@ -1745,10 +1768,9 @@ together with their respective variances.
 During the initial approach phase the robot closes contact from free space;
 this produces transient force spikes of up to $-10\,\mathrm{N}$ that are
 unrelated to steady-state control quality.
-Accordingly, force metrics are computed only over the interval
+Accordingly, force metrics and position error are computed only over the interval
 $[1\,\mathrm{s},\,10\,\mathrm{s}]$, discarding the first 1000 samples
 (at $\Delta t = 1\,\mathrm{ms}$) to exclude the approach transient.
-Position error is however computed over the full $10\,\mathrm{s}$ window.
 
 \subsection{Force Tracking Results}
 
@@ -1830,9 +1852,8 @@ yields $e_F = -10 - (-8) = -2\,\mathrm{N}$.
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.7\textwidth]{images/speed_3.4/position_tracking_xyz.png}
-    \caption{End-effector position tracking in $x$, $y$, and $z$ for all controllers
-    at speed multiplier $3.4\times$.
-    All controllers achieve comparable and accurate motion tracking.
+    \caption{End-effector position tracking in $x$, $y$, and $z$ at speed multiplier $3.4\times$.
+    All controllers achieve comparable and accurate motion tracking. Mean and maximum absolute errors are computed per axis and over $t > 1\,\text{s}$.
     In $x$: avg 4.6--4.8\,mm, max 8.2--10.4\,mm across all methods.
     In $y$: avg 1.6--2.1\,mm, max 3.1--3.5\,mm across all methods.
     In $z$: Feedforward deviates most (avg 4.7\,mm, max 10.9\,mm),
@@ -1919,7 +1940,7 @@ error of $0.524\,\mathrm{N}$, demonstrating (to be filled).
         \includegraphics[width=\linewidth]{images/speed_3.8/position_tracking_xyz.png}
         \caption{End-effector position tracking in $x$, $y$, and $z$ for all
         controllers at speed multiplier $3.8\times$.
-        All controllers achieve comparable and accurate motion tracking.
+        All controllers achieve comparable and accurate motion tracking. Mean and maximum absolute errors are computed per axis and over $t > 1\,\text{s}$.
         In $x$: avg 5.0--5.7\,mm, max 8.4--11.6\,mm across all methods.
         In $y$: avg 2.6--4.7\,mm, max 4.4--8.6\,mm.
         In $z$: Feedforward deviates most (avg 6.2\,mm, max 14.7\,mm),
@@ -1957,8 +1978,7 @@ range, with HFDC+PI achieving the lowest steady-state force error at every speed
     \captionsetup[subfigure]{font=small}
     \begin{subfigure}[t]{0.48\linewidth}
         \includegraphics[width=\linewidth]{images/speed_4.4/force_tracking.png}
-        \caption{Signed force error $e_F = F_z - F_d$ for all controllers
-        at speed multiplier $4.4\times$.
+        \caption{Signed force error $e_F = F_z - F_d$ for all controllers.
         All controllers exhibit marked deterioration compared to lower speeds.
         Mean and maximum absolute errors (computed over $t > 1\,\text{s}$):\\
         FF: avg $= 8.042\,\text{N}$, max $= 37.232\,\text{N}$;\\
@@ -1972,7 +1992,7 @@ range, with HFDC+PI achieving the lowest steady-state force error at every speed
     \begin{subfigure}[t]{0.48\linewidth}
         \includegraphics[width=\linewidth]{images/speed_4.4/position_tracking_xyz.png}
         \caption{End-effector position tracking in $x$, $y$, and $z$ for all
-        controllers at speed multiplier $4.4\times$.
+        controllers. Mean and maximum absolute errors are computed per axis and over $t > 1\,\text{s}$:
         PD becomes effectively unstable across all axes
         ($x$: avg 88.3\,mm, max 466.8\,mm;
          $y$: avg 34.8\,mm, max 235.1\,mm;
@@ -2106,25 +2126,38 @@ To isolate the effect of surface friction on force tracking performance, a separ
 
 \begin{figure}[htbp]
     \centering
-    % Row 1
-    \begin{subfigure}[b]{0.9\textwidth}
-        \includegraphics[width=\textwidth]{images/compensation_comparison/compensation_comparison.png}
-        \caption{Frictionless contact (condim\,=\,1).}
+    \begin{subfigure}[b]{0.6\textwidth}
+        \includegraphics[width=\textwidth]{images/compensation_comparison/frictionless/compensation_comparison.png}
+        \caption{Frictionless contact (condim\,=\,1).
+        Mean and maximum absolute errors $|e_F|$ (computed over $t > 1\,\text{s}$):\\
+        No contact force comp.: avg $= 0.257\,\text{N}$, max $= 0.602\,\text{N}$;\\
+        No velocity term: avg $= 0.285\,\text{N}$, max $= 0.957\,\text{N}$;\\
+        No control force comp.: avg $= 1.726\,\text{N}$, max $= 4.533\,\text{N}$;\\
+        All compensations ON: avg $= 0.257\,\text{N}$, max $= 0.602\,\text{N}$.}
         \label{fig:compensation_comparison}
     \end{subfigure}
 
-    \vspace{0.5em}  % vertical gap between rows
+    \vspace{0.5em}
 
-    % Row 2
-    \begin{subfigure}[b]{0.9\textwidth}
-        \includegraphics[width=\textwidth]{images/compensation_comparison/compensation_comparison_surface_friction.png}
-        \caption{Frictional contact ($\mu_s = 0.7$).}
+    \begin{subfigure}[b]{0.6\textwidth}
+        \includegraphics[width=\textwidth]{images/compensation_comparison/friction_0.7/compensation_comparison.png}
+        \caption{Frictional contact ($\mu_s = 0.7$).
+        Mean and maximum absolute errors $|e_F|$ (computed over $t > 1\,\text{s}$):\\
+        No contact force comp.: avg $= 1.698\,\text{N}$, max $= 6.082\,\text{N}$;\\
+        No velocity term: avg $= 0.867\,\text{N}$, max $= 2.910\,\text{N}$;\\
+        No control force comp.: avg $= 1.731\,\text{N}$, max $= 8.000\,\text{N}$;\\
+        All compensations ON: avg $= 0.879\,\text{N}$, max $= 2.595\,\text{N}$.}
         \label{fig:compensation_comparison_surface_friction}
     \end{subfigure}
 
-    \caption{Force tracking error time series for each compensation term variant of HFDC, at angular speed $\omega = 2\pi$~rad/s. Each curve removes one term from the full force control law~\eqref{eq:paper_method} while keeping all others active.}
+    \caption{Force tracking error time series for each compensation term
+    variant of HFDC, at angular speed $\omega = 2\pi$~rad/s. Each curve
+    removes one term from the full force control law~\eqref{eq:paper_method}
+    while keeping all others active.}
     \label{fig:compensation_term_analysis}
 \end{figure}
+
+
 
 \subsection{Contact Force Compensation Analysis}
 To further understand the source of this friction-induced degradation, Figure~\ref{fig:compensation_comparison_surface_frictio} isolates the contribution of each compensation term in the force control law under the same frictional conditions ($\mu_s = 0.7$) and at same angular speed $\omega = 2\pi\,\mathrm{rad/s}$. The four variants compared are: the full controller with all terms active, and three cases in which the contact force compensation, velocity term, and control force compensation are each individually removed.

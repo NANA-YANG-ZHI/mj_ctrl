@@ -17,6 +17,13 @@ import numpy as np
 from tueplots import bundles
 
 plt.rcParams.update(bundles.icml2024(usetex=False))
+plt.rcParams.update({
+    "font.size": 10,
+    "axes.labelsize": 8,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    # "legend.fontsize": 14,
+})
 
 CONFIGS = [
     {
@@ -53,7 +60,7 @@ CONFIGS = [
     },
 ]
 
-PLOT_DURATION_S = 3.0
+PLOT_DURATION_S = 2.0
 DT = 0.001
 
 
