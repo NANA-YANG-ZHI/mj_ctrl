@@ -29,18 +29,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tueplots import bundles
 
-plt.rcParams.update(bundles.neurips2021(usetex=False))
+plt.rcParams.update(bundles.icml2024(usetex=False))
+plt.rcParams.update({
+    "font.size": 10,
+    "axes.labelsize": 8,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    # "legend.fontsize": 14,
+})
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR  = os.path.join(SCRIPT_DIR, "plots")
 
 DT             = 0.001   # simulation timestep (s)
-SKIP_S         = 0.0     # seconds to skip at start for steady-state metrics
+SKIP_S         = 1.0     # seconds to skip at start for steady-state metrics
 FORCE_SKIP_S   = 1.0     # seconds to skip for force avg/max metrics
 PLOT_DURATION_S = 2.0    # only plot this many seconds of data
 
 # Default friction coefficients — overridden by command-line args
-FRICTION_COEFFS = [0.5]
+FRICTION_COEFFS = [0.7]
 
 AXES_LABELS = ["X", "Y", "Z"]
 
@@ -119,10 +126,26 @@ def plot_position_axis(datasets: list, axis_idx: int, coeff: float, out_dir: str
 
 def plot_position_xyz(datasets: list, coeff: float, out_dir: str) -> None:
     """3-row figure: one row per axis, all datasets overlaid, shared time axis."""
-    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
-    fig.suptitle(
-        f"Position Tracking (X, Y, Z)  |  μ={coeff_str(coeff)}", fontsize=13
+    col_w = 20
+    sk = int(SKIP_S / DT)
+    for axis_idx, axis_label in enumerate(AXES_LABELS):
+        print(f"\n  {axis_label} axis — avg / max |error| (m)")
+        print(f"  {'Method':<{col_w}}  {'Avg':>10}  {'Max':>10}")
+        print("  " + "-" * (col_w + 24))
+        for name, data, color, ls in datasets:
+            # n  = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
+            pe = np.abs(data["actual_positions"][sk:, axis_idx]
+                        - data["desired_positions"][sk:, axis_idx])
+            print(f"  {name:<{col_w}}  {np.mean(pe):>10.4f}  {np.max(pe):>10.4f}")
+    print()
+
+    fig, axes = plt.subplots(
+        3, 1, sharex=True, figsize=(3.25, 3.012),
+        gridspec_kw={"height_ratios": [1,1,1]},
     )
+    # fig.suptitle(
+    #     f"Position Tracking (X, Y, Z)  |  μ={coeff_str(coeff)}", fontsize=13
+    # )
 
     for axis_idx, ax in enumerate(axes):
         lbl = AXES_LABELS[axis_idx]
@@ -131,23 +154,21 @@ def plot_position_xyz(datasets: list, coeff: float, out_dir: str) -> None:
             n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
             t = make_time_axis(n)
             ax.plot(t, data["actual_positions"][:n, axis_idx],
-                    color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
+                    color=color, linestyle=ls, linewidth=1.0, label=name, alpha=0.85)
             if not desired_plotted:
                 ax.plot(t, data["desired_positions"][:n, axis_idx],
-                        color="black", linestyle=":", linewidth=1.2,
+                        color="black", linestyle=":", linewidth=1.0,
                         label="Desired", alpha=0.7)
                 desired_plotted = True
 
         ax.set_ylabel(f"{lbl} (m)")
-        ax.grid(True, alpha=0.3)
         if axis_idx == 0:
-            ax.legend(loc="upper right", fontsize=8.5, framealpha=0.85, ncol=2)
+            ax.legend(loc="upper right", ncol=2)
 
     axes[-1].set_xlabel("Time (s)")
-    plt.tight_layout()
 
     out = os.path.join(out_dir, "position_tracking_xyz.png")
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=600)
     plt.close(fig)
     print(f"[PLOT] {os.path.relpath(out)}")
 
@@ -165,19 +186,20 @@ def plot_force_tracking(datasets: list, coeff: float, out_dir: str) -> None:
         fe  = data["force_error"][:int(PLOT_DURATION_S / DT)]
         n   = len(fe)
         t   = make_time_axis(n)
-        avg = np.mean(np.abs(fe[sk:]))       if n > sk       else np.mean(np.abs(fe))
+        avg = np.mean(np.abs(fe[force_sk:]))       if n > sk       else np.mean(np.abs(fe))
         mx  = np.max(np.abs(fe[force_sk:]))  if n > force_sk else np.max(np.abs(fe))
         ax.plot(t, fe, color=color, linestyle=ls, linewidth=1.0, alpha=0.80,
-                label=f"{name}  (avg|err|={avg:.3f} N, max|err|={mx:.3f} N)")
+                label=f"{name}")
+        print(f"  {name:30s} — avg |error| = {avg:.3f} N,  max |error| = {mx:.3f} N")
 
     ax.axhline(0, color="gray", linestyle="--", linewidth=0.9, alpha=0.6)
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Force Z Error (N)")
-    ax.set_title(f"Force Tracking — Force Z Error  |  μ={coeff_str(coeff)}")
+    # ax.set_title(f"Force Tracking — Force Z Error  |  μ={coeff_str(coeff)}")
     ax.legend(loc="upper right")
 
     out = os.path.join(out_dir, "force_tracking.png")
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=600, bbox_inches="tight")
     plt.close(fig)
     print(f"[PLOT] {os.path.relpath(out)}")
 
@@ -211,8 +233,8 @@ def main():
 
         print(f"  Generating plots -> {out_dir}")
 
-        for axis_idx in range(3):
-            plot_position_axis(datasets, axis_idx, coeff, out_dir)
+        # for axis_idx in range(3):
+        #     plot_position_axis(datasets, axis_idx, coeff, out_dir)
 
         plot_position_xyz(datasets, coeff, out_dir)
         plot_force_tracking(datasets, coeff, out_dir)

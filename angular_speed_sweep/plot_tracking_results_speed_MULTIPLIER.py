@@ -25,13 +25,23 @@ import matplotlib.pyplot as plt
 from tueplots import bundles
 
 plt.rcParams.update(bundles.icml2024(usetex=False))
+plt.rcParams.update({
+    "font.size": 10,
+    "axes.labelsize": 8,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    # "legend.fontsize": 14,
+})
+# import scienceplots
+
+# plt.style.use(['science', 'no-latex'])
 
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR   = os.path.join(SCRIPT_DIR, "plots")
 
 MULTIPLIER  = 3.4
 DT          = 0.001          # simulation timestep (s)
-SKIP_S      = 0.0            # seconds to skip at the start for steady-state metrics
+SKIP_S      = 1.0            # seconds to skip at the start for steady-state metrics
 OUT_DIR     = os.path.join(PLOTS_DIR, f"tracking_speed_{MULTIPLIER}")
 
 METHODS = [
@@ -103,45 +113,48 @@ def plot_position_xyz(datasets: list) -> None:
     """3-row figure: one row per axis, all methods overlaid, shared time axis."""
     # Print per-axis position error summary to terminal
     col_w = 20
+    sk = int(SKIP_S / DT)
     for axis_idx, axis_label in enumerate(AXES_LABELS):
         print(f"\n  {axis_label} axis — avg / max |error| (m)")
         print(f"  {'Method':<{col_w}}  {'Avg':>10}  {'Max':>10}")
         print("  " + "-" * (col_w + 24))
         for name, data, color, ls, _ in datasets:
-            n  = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
-            pe = np.abs(data["actual_positions"][:n, axis_idx]
-                        - data["desired_positions"][:n, axis_idx])
+            # n  = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
+            pe = np.abs(data["actual_positions"][sk:, axis_idx]
+                        - data["desired_positions"][sk:, axis_idx])
             print(f"  {name:<{col_w}}  {np.mean(pe):>10.4f}  {np.max(pe):>10.4f}")
     print()
 
-    with plt.rc_context(bundles.icml2024(usetex=False, nrows=3)):
-        fig, axes = plt.subplots(3, 1, sharex=True)
-        fig.suptitle(f"Position Tracking (X, Y, Z)  |  Speed Multiplier {MULTIPLIER}×")
+    fig, axes = plt.subplots(
+        3, 1, sharex=True, figsize=(3.25, 3.012),
+        gridspec_kw={"height_ratios": [1,1,1]},
+    )
+    # fig.suptitle(f"Position Tracking (X, Y, Z)  |  Speed Multiplier {MULTIPLIER}×")
 
-        for axis_idx, ax in enumerate(axes):
-            label = AXES_LABELS[axis_idx]
-            desired_plotted = False
-            for name, data, color, ls, _ in datasets:
-                n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
-                t = make_time_axis(n)
-                ax.plot(t, data["actual_positions"][:n, axis_idx],
-                        color=color, linestyle=ls, linewidth=1.2, label=name, alpha=0.85)
-                if not desired_plotted:
-                    ax.plot(t, data["desired_positions"][:n, axis_idx],
-                            color="black", linestyle="--", linewidth=1.2,
-                            label="Desired", alpha=0.7)
-                    desired_plotted = True
+    for axis_idx, ax in enumerate(axes):
+        label = AXES_LABELS[axis_idx]
+        desired_plotted = False
+        for name, data, color, ls, _ in datasets:
+            n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
+            t = make_time_axis(n)
+            ax.plot(t, data["actual_positions"][:n, axis_idx],
+                    color=color, linestyle=ls, linewidth=0.8, label=name, alpha=0.85)
+            if not desired_plotted:
+                ax.plot(t, data["desired_positions"][:n, axis_idx],
+                        color="black", linestyle="--", linewidth=0.8,
+                        label="Desired", alpha=0.7)
+                desired_plotted = True
 
-            ax.set_ylabel(f"{label} (m)")
-            if axis_idx == 0:
-                ax.legend(loc="upper right", ncol=1)
+        ax.set_ylabel(f"{label} (m)")
+        if axis_idx == 0:
+            ax.legend(loc="upper right", ncol=1)
 
-        axes[-1].set_xlabel("Time (s)")
+    axes[-1].set_xlabel("Time (s)")
 
-        out = os.path.join(OUT_DIR, "position_tracking_xyz.png")
-        fig.savefig(out, dpi=300)
-        plt.close(fig)
-        print(f"[PLOT] {os.path.relpath(out)}")
+    out = os.path.join(OUT_DIR, "position_tracking_xyz.png")
+    fig.savefig(out, dpi=600)
+    plt.close(fig)
+    print(f"[PLOT] {os.path.relpath(out)}")
 
 
 # ── force tracking plot ───────────────────────────────────────────────────────
@@ -156,8 +169,8 @@ def plot_force_tracking(datasets: list) -> None:
         t  = make_time_axis(n)
         sk = int(SKIP_S / DT)
         avg = np.mean(np.abs(fe[sk:])) if n > sk else np.mean(np.abs(fe))
-        sk = int(1.0 / DT)
         max = np.max(np.abs(fe[sk:])) if n > sk else np.max(np.abs(fe))
+        print(f"{name:20s} — avg |error| = {avg:.3f} N, max |error| = {max:.3f} N")
 
         ax.plot(t, fe, color=color, linestyle=ls, linewidth=1.0, alpha=0.80,
                 label=f"{name}")
@@ -172,7 +185,7 @@ def plot_force_tracking(datasets: list) -> None:
     ax.legend(loc="lower right")
 
     out = os.path.join(OUT_DIR, "force_tracking.png")
-    fig.savefig(out, dpi=300)
+    fig.savefig(out, dpi=600)
     plt.close(fig)
     print(f"[PLOT] {os.path.relpath(out)}")
 
