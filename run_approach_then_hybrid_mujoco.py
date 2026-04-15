@@ -158,6 +158,12 @@ def main() -> None:
         default=True,
         help="Disable the velocity term in F_ctrl_constraint (paper method only)"
     )
+    parser.add_argument(
+        "--slope-angle",
+        type=float,
+        default=30.0,
+        help="Slope angle in degrees around the X axis (default: 30.0)"
+    )
     args = parser.parse_args()
 
     # ============================================================
@@ -227,6 +233,7 @@ def main() -> None:
     common_config.angular_speed = args.angular_speed
     common_config.force_control_method = args.force_control_method
     common_config.use_pi = args.use_pi
+    common_config.euler = np.array([np.deg2rad(args.slope_angle), 0.0, 0.0])
 
     approach_config = CartesianSpacePDControlConfig()
     hybrid_config = HybridControllerConfig()
@@ -319,8 +326,12 @@ def main() -> None:
             # Read initial robot state
             robot_state, duration = mujoco_interface.readOnce()
             O_T_EE = np.array(robot_state.O_T_EE).reshape(4, 4).T
-            target_rot = O_T_EE[:3, :3]
             start_pos = O_T_EE[:3, 3]
+
+            # Compute slope-aware target orientation: slope rotation * default EE orientation
+            rot_slope = Rotation.from_euler('xyz', common_config.euler)
+            rot_default = Rotation.from_quat(np.roll(robot_cfg.target_quat, -1))
+            target_rot = (rot_slope * rot_default).as_matrix()
 
             # Initialize approach controller
             control_phase = ControlPhase.APPROACHING
