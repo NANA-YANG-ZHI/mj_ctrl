@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Sweep angular_speed on a 30-degree slope.
-# Same structure as sweep_angular_speed.sh but passes --slope-angle 30
+# Sweep angular_speed on a slope.
+# Same structure as sweep_angular_speed.sh but passes --slope-angle SLOPE_ANGLE
 # and uses a slope-specific SWEEP_NAME so results land in a separate directory.
+# Usage:
+#   bash sweep_angular_speed_slope.sh                    # 30-degree slope, feedforward+PI
+#   SLOPE_ANGLE=45 bash sweep_angular_speed_slope.sh     # 45-degree slope
 
 set -euo pipefail
 
@@ -9,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${SCRIPT_DIR}/.."
 PLOT_SCRIPT="${SCRIPT_DIR}/plot_angular_speed_sweep.py"
 
-SWEEP_NAME="${SWEEP_NAME:-slope30_feedforward_pi}"
+SLOPE_ANGLE="${SLOPE_ANGLE:-30.0}"
 FORCE_CONTROL_METHOD="${FORCE_CONTROL_METHOD:-feedforward}"
 USE_PI="${USE_PI:-true}"
 KP_FORCE="${KP_FORCE:-2.0}"
@@ -17,7 +20,10 @@ KD_FORCE="${KD_FORCE:-}"
 KI_FORCE="${KI_FORCE:-5.0}"
 NUM_WORKERS="${NUM_WORKERS:-10}"
 SKIP_SECONDS="${SKIP_SECONDS:-1.0}"
-SLOPE_ANGLE="${SLOPE_ANGLE:-30.0}"
+# SWEEP_NAME defaults to slope<angle>_<method>[_pi]; override to customise output dir
+PI_SUFFIX=""
+[ "${USE_PI}" = "true" ] && PI_SUFFIX="_pi"
+SWEEP_NAME="${SWEEP_NAME:-slope${SLOPE_ANGLE}_${FORCE_CONTROL_METHOD}${PI_SUFFIX}}"
 
 OUTPUT_DIR="${SCRIPT_DIR}/plots/${SWEEP_NAME}"
 TMP_DIR="${OUTPUT_DIR}/tmp_results"
@@ -95,7 +101,7 @@ run_one() {
 export -f run_one
 export OUTPUT_DIR TMP_DIR DATA_DIR REPO_DIR FORCE_CONTROL_METHOD USE_PI KP_FORCE KD_FORCE KI_FORCE SKIP_SECONDS SLOPE_ANGLE SAVE_PLOT_MULTIPLIERS
 
-echo "Starting slope-30 sweep with NUM_WORKERS=${NUM_WORKERS} (50 speeds total)..."
+echo "Starting slope-${SLOPE_ANGLE} sweep with NUM_WORKERS=${NUM_WORKERS} (50 speeds total)..."
 active_jobs=0
 
 for i in $(seq 1 50); do
