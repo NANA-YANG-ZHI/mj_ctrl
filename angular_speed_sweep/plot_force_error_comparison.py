@@ -40,7 +40,7 @@ plt.rcParams.update({
     "ytick.labelsize": 8,
 })
 
-FIGSIZE = (3, 3.25)
+FIGSIZE = (3.25,3)
 
 _STYLE = {
     "plot_linewidth":     0.5,
@@ -67,6 +67,7 @@ METHOD_KEYS = [
     ("HFDC + PI",        "paper_pi",       "tab:red", "P"),
 ]
 
+STD_RATIO = 0.3   # width of ±1 std band relative to mean (for combined plots)
 
 def build_methods(slope_angle):
     """Return (label, data_dir, color, marker) list for the given slope angle.
@@ -145,7 +146,7 @@ COMBINED_METRICS = [
     dict(
         col_mean="avg_force_z_error",
         col_var="var_force_z_error",
-        ylabel="Avg |Force Z Error| ± Std  (N)",
+        ylabel=f"Avg |Force Z Error| ± {STD_RATIO:.1f}Std  (N)",
         title="Force Z Error  (mean ± std)",
         out="force_error_combined.png",
         break_y=3.0,
@@ -156,7 +157,7 @@ COMBINED_METRICS = [
     dict(
         col_mean="avg_position_error",
         col_var="var_position_error",
-        ylabel="Avg Position Error ± Std  (m)",
+        ylabel=f"Avg Position Error ± {STD_RATIO:.1f}Std  (m)",
         title="Position Error  (mean ± std)",
         out="position_error_combined.png",
         break_y=0.020,
@@ -350,7 +351,7 @@ def make_combined_plot(cfg, datasets):
         v    = data["ee_linear_speed_m_s"]
         mean = data[col_mean]
         # guard against tiny floating-point negatives in variance
-        std  = np.sqrt(np.maximum(data[col_var], 0.0)) * 0.3
+        std  = np.sqrt(np.maximum(data[col_var], 0.0)) * STD_RATIO
 
         lo = np.maximum(mean - std, 0.0)          # errors are non-negative
         hi = np.minimum(mean + std, top_max)       # clip band to plot range
