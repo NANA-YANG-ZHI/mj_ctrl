@@ -1,4 +1,4 @@
-"""Plot position (X, Y, Z) and force tracking for all 5 control methods at speed multiplier 3.6.
+"""Plot position (X, Y, Z) and force tracking for all 5 control methods at a given speed multiplier.
 
 Experiments:
   1. Feedforward
@@ -7,18 +7,17 @@ Experiments:
   4. Paper
   5. Paper + PI        (kp=2.0, ki=5.0)
 
-Outputs (saved to plots/tracking_speed_3.6/):
-  position_tracking_x.png   – X-axis: actual vs desired for all 5 methods
-  position_tracking_y.png   – Y-axis: actual vs desired for all 5 methods
-  position_tracking_z.png   – Z-axis: actual vs desired for all 5 methods
+Outputs (saved to plots/tracking_speed_<multiplier>[_slope<angle>]/):
   position_tracking_xyz.png – Combined 3-row figure (X, Y, Z)
   force_tracking.png         – Force error over time for all 5 methods
 
 Usage
 -----
-    python angular_speed_sweep/plot_tracking_results_speed_3_6.py
+    python angular_speed_sweep/plot_tracking_results_speed_MULTIPLIER.py --multiplier 3.4
+    python angular_speed_sweep/plot_tracking_results_speed_MULTIPLIER.py --multiplier 3.4 --slope-angle 30
 """
 
+import argparse
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,30 +29,33 @@ plt.rcParams.update({
     "axes.labelsize": 8,
     "xtick.labelsize": 8,
     "ytick.labelsize": 8,
-    # "legend.fontsize": 14,
 })
-# import scienceplots
-
-# plt.style.use(['science', 'no-latex'])
 
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR   = os.path.join(SCRIPT_DIR, "plots")
 
-MULTIPLIER  = 3.4
 DT          = 0.001          # simulation timestep (s)
 SKIP_S      = 1.0            # seconds to skip at the start for steady-state metrics
-OUT_DIR     = os.path.join(PLOTS_DIR, f"tracking_speed_{MULTIPLIER}")
 
-METHODS = [
+METHOD_KEYS = [
     ("Feedforward",       "feedforward",    "tab:blue",   "-",  "o"),
     ("Feedforward + PI",  "feedforward_pi", "tab:purple", "-",  "s"),
     ("PD",                "pd",             "tab:green",  "-",  "^"),
-    ("HFDC",             "paper",          "tab:orange",    "-",  "D"),
-    ("HFDC + PI",        "paper_pi",       "tab:red", "-",  "P"),
+    ("HFDC",              "paper",          "tab:orange", "-",  "D"),
+    ("HFDC + PI",         "paper_pi",       "tab:red",    "-",  "P"),
 ]
 
 AXES_LABELS = ["X", "Y", "Z"]
 PLOT_DURATION_S = 2.0  # only plot this many seconds of data
+
+
+def build_methods(slope_angle):
+    """Return (label, dir_name, color, ls, marker) for the given slope angle."""
+    methods = []
+    for label, key, color, ls, marker in METHOD_KEYS:
+        dir_name = f"slope{slope_angle}_{key}" if slope_angle != 0.0 else key
+        methods.append((label, dir_name, color, ls, marker))
+    return methods
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -69,13 +71,10 @@ def make_time_axis(n_samples: int) -> np.ndarray:
     return np.arange(n_samples) * DT
 
 
-def skip_samples(n_samples: int) -> int:
-    return int(SKIP_S / DT)
-
-
 # ── individual axis position plots ────────────────────────────────────────────
 
-def plot_position_axis(datasets: list, axis_idx: int) -> None:
+def plot_position_axis(datasets: list, axis_idx: int, multiplier: float,
+                       surface_label: str, out_dir: str) -> None:
     """One figure per axis (X / Y / Z): all methods + desired reference."""
     label = AXES_LABELS[axis_idx]
     fig, ax = plt.subplots(figsize=(12, 4))
@@ -95,13 +94,13 @@ def plot_position_axis(datasets: list, axis_idx: int) -> None:
     ax.set_xlabel("Time (s)")
     ax.set_ylabel(f"{label} Position (m)")
     ax.set_title(
-        f"Position Tracking — {label} Axis  |  Speed Multiplier {MULTIPLIER}×"
+        f"Position Tracking — {label} Axis  |  Speed Multiplier {multiplier}×  [{surface_label}]"
     )
     ax.legend(loc="best", fontsize=9, framealpha=0.85)
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
 
-    out = os.path.join(OUT_DIR, f"position_tracking_{label.lower()}.png")
+    out = os.path.join(out_dir, f"position_tracking_{label.lower()}.png")
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"[PLOT] {os.path.relpath(out)}")
@@ -109,7 +108,8 @@ def plot_position_axis(datasets: list, axis_idx: int) -> None:
 
 # ── combined XYZ position plot ────────────────────────────────────────────────
 
-def plot_position_xyz(datasets: list) -> None:
+def plot_position_xyz(datasets: list, multiplier: float,
+                      surface_label: str, out_dir: str) -> None:
     """3-row figure: one row per axis, all methods overlaid, shared time axis."""
     # Print per-axis position error summary to terminal
     col_w = 20
@@ -119,7 +119,6 @@ def plot_position_xyz(datasets: list) -> None:
         print(f"  {'Method':<{col_w}}  {'Avg':>10}  {'Max':>10}")
         print("  " + "-" * (col_w + 24))
         for name, data, color, ls, _ in datasets:
-            # n  = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
             pe = np.abs(data["actual_positions"][sk:, axis_idx]
                         - data["desired_positions"][sk:, axis_idx])
             print(f"  {name:<{col_w}}  {np.mean(pe):>10.4f}  {np.max(pe):>10.4f}")
@@ -127,9 +126,8 @@ def plot_position_xyz(datasets: list) -> None:
 
     fig, axes = plt.subplots(
         3, 1, sharex=True, figsize=(3.25, 3.012),
-        gridspec_kw={"height_ratios": [1,1,1]},
+        gridspec_kw={"height_ratios": [1, 1, 1]},
     )
-    # fig.suptitle(f"Position Tracking (X, Y, Z)  |  Speed Multiplier {MULTIPLIER}×")
 
     for axis_idx, ax in enumerate(axes):
         label = AXES_LABELS[axis_idx]
@@ -151,7 +149,7 @@ def plot_position_xyz(datasets: list) -> None:
 
     axes[-1].set_xlabel("Time (s)")
 
-    out = os.path.join(OUT_DIR, "position_tracking_xyz.png")
+    out = os.path.join(out_dir, "position_tracking_xyz.png")
     fig.savefig(out, dpi=600)
     plt.close(fig)
     print(f"[PLOT] {os.path.relpath(out)}")
@@ -159,7 +157,8 @@ def plot_position_xyz(datasets: list) -> None:
 
 # ── force tracking plot ───────────────────────────────────────────────────────
 
-def plot_force_tracking(datasets: list) -> None:
+def plot_force_tracking(datasets: list, multiplier: float,
+                        surface_label: str, out_dir: str) -> None:
     """Force error (Z) over time for all 5 methods, with per-method avg |error|."""
     fig, ax = plt.subplots()
 
@@ -169,8 +168,8 @@ def plot_force_tracking(datasets: list) -> None:
         t  = make_time_axis(n)
         sk = int(SKIP_S / DT)
         avg = np.mean(np.abs(fe[sk:])) if n > sk else np.mean(np.abs(fe))
-        max = np.max(np.abs(fe[sk:])) if n > sk else np.max(np.abs(fe))
-        print(f"{name:20s} — avg |error| = {avg:.3f} N, max |error| = {max:.3f} N")
+        max_err = np.max(np.abs(fe[sk:])) if n > sk else np.max(np.abs(fe))
+        print(f"{name:20s} — avg |error| = {avg:.3f} N, max |error| = {max_err:.3f} N")
 
         ax.plot(t, fe, color=color, linestyle=ls, linewidth=1.0, alpha=0.80,
                 label=f"{name}")
@@ -179,12 +178,9 @@ def plot_force_tracking(datasets: list) -> None:
 
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Force Z Error (N)")
-    # ax.set_title(
-    #     f"Force Tracking — Force Z Error  |  Speed Multiplier {MULTIPLIER}×"
-    # )
     ax.legend(loc="lower right")
 
-    out = os.path.join(OUT_DIR, "force_tracking.png")
+    out = os.path.join(out_dir, "force_tracking.png")
     fig.savefig(out, dpi=600)
     plt.close(fig)
     print(f"[PLOT] {os.path.relpath(out)}")
@@ -192,7 +188,8 @@ def plot_force_tracking(datasets: list) -> None:
 
 # ── per-method detail plot (position + force in one figure) ──────────────────
 
-def plot_per_method_detail(datasets: list) -> None:
+def plot_per_method_detail(datasets: list, multiplier: float,
+                           surface_label: str, out_dir: str) -> None:
     """4-row figure per method: X, Y, Z position + force error on one page."""
     for name, data, color, ls, marker in datasets:
         n  = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
@@ -201,7 +198,7 @@ def plot_per_method_detail(datasets: list) -> None:
 
         fig, axes = plt.subplots(4, 1, figsize=(14, 12), sharex=True)
         fig.suptitle(
-            f"{name}  |  Speed Multiplier {MULTIPLIER}×", fontsize=13
+            f"{name}  |  Speed Multiplier {multiplier}×  [{surface_label}]", fontsize=13
         )
 
         # X, Y, Z position rows
@@ -231,7 +228,7 @@ def plot_per_method_detail(datasets: list) -> None:
         plt.tight_layout()
 
         safe_name = name.lower().replace(" + ", "_").replace(" ", "_")
-        out = os.path.join(OUT_DIR, f"detail_{safe_name}.png")
+        out = os.path.join(out_dir, f"detail_{safe_name}.png")
         fig.savefig(out, dpi=150, bbox_inches="tight")
         plt.close(fig)
         print(f"[PLOT] {os.path.relpath(out)}")
@@ -240,13 +237,41 @@ def plot_per_method_detail(datasets: list) -> None:
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    os.makedirs(OUT_DIR, exist_ok=True)
+    parser = argparse.ArgumentParser(
+        description="Plot position and force tracking for all control methods."
+    )
+    parser.add_argument(
+        "--multiplier",
+        type=float,
+        default=3.4,
+        help="Angular speed multiplier (omega/pi) to plot (default: 3.4)",
+    )
+    parser.add_argument(
+        "--slope-angle",
+        type=float,
+        default=0.0,
+        help="Slope angle in degrees (default: 0 = flat surface). "
+             "Reads from slope<angle>_<method>/data directories.",
+    )
+    args = parser.parse_args()
+
+    multiplier  = args.multiplier
+    slope_angle = args.slope_angle
+    surface_label = f"{slope_angle:g}° slope" if slope_angle != 0.0 else "flat surface"
+
+    slope_suffix = f"_slope{slope_angle:g}" if slope_angle != 0.0 else ""
+    out_dir = os.path.join(PLOTS_DIR, f"tracking_speed_{multiplier}{slope_suffix}")
+    os.makedirs(out_dir, exist_ok=True)
+
+    print(f"[INFO] Multiplier: {multiplier}×  |  Surface: {surface_label}")
+
+    methods = build_methods(slope_angle)
 
     # Load data for every method
     datasets = []
-    for name, method_dir, color, ls, marker in METHODS:
+    for name, method_dir, color, ls, marker in methods:
         try:
-            d = load_npz(method_dir, MULTIPLIER)
+            d = load_npz(method_dir, multiplier)
             datasets.append((name, d, color, ls, marker))
             print(f"[LOAD] {name:20s} — {d['actual_positions'].shape[0]} timesteps, "
                   f"angular_speed={float(d['angular_speed_rad_s']):.2f} rad/s, "
@@ -258,22 +283,12 @@ def main():
         print("No data loaded. Exiting.")
         return
 
-    print(f"\nGenerating plots → {OUT_DIR}\n")
+    print(f"\nGenerating plots → {out_dir}\n")
 
-    # # Per-axis position comparison
-    # for axis_idx in range(3):
-    #     plot_position_axis(datasets, axis_idx)
+    plot_position_xyz(datasets, multiplier, surface_label, out_dir)
+    plot_force_tracking(datasets, multiplier, surface_label, out_dir)
 
-    # Combined XYZ position comparison
-    plot_position_xyz(datasets)
-
-    # Force tracking comparison
-    plot_force_tracking(datasets)
-
-    # # Per-method detail (position + force)
-    # plot_per_method_detail(datasets)
-
-    print(f"\nDone. All plots saved to: {OUT_DIR}")
+    print(f"\nDone. All plots saved to: {out_dir}")
 
 
 if __name__ == "__main__":
