@@ -447,7 +447,6 @@ constraints imposed by the environment on the robot end-effector.
 When the end-effector comes into contact with a surface, the surface restricts
 end-effector motion in certain directions while leaving others free.
 The framework captures this mathematically by introducing holonomic constraints.
-
 Specifically, the kinematic, holonomic constraints
 $\boldsymbol{\Phi}(\mathbf{q}) \in \mathbb{R}^{c}$
 at the end-effector are formulated as
@@ -469,11 +468,14 @@ constraint
     \label{eq:velocity_constraint}
 \end{equation}
 %
-where
-$\mathbf{J}_{\dot{\Phi}}(\mathbf{q})
+where \emph{constraint Jacobian} is defined as
+\begin{equation}
+\mathbf{J}_{\dot{\Phi}}(\mathbf{q})
   = \dfrac{\partial\boldsymbol{\Phi}(\mathbf{q})}{\partial\mathbf{q}}
-  \in \mathbb{R}^{c \times n}$
-is the \emph{constraint Jacobian}.
+  \in \mathbb{R}^{c \times n}
+  \label{eq:definition_constraint_jac}
+\end{equation}
+.
 This matrix maps joint velocities into the constraint subspace; when the
 constraint is active, the product $\mathbf{J}_{\dot{\Phi}}\dot{\mathbf{q}}$
 must remain zero, enforcing zero velocity in the constrained direction(s).
@@ -499,12 +501,11 @@ The constraint function $\boldsymbol{\Phi}(\mathbf{q})$ must be provided based o
 knowledge of the environment geometry, and the constraint Jacobian follows from its
 gradient.
 How this is done in practice for specific surface geometries is the subject of
-subsequent sections.
+~\ref{sec:constraint_frame}.
 
 \subsection{Selection Matrix Framework}
 
 To address the computation of the constraint Jacobian for specific task geometries, textbook by Siciliano et al.~\cite{Siciliano_Sciavicco_Villani_Oriolo_2009} provides a constructive path to identifying the force and motion subspaces, based on the concept of \emph{selection matrices}.
-This approach begins from the same holonomic constraint representation~\eqref{eq:holonomic_constraint}, where $\boldsymbol{\Phi}(\boldsymbol{q}) = \boldsymbol{0}$ with $\boldsymbol{J}_{\dot{\Phi}}(\boldsymbol{q}) = \partial\boldsymbol{\Phi}/\partial\boldsymbol{q}$ referred to explicitly as the \emph{constraint Jacobian}. 
 
 In the absence of friction, any reaction force arising at the end-effector from contact with
 the environment must point in a direction that is normal to the constraint surface. Consequently, even though the end-effector wrench $\boldsymbol{h}_e \in \mathbb{R}^6$,
@@ -516,12 +517,7 @@ has six components in general, the contact with the environment can only produce
 where $\boldsymbol{\lambda} \in \mathbb{R}^m$ is a vector of \emph{constraint
 forces} encoding the magnitude of the contact along each of the $m$ constrained directions,
 and $\boldsymbol{S}_f(\boldsymbol{q}) \in \mathbb{R}^{6 \times m}$ is the
-\emph{force selection matrix}, defined as
-\begin{equation}
-    \boldsymbol{S}_f(\boldsymbol{q}) = \boldsymbol{J}^{-T}(\boldsymbol{q})\,
-    \boldsymbol{J}_\varphi^T(\boldsymbol{q}).
-    \label{eq:Sf_def}
-\end{equation}
+\emph{force selection matrix}.
 Each column of $\boldsymbol{S}_f$ is a unit wrench vector aligned with the normal to one
 constraint hypersurface, expressed in the six-dimensional space of end-effector forces and
 torques. The matrix thus acts as a \emph{direction encoder}: it takes the scalar contact
@@ -938,19 +934,19 @@ The desired orientation is kept constant throughout the circle motion.
 \end{figure}
 
 
-\section{Constraint Frame and Selection Matrices}
+\section{Implementation of Constraint Frame and Selection Matrices}
 \label{sec:constraint_frame}
 
 This section develops the constraint-frame formalism using the flat-surface
 circle-drawing task (Task~1) as a running example.
 The robot end-effector presses against a \textbf{flat horizontal surface} at
-height $z = 0.2\,\mathrm{m}$ in the base frame while drawing a circle of
+height $z = 0.46\,\mathrm{m}$ in the base frame while drawing a circle of
 radius $r = 0.1\,\mathrm{m}$ in the $xy$-plane.
 It is required to maintain a constant normal contact force of
-$\lambda_d = 10\,\mathrm{N}$ in the $z$-direction.
+$\lambda_d = -8\,\mathrm{N}$ in the $z$-direction, pointing into surface.
 Only one direction is constrained ($m = 1$); the end-effector remains free
 to translate in $x$ and $y$ and to rotate about all three axes
-($6 - m = 5$ free directions).
+($6 - m = 5$ free directions). In order to make it easy for end-effector to keep contact with surface. the end-effector rotation is set as constant and parallel to the surface.
 
 % ------------------------------------------------------------------
 % Holonomic constraint
@@ -960,77 +956,29 @@ to translate in $x$ and $y$ and to rotate about all three axes
 When the end-effector is in physical contact with the surface, the environment
 imposes a geometric restriction on the reachable configurations.
 Assuming the constraint depends only on the joint configuration
-$\mathbf{q}$ (holonomic), it takes the form
-%
-\begin{equation}
-    \boldsymbol{\phi}(\mathbf{q}) = \mathbf{0},
-    \label{eq:constraint}
-\end{equation}
-%
+$\mathbf{q}$ (holonomic), it takes the form $\boldsymbol{\phi}(\mathbf{q}) = \mathbf{0}$\eqref{eq:holonomic_constraint}, 
 where $\boldsymbol{\phi}: \mathbb{R}^n \to \mathbb{R}^m$ and $m$ is the number
 of independent constraints.
 
 \begin{tcolorbox}[
     colback=gray!8, colframe=gray!45,
-    title={Example~1 — Constraint equation \eqref{eq:constraint}},
+    title={Example~1 — Constraint equation \eqref{eq:holonomic_constraint}},
     fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
 \small
-With $m = 1$ and the surface at $z = 0.2\,\mathrm{m}$, the single
+With $m = 1$ and the surface at $z = 0.46\,\mathrm{m}$, the single
 constraint equation is:
 \begin{equation*}
-    \phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.2 = 0
+    \phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.46 = 0
 \end{equation*}
 When $\phi = 0$ the end-effector sits exactly on the surface.
 When $\phi > 0$ it is above the surface (contact lost);
-$\phi < 0$ is physically impossible (penetration).
-\end{tcolorbox}
-
-% ------------------------------------------------------------------
-% Constraint Jacobian
-% ------------------------------------------------------------------
-\subsection*{Constraint Jacobian}
-
-Differentiating \eqref{eq:constraint} with respect to time yields a
-velocity-level constraint on the admissible joint velocities:
-%
-\begin{equation}
-    \mathbf{J}_{\phi}(\mathbf{q})\,\dot{\mathbf{q}} = \mathbf{0},
-    \label{eq:vel_constraint}
-\end{equation}
-%
-where $\mathbf{J}_{\phi}(\mathbf{q}) = \partial\boldsymbol{\phi}/\partial\mathbf{q}
-\in \mathbb{R}^{m \times n}$ is the \emph{constraint Jacobian}, assumed to
-have full row rank $m$ in the neighbourhood of the operating point.
-Equation~\eqref{eq:vel_constraint} states that joint velocities must lie
-in the null space of $\mathbf{J}_{\phi}$; equivalently, for any virtual
-joint displacement $\delta\mathbf{q}$,
-%
-\begin{equation}
-    \mathbf{J}_{\phi}(\mathbf{q})\,\delta\mathbf{q} = \mathbf{0}.
-    \label{eq:virt_constraint}
-\end{equation}
-
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~2 — Constraint Jacobian \eqref{eq:vel_constraint}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-Differentiating $\phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.2$ gives:
-\begin{equation*}
-    \mathbf{J}_{\phi}(\mathbf{q})\,\dot{\mathbf{q}}
-    = \frac{\partial z_{ee}}{\partial \mathbf{q}}\,\dot{\mathbf{q}}
-    = \dot{z}_{ee} = 0
-\end{equation*}
-This is a $(1 \times 6)$ row vector — one row because $m = 1$.
-It states that no joint motion is allowed to produce a
-$z$-velocity at the end-effector; the robot may only move
-in $x$, $y$, and rotationally while maintaining contact.
+$\phi < 0$ is penetrating into surface.
 \end{tcolorbox}
 
 % ------------------------------------------------------------------
 % Force selection matrix S_f
 % ------------------------------------------------------------------
-\subsection*{Force selection matrix \(\mathbf{S}_f\)}
+\subsection*{Constraint Jacobian and Force selection matrix \(\mathbf{S}_f\)}
 
 The hybrid force/velocity controller partitions the six-dimensional
 end-effector space into a \emph{force subspace} (constrained directions)
@@ -1048,31 +996,41 @@ For the flat horizontal surface with the normal in the $z$-direction:
     \in \mathbb{R}^{6\times 1}.
     \label{eq:Sf_flat}
 \end{equation}
+We can deduct this selection matrix from the definition of constraint Jacobian \eqref{eq:definition_constraint_jac} as well.
+For a flat horizontal surface with constant height $h$, the holonomic constraint is expressed as
+%
+\begin{equation}
+    \boldsymbol{\Phi}(\mathbf{q}) = z(\mathbf{q}) - h = 0,
+    \label{eq:constraint_flat_surface}
+\end{equation}
+%
+\begin{equation}
+    \mathbf{J}_{\phi} = \frac{\partial \boldsymbol{\phi}}{\partial \mathbf{q}} = 
+    \frac{\partial \boldsymbol{\phi}}{\partial \mathbf{x}} \cdot \frac{\partial \mathbf{x}}{\partial \mathbf{q}} = 
+    \frac{\partial (z - h)}{\partial \mathbf{x}} \cdot \mathbf{J}
+    \label{eq:constraint_jacobian}
+\end{equation}
+\begin{equation}
+    \mathbf{J}_{\phi} = \begin{bmatrix}0 & 0 & 1 & 0 & 0 & 0\end{bmatrix} ^T \cdot \mathbf{J}
+    \label{eq:constraint_jacobian_flat}
+\end{equation}
+
+The deducted force selection matrix $\mathbf{S}_f$ yields out same result as the manuel inspection.
+
 
 \begin{tcolorbox}[
     colback=gray!8, colframe=gray!45,
     title={Example~4 — Force selection matrix and end-effector wrench},
     fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
 \small
-For a flat horizontal surface with the contact normal aligned with
-the base-frame $z$-axis:
-\begin{equation*}
-    \mathbf{S}_{f}
-    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix}
-    \in \mathbb{R}^{6\times 1}
-\end{equation*}
-This vector selects the $z$-force component of the end-effector wrench.
-With $\lambda_d = 10\,\mathrm{N}$, the $6$-dimensional end-effector
-wrench mapped into joint torques is:
+$\lambda$ is a vector of constraint forces encoding the magnitude of the contact along constrained directions, in this example, along z axis. With $\mathbf{S}_f$ it can be mapped back to the six-dimensional end-effector wrench space as:
+
 \begin{equation*}
     \mathbf{h}_e
-    = \mathbf{S}_f\,\lambda_d
-    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix} \cdot 10
-    = \begin{bmatrix}0\\0\\10\\0\\0\\0\end{bmatrix}\,\mathrm{N}
+    = \mathbf{S}_f\,\lambda
+    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix} \cdot 8
+    = \begin{bmatrix}0\\0\\8\\0\\0\\0\end{bmatrix}\,\mathrm{N}
 \end{equation*}
-Only the $z$-component is nonzero, confirming that the environment
-exerts a purely normal force of $10\,\mathrm{N}$ on the end-effector
-with no forces or moments in the five unconstrained directions.
 \end{tcolorbox}
 
 % ------------------------------------------------------------------
@@ -1568,8 +1526,8 @@ control phase transitions from \textsc{Approaching} to
 \end{figure}
 
 
-\chapter{Simulation and Experiments}
-\label{chap:experiments}
+\chapter{Simulation Experiments}
+\label{chap:simulation_experiments}
 % ==================================================================
 
 \section{System Overview}
@@ -1730,7 +1688,7 @@ The desired orientation is kept constant throughout the circle motion.
 
 
 % ==================================================================
-\section{Simulation: Flat Surface --- Without Surface Friction}
+\section{Simulation: Flat Surface — Without Friction}
 % ==================================================================
 
 The end-effector draws a circle on a flat horizontal surface
@@ -1839,7 +1797,7 @@ $0.023\,\mathrm{m}$, respectively), suggesting that integral force correction
 moderates the destabilising effect of high-frequency contact dynamics.
 Above $v \approx 1.5\,\mathrm{m/s}$ all methods diverge, exhibiting catastrophic instability.
 
-\subsection{Detailed Analysis at Representative Speeds}
+\subsection{Detailed Analysis at Representative Speeds: Slow vs. Fast}
 We now examine the force and motion tracking behavior at representative 
 end-effector speeds. For each selected end effector speed, the force tracking 
 error is defined as $e_F = F_z - F_d$ and reported with sign. A positive error indicates loss of contact or insufficient force application; 
@@ -2159,7 +2117,7 @@ To isolate the effect of surface friction on force tracking performance, a separ
 
 
 
-\subsection{Contact Force Compensation Analysis}
+\subsubsection{Contact Force Compensation Analysis}
 To further understand the source of this friction-induced degradation, Figure~\ref{fig:compensation_comparison_surface_frictio} isolates the contribution of each compensation term in the force control law under the same frictional conditions ($\mu_s = 0.7$) and at same angular speed $\omega = 2\pi\,\mathrm{rad/s}$. The four variants compared are: the full controller with all terms active, and three cases in which the contact force compensation, velocity term, and control force compensation are each individually removed.
 
 The most significant degradation occurs when either the contact force compensation or the control force compensation is removed. Disabling the contact force compensation raises the average error from 0.880~N to 1.698~N and the peak error from 2.595~N to 6.082~N — nearly doubling the average and more than doubling the peak. This confirms that the contact force compensation, which accounts for tangential contact forces from the motion space projected into the constraint direction, does meaningfully attenuate the disturbance introduced by surface friction. Removing the control force compensation produces an even larger peak error of 8.000~N (average 1.724~N), with large intermittent spikes visible throughout the trajectory. By contrast, disabling the velocity term has a negligible effect: the average error remains virtually unchanged at 0.868~N with a peak of 2.910~N, indicating that Coriolis and Jacobian time-derivative contributions are not a primary factor at this trajectory speed.
@@ -2217,96 +2175,10 @@ Taken together, these results demonstrate that HFDC+PI achieves near-ideal norma
 
 
 % ==================================================================
-\chapter{Simulation Experiments --- Slope Surface (\texorpdfstring{$30^\circ$}{30 deg})}
+\section{Simulation: Slope Surface (\texorpdfstring{$30^\circ$}{30 deg})} — Without Friction
 % ==================================================================
 
-\section{Slope Setup and Constraint Frame Adaptation}
 
-% TODO (FILL): Describe MuJoCo XML modification for 30° slope, coordinate
-% frame rotation, and how J_φ is computed using the rotated S_f. Explain
-% why J̇_φ ≈ 0 for planar slope.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): MuJoCo scene: Panda on slope environment with constraint
-    % frame axes overlaid.
-    \missingfigure{MuJoCo scene: Panda on slope with constraint frame axes}
-    \caption{MuJoCo simulation scene of the Panda robot on the $30^\circ$
-             slope environment with the constraint frame axes overlaid.}
-    \label{fig:mujoco_slope}
-\end{figure}
-
-
-\section{Velocity Term Analysis on Slope}
-
-% TODO (FILL): Show J̇_φ computation problem (was zero due to un-updated
-% Pinocchio data). After fix, analyse two sub-terms:
-% Λ_φ J_φ M⁻¹ C q̇ (red) and –Λ_φ J̇_φ q̇ (blue). Show they nearly cancel.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Velocity term components (red: Coriolis part,
-    % blue: J̇_φ part) and their sum ≈ 0 on slope.
-    \missingfigure{Velocity term components on slope: Coriolis (red) and $\dot{J}_\Phi$ (blue)}
-    \caption{Velocity term components on the slope: Coriolis part (red) and
-             $-\Lambda_\Phi \dot{J}_\Phi \dot{q}$ part (blue), and
-             their sum which is approximately zero.}
-    \label{fig:velocity_term_slope}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Force tracking: with J̇_φ (Pinocchio attachment frame)
-    % vs. without J̇_φ — showing negligible difference on slope.
-    \missingfigure{Force tracking: with $\dot{J}_\Phi$ vs.\ without $\dot{J}_\Phi$ on slope}
-    \caption{Force tracking on the slope with and without the
-             $\dot{J}_\Phi$ term, demonstrating the negligible difference.}
-    \label{fig:slope_jdot_comparison}
-\end{figure}
-
-
-\section{Slope Performance: Slow vs.\ Fast}
-
-% TODO (FILL): Present force tracking at π/4 and π rad/s on 30° slope.
-% Compare with flat surface results. Note that Bruno+velocity_term performs
-% well in frictionless environment.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Contact force tracking on slope: π/4 rad/s (top) and
-    % π rad/s (bottom) — desired vs. actual.
-    \missingfigure{Contact force tracking on slope: $\pi/4$\,rad/s (top) and $\pi$\,rad/s (bottom)}
-    \caption{Contact force tracking on the $30^\circ$ slope at
-             $\pi/4$\,rad/s (top) and $\pi$\,rad/s (bottom), showing
-             desired versus actual force.}
-    \label{fig:force_slope}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): EE trajectory on slope: 3D path plot and X/Y/Z time series.
-    \missingfigure{End-effector trajectory on slope: 3D path and X/Y/Z time series}
-    \caption{End-effector trajectory on the slope: three-dimensional path
-             plot (left) and $X/Y/Z$ position time series (right).}
-    \label{fig:ee_trajectory_slope}
-\end{figure}
-
-
-\section{Franka vs.\ KUKA Comparison in Simulation}
-
-% TODO (FILL): Describe adaptation from KUKA iiwa to Franka Panda XML
-% (torque actuator, attachment collision). Note Panda has larger force error
-% and less stability at π rad/s compared to KUKA.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Side-by-side force tracking: KUKA iiwa vs. Franka Panda,
-    % with and without friction, at π rad/s.
-    \missingfigure{Force tracking: KUKA iiwa vs.\ Franka Panda, with/without friction, $\pi$\,rad/s}
-    \caption{Side-by-side force tracking comparison between the KUKA iiwa
-             and Franka Panda at $\pi$\,rad/s, with and without friction.}
-    \label{fig:kuka_vs_panda}
-\end{figure}
 
 
 % ==================================================================

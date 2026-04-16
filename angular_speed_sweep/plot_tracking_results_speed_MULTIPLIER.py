@@ -60,8 +60,10 @@ def build_methods(slope_angle):
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def load_npz(method_dir: str, multiplier: float) -> np.lib.npyio.NpzFile:
+def load_npz(method_dir: str, multiplier: float, slope_angle: float = 0.0) -> np.lib.npyio.NpzFile:
     path = os.path.join(PLOTS_DIR, method_dir, "data", f"data_{multiplier}.npz")
+    if slope_angle != 0.0:
+        path = os.path.join(PLOTS_DIR, method_dir, "data", f"data_{multiplier}_all.npz")
     if not os.path.isfile(path):
         raise FileNotFoundError(f"Data file not found: {path}")
     return np.load(path)
@@ -271,7 +273,7 @@ def main():
     datasets = []
     for name, method_dir, color, ls, marker in methods:
         try:
-            d = load_npz(method_dir, multiplier)
+            d = load_npz(method_dir, multiplier, slope_angle)
             datasets.append((name, d, color, ls, marker))
             print(f"[LOAD] {name:20s} — {d['actual_positions'].shape[0]} timesteps, "
                   f"angular_speed={float(d['angular_speed_rad_s']):.2f} rad/s, "
