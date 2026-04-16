@@ -23,6 +23,7 @@ Usage
 
 import argparse
 import os
+import re
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -118,7 +119,7 @@ def load_all(data_dir):
     import glob
     npz_files = sorted(
         glob.glob(os.path.join(data_dir, "data_*.npz")),
-        key=lambda p: float(os.path.basename(p)[5:-4])  # sort by multiplier float
+        key=lambda p: float(re.match(r'data_([0-9.]+)', os.path.basename(p)).group(1))
     )
     rows = {k: [] for k in (
         "ee_linear_speed_m_s",

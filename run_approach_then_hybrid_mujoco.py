@@ -498,7 +498,7 @@ def main() -> None:
                 disabled_parts.append("no_contact")
             if not args.use_velocity_term:
                 disabled_parts.append("no_vel")
-            comp_suffix = ("_" + "_".join(disabled_parts)) if disabled_parts else "_all"
+            comp_suffix = ("_" + "_".join(disabled_parts)) if disabled_parts else ""
             fname = f"data_{args.multiplier:.1f}{comp_suffix}.npz"
             fpath = _os.path.join(args.data_dir, fname)
             np.savez(
