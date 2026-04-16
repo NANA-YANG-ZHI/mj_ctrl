@@ -239,16 +239,10 @@ def _fmt_val(v, col):
     return f"{v:.3g}"
 
 
-def _annotate_outliers(ax, datasets, col, top_max):
-    """Draw triangle markers and staggered text labels for outlier points.
-
-    Labels are distributed vertically within each x-group to prevent overlap.
-    """
+def _annotate_outliers(ax, datasets, col, top_max, plot_title=""):
+    """Draw triangle markers for outlier points and print their values to stdout."""
     y_annot = top_max * 0.92
-    y_top   = top_max * 0.84
-    y_bot   = top_max * 0.68
 
-    # Group outliers by x-position
     groups = defaultdict(list)   # x_val -> [(name, yi, color), ...]
     for name, data, color, marker in datasets:
         v, vals = data["ee_linear_speed_m_s"], data[col]
@@ -264,19 +258,11 @@ def _annotate_outliers(ax, datasets, col, top_max):
             ax.plot(x_val, y_annot, marker="^", color=color,
                     markersize=_STYLE["outlier_markersize"], zorder=5, clip_on=False)
 
-    for x_val, entries in groups.items():
-        n = len(entries)
-        if n == 1:
-            y_positions = [y_top]
-        else:
-            step = (y_top - y_bot) / (n - 1)
-            y_positions = [y_top - i * step for i in range(n)]
-        for (_, yi, color), y_lbl in zip(entries, y_positions):
-            ax.text(x_val, y_lbl, _fmt_val(yi, col),
-                    color=color, fontsize=_STYLE["outlier_fontsize"],
-                    ha="center", va="top",
-                    bbox=dict(boxstyle="round,pad=0.15", fc="white",
-                              ec=color, lw=_STYLE["bbox_lw"], alpha=0.85))
+    # Print outlier values for caption use
+    print(f"\n[OUTLIERS] {plot_title} (clipped above {_fmt_val(top_max, col)})")
+    for x_val in sorted(groups):
+        for name, yi, _ in groups[x_val]:
+            print(f"  v={x_val:.3f} m/s  {name}: {_fmt_val(yi, col)}")
 
 
 def make_plot(cfg, datasets, surface_label="flat surface"):
@@ -316,7 +302,7 @@ def make_plot(cfg, datasets, surface_label="flat surface"):
     )
 
     # ── Annotate outliers (per method) ───────────────────────────────────────
-    _annotate_outliers(ax, datasets, col, top_max)
+    _annotate_outliers(ax, datasets, col, top_max, cfg["title"])
 
     # ── Axes labels / legend / grid ──────────────────────────────────────────
     x_max = max(data["ee_linear_speed_m_s"].max() for _, data, _, _ in datasets)
@@ -382,7 +368,7 @@ def make_combined_plot(cfg, datasets):
     )
 
     # ── Annotate outliers (based on mean exceeding top_max) ──────────────────
-    _annotate_outliers(ax, datasets, col_mean, top_max)
+    _annotate_outliers(ax, datasets, col_mean, top_max, cfg["title"])
 
     # ── Axes labels / legend / grid ──────────────────────────────────────────
     x_max = max(data["ee_linear_speed_m_s"].max() for _, data, _, _ in datasets)
