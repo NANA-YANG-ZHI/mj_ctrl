@@ -2175,10 +2175,244 @@ Taken together, these results demonstrate that HFDC+PI achieves near-ideal norma
 
 
 % ==================================================================
-\section{Simulation: Slope Surface (\texorpdfstring{$30^\circ$}{30 deg})} — Without Friction
+\section{Simulation: Slope Surface (\texorpdfstring{$30^\circ$}{30 deg}) --- Without Friction}
 % ==================================================================
 
+The angular speed sweep described for the flat surface is repeated on the
+$30^\circ$ slope with frictionless contact (\texttt{condim}~$= 1$).
+The slope geometry introduces a gravitational component along the surface
+normal direction and rotates the motion and constraint subspaces relative to
+the world frame.
+All experimental parameters are held constant: circle radius $r = 0.1\,\mathrm{m}$,
+desired normal force $F_d = -8\,\mathrm{N}$, speed range
+$\omega \in [0.1\pi,\,5.0\pi]\,\mathrm{rad/s}$
+($v \in [0.031,\,1.571]\,\mathrm{m/s}$),
+and a $10\,\mathrm{s}$ trial duration with metrics computed over
+$t > 1\,\mathrm{s}$ to exclude approach transients.
 
+\subsection{Force Tracking Results}
+
+\begin{figure}[h]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../angular_speed_sweep/plots/force_error_comparison_slope30.png}
+        \caption{Mean absolute force tracking error $\bar{e}_F$ versus
+                 end-effector speed for all five controllers on the
+                 $30^\circ$ slope (frictionless).
+                 HFDC and HFDC\,+\,PI remain below $0.7\,\mathrm{N}$ up to
+                 $v \approx 1.2\,\mathrm{m/s}$, above which PD,
+                 Feedforward\,+\,PI, and HFDC\,+\,PI escalate sharply.
+                 HFDC is the only method to maintain low error above this
+                 threshold.}
+        \label{fig:force_error_comparison_slope30}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../angular_speed_sweep/plots/force_var_comparison_slope30.png}
+        \caption{Force error variance versus end-effector speed on the
+                 $30^\circ$ slope.
+                 Variance spikes coincide with the onset of intermittent
+                 contact loss and re-contact events above the stability
+                 threshold, confirming that degradation is driven by
+                 transient instability rather than a steady-state bias.}
+        \label{fig:force_var_comparison_slope30}
+    \end{subfigure}
+    \caption{Force tracking error and variance versus end-effector speed on
+             the $30^\circ$ slope surface (frictionless).}
+    \label{fig:speed_sweep_force_comparison_slope30}
+\end{figure}
+
+Figure~\ref{fig:speed_sweep_force_comparison_slope30} shows the mean absolute
+force error and its variance across the full speed range on the slope.
+The qualitative ordering of methods is consistent with the flat-surface results:
+HFDC\,+\,PI achieves the lowest force error at moderate speeds, followed by
+HFDC, PD, Feedforward\,+\,PI, and feedforward.
+However, the critical speed at which errors escalate is substantially lower on
+the slope.
+PD, Feedforward\,+\,PI, and HFDC\,+\,PI all exhibit a sharp increase in both
+error and variance near $v \approx 1.2\,\mathrm{m/s}$
+($\omega \approx 3.8\pi\,\mathrm{rad/s}$), compared with
+$v \approx 1.38\,\mathrm{m/s}$ on the flat surface — a reduction of
+approximately $13\,\%$ in the stability threshold.
+Notably, HFDC without PI augmentation remains stable above this threshold,
+maintaining a mean force error of $0.820\,\mathrm{N}$ at
+$v = 1.194\,\mathrm{m/s}$.
+
+\subsection{Motion Tracking Results}
+
+\begin{figure}[h]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../angular_speed_sweep/plots/position_error_comparison_slope30.png}
+        \caption{Mean position tracking error $\bar{e}_p$ versus end-effector
+                 speed on the $30^\circ$ slope (frictionless).
+                 All methods remain within $3$--$14\,\mathrm{mm}$ below the
+                 stability threshold.
+                 Above $v \approx 1.2\,\mathrm{m/s}$, PD diverges first
+                 ($\bar{e}_p > 100\,\mathrm{mm}$), followed by Feedforward\,+\,PI
+                 and HFDC\,+\,PI; only HFDC and feedforward maintain bounded
+                 tracking above this speed.}
+        \label{fig:position_error_comparison_slope30}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../angular_speed_sweep/plots/position_var_comparison_slope30.png}
+        \caption{Position error variance versus end-effector speed on the
+                 $30^\circ$ slope.
+                 The variance spike at $v \approx 1.2\,\mathrm{m/s}$
+                 confirms that trajectory divergence is caused by intermittent
+                 instability rather than a systematic tracking offset.}
+        \label{fig:position_var_comparison_slope30}
+    \end{subfigure}
+    \caption{Position tracking error and variance versus end-effector speed on
+             the $30^\circ$ slope surface (frictionless).}
+    \label{fig:speed_sweep_position_error_slope30}
+\end{figure}
+
+As shown in Figure~\ref{fig:speed_sweep_position_error_slope30}, position
+tracking errors remain uniformly small — in the range $3$--$14\,\mathrm{mm}$
+— for all methods below the stability threshold.
+Beyond $v \approx 1.2\,\mathrm{m/s}$, the PD controller diverges first, with
+mean position error rising to $123\,\mathrm{mm}$ and peak deviations exceeding
+$380\,\mathrm{mm}$ in all axes at multiplier $3.8\times$.
+Feedforward\,+\,PI and HFDC\,+\,PI also lose stable tracking at this speed,
+exhibiting peak errors of up to $271\,\mathrm{mm}$ and $125\,\mathrm{mm}$,
+respectively.
+Feedforward and HFDC are the only methods to maintain bounded position errors
+above the threshold.
+
+\subsection{Detailed Analysis at Representative Speeds}
+
+Force tracking error is defined as $e_F = F_z - F_d$ and reported with sign.
+A positive error indicates loss of contact or insufficient force; for example,
+complete contact loss gives $e_F = 0 - (-8) = +8\,\mathrm{N}$.
+A negative error indicates excessive force application,
+e.g.\ $F_z = -10\,\mathrm{N}$ yields $e_F = -2\,\mathrm{N}$.
+All metrics are computed over $t > 1\,\mathrm{s}$.
+
+\begin{figure}[h]
+    \centering
+    \captionsetup[subfigure]{font=small}
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{../angular_speed_sweep/plots/tracking_speed_3.4_slope30/force_tracking.png}
+        \caption{Signed force error $e_F = F_z - F_d$ for all controllers at
+        speed multiplier $3.4\times$ on the $30^\circ$ slope.
+        Mean and maximum absolute errors (computed over $t > 1\,\text{s}$):\\
+        FF: avg $= 3.472\,\text{N}$, max $= 11.694\,\text{N}$;\\
+        FF + PI: avg $= 1.102\,\text{N}$, max $= 3.123\,\text{N}$;\\
+        PD: avg $= 1.341\,\text{N}$, max $= 3.232\,\text{N}$;\\
+        HFDC: avg $= 0.644\,\text{N}$, max $= 2.004\,\text{N}$;\\
+        HFDC + PI: avg $= 0.201\,\text{N}$, max $= 0.637\,\text{N}$.}
+        \label{fig:slope30_speed_3.4/force_tracking}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{../angular_speed_sweep/plots/tracking_speed_3.4_slope30/position_tracking_xyz.png}
+        \caption{End-effector position tracking in $x$, $y$, and $z$ for all
+        controllers at speed multiplier $3.4\times$ on the $30^\circ$ slope.
+        All controllers achieve accurate trajectory following.
+        Mean and maximum absolute errors over $t > 1\,\text{s}$:\\
+        In $x$: avg $4.1$--$4.2\,\text{mm}$, max $7.7$--$9.1\,\text{mm}$.\\
+        In $y$: avg $0.5$--$0.7\,\text{mm}$, max $0.9$--$1.4\,\text{mm}$.\\
+        In $z$: avg $3.4$--$3.6\,\text{mm}$, max $4.5$--$6.1\,\text{mm}$.}
+        \label{fig:slope30_speed_3.4/position_tracking}
+    \end{subfigure}
+    \caption{Force tracking error and end-effector trajectory at speed
+    multiplier $3.4\times$ ($v \approx 1.068\,\mathrm{m/s}$,
+    $\omega \approx 3.4\pi\,\mathrm{rad/s}$) on the $30^\circ$ slope.
+    First $2\,\mathrm{s}$ are plotted.}
+    \label{fig:force_position_details_slope30_3.4}
+\end{figure}
+
+At $v \approx 1.068\,\mathrm{m/s}$ (multiplier $3.4\times$), all five
+controllers remain stable on the slope.
+Position tracking errors are bounded across all axes for every method,
+with mean errors of $4\,\mathrm{mm}$ in $x$, below $1\,\mathrm{mm}$ in $y$,
+and $3.4$--$3.6\,\mathrm{mm}$ in $z$ — comparable to the flat-surface case at
+the same speed.
+Force tracking is more demanding due to the gravitational load component along
+the slope normal.
+HFDC\,+\,PI achieves the best result: mean error $0.201\,\mathrm{N}$,
+maximum $0.637\,\mathrm{N}$.
+HFDC without PI follows at $0.644\,\mathrm{N}$ mean ($2.004\,\mathrm{N}$
+maximum), while PD and Feedforward\,+\,PI reach $1.341\,\mathrm{N}$ and
+$1.102\,\mathrm{N}$ mean errors, respectively.
+The pure feedforward controller exhibits the largest error at
+$3.472\,\mathrm{N}$, reflecting its inability to compensate for the additional
+gravitational disturbance introduced by the slope.
+
+\begin{figure}[h]
+    \centering
+    \captionsetup[subfigure]{font=small}
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{../angular_speed_sweep/plots/tracking_speed_3.8_slope30/force_tracking.png}
+        \caption{Signed force error $e_F = F_z - F_d$ for all controllers at
+        speed multiplier $3.8\times$ on the $30^\circ$ slope.
+        All controllers except HFDC exhibit severe degradation.
+        Mean and maximum absolute errors (computed over $t > 1\,\text{s}$):\\
+        FF: avg $= 4.461\,\text{N}$, max $= 17.319\,\text{N}$;\\
+        FF + PI: avg $= 7.917\,\text{N}$, max $= 45.451\,\text{N}$;\\
+        PD: avg $= 8.000\,\text{N}$, max $= 8.000\,\text{N}$ (sustained contact loss);\\
+        HFDC: avg $= 0.820\,\text{N}$, max $= 2.760\,\text{N}$;\\
+        HFDC + PI: avg $= 7.198\,\text{N}$, max $= 90.678\,\text{N}$.}
+        \label{fig:slope30_speed_3.8/force_tracking}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{../angular_speed_sweep/plots/tracking_speed_3.8_slope30/position_tracking_xyz.png}
+        \caption{End-effector position tracking in $x$, $y$, and $z$ for all
+        controllers at speed multiplier $3.8\times$ on the $30^\circ$ slope.
+        Mean and maximum absolute errors over $t > 1\,\text{s}$:\\
+        PD loses contact entirely
+        ($x$: avg $122.9\,\text{mm}$, max $382.4\,\text{mm}$;
+         $y$: avg $228.8\,\text{mm}$, max $464.1\,\text{mm}$;
+         $z$: avg $364.7\,\text{mm}$, max $487.3\,\text{mm}$).
+        FF + PI and HFDC + PI show intermittent instability
+        ($x$: avg $19.6$ and $10.0\,\text{mm}$;
+         max $271$ and $125\,\text{mm}$, respectively).
+        Only feedforward and HFDC maintain bounded tracking
+        (all axes avg $\leq 5.1\,\text{mm}$, max $\leq 9.3\,\text{mm}$).}
+        \label{fig:slope30_speed_3.8/position_tracking}
+    \end{subfigure}
+    \caption{Force tracking error and end-effector trajectory at speed
+    multiplier $3.8\times$ ($v \approx 1.194\,\mathrm{m/s}$,
+    $\omega \approx 3.8\pi\,\mathrm{rad/s}$) on the $30^\circ$ slope.
+    First $2\,\mathrm{s}$ are plotted.}
+    \label{fig:force_position_details_slope30_3.8}
+\end{figure}
+
+At $v \approx 1.194\,\mathrm{m/s}$ (multiplier $3.8\times$), the slope
+surface produces a decisive divergence in controller behaviour.
+The PD controller loses contact entirely: a sustained mean force error of
+$8.000\,\mathrm{N}$ throughout the measurement window indicates that the
+end-effector never re-establishes stable contact.
+Position errors exceed $460\,\mathrm{mm}$ peak in several axes, confirming
+full trajectory divergence.
+Feedforward\,+\,PI and HFDC\,+\,PI exhibit intermittent instability: the PI
+integrator accumulates large corrective commands during contact loss events,
+producing force spikes of up to $45.5\,\mathrm{N}$ and $90.7\,\mathrm{N}$
+respectively upon re-contact, which in turn drive further instability.
+HFDC without PI correction is the only feedback-augmented controller to
+maintain stable operation: force error remains at $0.820\,\mathrm{N}$ mean
+with a $2.760\,\mathrm{N}$ maximum, and position tracking stays within
+$9.3\,\mathrm{mm}$ across all axes.
+
+\paragraph{Comparison with the flat surface.}
+These results reveal a consistent reduction in stability limit when
+transitioning from flat to slope surface.
+On the flat surface, the first controller to lose stable tracking is PD at
+$v \approx 1.38\,\mathrm{m/s}$ (multiplier $4.4\times$); on the slope, the
+same controller diverges at $v \approx 1.194\,\mathrm{m/s}$ (multiplier
+$3.8\times$) — a reduction of approximately $13\,\%$.
+A further distinction is the reversal of the HFDC\,+\,PI advantage: on the
+flat surface, HFDC\,+\,PI degrades more gradually than PD; on the slope, both
+fail at the same speed.
+This is consistent with integral windup during contact loss events, which is
+exacerbated by the gravitational disturbance on the slope.
+By contrast, HFDC's model-based compensation — which explicitly accounts for
+constraint-frame inertia and the slope rotation — provides robustness that
+purely feedback-based augmentations cannot match at high contact-transition
+rates.
 
 
 % ==================================================================
