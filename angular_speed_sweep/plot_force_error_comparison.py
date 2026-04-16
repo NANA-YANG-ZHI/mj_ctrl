@@ -35,10 +35,10 @@ PLOTS_DIR = os.path.join(SCRIPT_DIR, "plots")
 
 METHOD_KEYS = [
     ("Feedforward",      "feedforward",    "tab:blue",   "o"),
-    ("Feedforward + PI", "feedforward_pi", "tab:orange", "s"),
+    ("Feedforward + PI", "feedforward_pi", "tab:purple", "s"),
     ("PD",               "pd",             "tab:green",  "^"),
-    ("HFDC",             "paper",          "tab:red",    "D"),
-    ("HFDC + PI",        "paper_pi",       "tab:purple", "P"),
+    ("HFDC",             "paper",          "tab:orange",    "D"),
+    ("HFDC + PI",        "paper_pi",       "tab:red", "P"),
 ]
 
 
@@ -149,7 +149,7 @@ def load_all(data_dir):
     import glob
     npz_files = sorted(
         glob.glob(os.path.join(data_dir, "data_*.npz")),
-        key=lambda p: float(re.match(r'data_([0-9.]+)', os.path.basename(p)).group(1))
+        key=lambda p: float(re.match(r'data_([0-9]+(?:\.[0-9]+)?)', os.path.basename(p)).group(1))
     )
     rows = {k: [] for k in (
         "ee_linear_speed_m_s",
@@ -287,7 +287,7 @@ def make_combined_plot(cfg, datasets):
         v    = data["ee_linear_speed_m_s"]
         mean = data[col_mean]
         # guard against tiny floating-point negatives in variance
-        std  = np.sqrt(np.maximum(data[col_var], 0.0)) * 0.2
+        std  = np.sqrt(np.maximum(data[col_var], 0.0)) * 0.3
 
         lo = np.maximum(mean - std, 0.0)          # errors are non-negative
         hi = np.minimum(mean + std, top_max)       # clip band to plot range
