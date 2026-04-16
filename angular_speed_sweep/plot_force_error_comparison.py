@@ -26,9 +26,36 @@ Usage
 import argparse
 import os
 import re
+from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+from tueplots import bundles
+
+plt.rcParams.update(bundles.icml2024(usetex=False))
+plt.rcParams.update({
+    "font.size": 10,
+    "axes.labelsize": 8,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+})
+
+FIGSIZE = (10, 11)
+
+_STYLE = {
+    "plot_linewidth":     1.5,
+    "plot_markersize":    4,
+    "fill_alpha":         0.15,
+    "hline_linewidth":    0.9,
+    "hline_alpha":        0.55,
+    "annot_fontsize":     7.5,
+    "outlier_markersize": 8,
+    "outlier_fontsize":   7,
+    "bbox_lw":            0.7,
+    "grid_alpha":         0.3,
+    "legend_framealpha":  0.85,
+    "plot_dpi":           150,
+}
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR = os.path.join(SCRIPT_DIR, "plots")
@@ -199,13 +226,66 @@ def make_piecewise(break_y, compress):
     return forward, inverse
 
 
+def _fmt_val(v, col):
+    """Format an outlier value with appropriate precision/units."""
+    if col in ("avg_force_z_error", "var_force_z_error"):
+        if abs(v) >= 1_000:
+            return f"{v/1_000:.1f}k"
+        return f"{v:.0f}"
+    if col in ("avg_position_error", "var_position_error"):
+        if abs(v) >= 0.1:
+            return f"{v:.2f}"
+        return f"{v:.3f}"
+    return f"{v:.3g}"
+
+
+def _annotate_outliers(ax, datasets, col, top_max):
+    """Draw triangle markers and staggered text labels for outlier points.
+
+    Labels are distributed vertically within each x-group to prevent overlap.
+    """
+    y_annot = top_max * 0.92
+    y_top   = top_max * 0.84
+    y_bot   = top_max * 0.68
+
+    # Group outliers by x-position
+    groups = defaultdict(list)   # x_val -> [(name, yi, color), ...]
+    for name, data, color, marker in datasets:
+        v, vals = data["ee_linear_speed_m_s"], data[col]
+        mask = vals > top_max
+        for xi, yi in zip(v[mask], vals[mask]):
+            groups[float(xi)].append((name, yi, color))
+
+    if not groups:
+        return
+
+    for x_val, entries in groups.items():
+        for _, _, color in entries:
+            ax.plot(x_val, y_annot, marker="^", color=color,
+                    markersize=_STYLE["outlier_markersize"], zorder=5, clip_on=False)
+
+    for x_val, entries in groups.items():
+        n = len(entries)
+        if n == 1:
+            y_positions = [y_top]
+        else:
+            step = (y_top - y_bot) / (n - 1)
+            y_positions = [y_top - i * step for i in range(n)]
+        for (_, yi, color), y_lbl in zip(entries, y_positions):
+            ax.text(x_val, y_lbl, _fmt_val(yi, col),
+                    color=color, fontsize=_STYLE["outlier_fontsize"],
+                    ha="center", va="top",
+                    bbox=dict(boxstyle="round,pad=0.15", fc="white",
+                              ec=color, lw=_STYLE["bbox_lw"], alpha=0.85))
+
+
 def make_plot(cfg, datasets, surface_label="flat surface"):
     col     = cfg["col"]
     break_y = cfg["break_y"]
     compress= cfg["compress"]
     top_max = cfg["top_max"]
 
-    fig, ax = plt.subplots(figsize=(10, 11))
+    fig, ax = plt.subplots(figsize=FIGSIZE)
 
     # ── Plot each method ─────────────────────────────────────────────────────
     for name, data, color, marker in datasets:
@@ -213,7 +293,8 @@ def make_plot(cfg, datasets, surface_label="flat surface"):
         err = data[col]
         err_plot = np.where(err > top_max, np.nan, err)
         ax.plot(v, err_plot, marker=marker, color=color, label=name,
-                linewidth=1.5, markersize=4, markerfacecolor=color)
+                linewidth=_STYLE["plot_linewidth"], markersize=_STYLE["plot_markersize"],
+                markerfacecolor=color)
 
     # ── Piecewise y-scale ────────────────────────────────────────────────────
     fwd, inv = make_piecewise(break_y, compress)
@@ -226,48 +307,32 @@ def make_plot(cfg, datasets, surface_label="flat surface"):
     ax.ticklabel_format(style="plain", axis="y")
 
     # ── Inflection guide line ────────────────────────────────────────────────
-    ax.axhline(break_y, color="gray", linestyle="--", linewidth=0.9, alpha=0.55)
+    ax.axhline(break_y, color="gray", linestyle="--",
+               linewidth=_STYLE["hline_linewidth"], alpha=_STYLE["hline_alpha"])
     ax.annotate(
         f"  scale ÷{compress:.0f} above",
         xy=(0.0, break_y), xycoords=("axes fraction", "data"),
-        fontsize=7.5, color="gray", style="italic", va="bottom",
+        fontsize=_STYLE["annot_fontsize"], color="gray", style="italic", va="bottom",
     )
 
     # ── Annotate outliers (per method) ───────────────────────────────────────
-    y_annot = top_max * 0.92   # where to draw the triangle
-    y_label = top_max * 0.81   # where to put the text box
-    for name, data, color, marker in datasets:
-        v   = data["ee_linear_speed_m_s"]
-        err = data[col]
-        mask = err > top_max
-        if not mask.any():
-            continue
-        for xi, yi in zip(v[mask], err[mask]):
-            ax.plot(xi, y_annot, marker="^", color=color,
-                    markersize=8, zorder=5, clip_on=False)
-            # format the label value
-            lbl = _fmt_val(yi, cfg["col"])
-            ax.text(xi, y_label, lbl, color=color, fontsize=7,
-                    ha="center", va="top",
-                    bbox=dict(boxstyle="round,pad=0.15", fc="white",
-                              ec=color, lw=0.7, alpha=0.85))
+    _annotate_outliers(ax, datasets, col, top_max)
 
     # ── Axes labels / legend / grid ──────────────────────────────────────────
     x_max = max(data["ee_linear_speed_m_s"].max() for _, data, _, _ in datasets)
     ax.set_xlim(0.0, x_max * 1.02)
-    ax.set_xlabel("EE Linear Speed  v = r·ω  (m/s,  r = 0.1 m)", fontsize=11)
-    ax.set_ylabel(cfg["ylabel"], fontsize=11)
-    ax.legend(loc="upper left", fontsize=10, framealpha=0.85)
-    ax.grid(True, alpha=0.3)
+    ax.set_xlabel("EE Linear Speed  v = r·ω  (m/s,  r = 0.1 m)")
+    ax.set_ylabel(cfg["ylabel"])
+    ax.legend(loc="upper left", framealpha=_STYLE["legend_framealpha"])
+    ax.grid(True, alpha=_STYLE["grid_alpha"])
 
     fig.suptitle(
         f"{cfg['title']} vs. EE Linear Speed  [{surface_label}]",
-        fontsize=13,
     )
 
     out = os.path.join(PLOTS_DIR, cfg["out"])
     os.makedirs(PLOTS_DIR, exist_ok=True)
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=_STYLE["plot_dpi"], bbox_inches="tight")
     plt.close(fig)
     print(f"[PLOT] {cfg['out']}")
 
@@ -280,7 +345,7 @@ def make_combined_plot(cfg, datasets):
     compress = cfg["compress"]
     top_max  = cfg["top_max"]
 
-    fig, ax = plt.subplots(figsize=(10, 11))
+    fig, ax = plt.subplots(figsize=FIGSIZE)
 
     # ── Plot each method: band first, then line on top ────────────────────────
     for name, data, color, marker in datasets:
@@ -293,9 +358,10 @@ def make_combined_plot(cfg, datasets):
         hi = np.minimum(mean + std, top_max)       # clip band to plot range
         mean_plot = np.where(mean > top_max, np.nan, mean)
 
-        ax.fill_between(v, lo, hi, alpha=0.15, color=color, linewidth=0)
+        ax.fill_between(v, lo, hi, alpha=_STYLE["fill_alpha"], color=color, linewidth=0)
         ax.plot(v, mean_plot, marker=marker, color=color, label=name,
-                linewidth=1.5, markersize=4, markerfacecolor=color)
+                linewidth=_STYLE["plot_linewidth"], markersize=_STYLE["plot_markersize"],
+                markerfacecolor=color)
 
     # ── Piecewise y-scale ────────────────────────────────────────────────────
     fwd, inv = make_piecewise(break_y, compress)
@@ -308,62 +374,34 @@ def make_combined_plot(cfg, datasets):
     ax.ticklabel_format(style="plain", axis="y")
 
     # ── Inflection guide line ────────────────────────────────────────────────
-    ax.axhline(break_y, color="gray", linestyle="--", linewidth=0.9, alpha=0.55)
+    ax.axhline(break_y, color="gray", linestyle="--",
+               linewidth=_STYLE["hline_linewidth"], alpha=_STYLE["hline_alpha"])
     ax.annotate(
         f"  scale ÷{compress:.0f} above",
         xy=(0.0, break_y), xycoords=("axes fraction", "data"),
-        fontsize=7.5, color="gray", style="italic", va="bottom",
+        fontsize=_STYLE["annot_fontsize"], color="gray", style="italic", va="bottom",
     )
 
     # ── Annotate outliers (based on mean exceeding top_max) ──────────────────
-    y_annot = top_max * 0.92
-    y_label = top_max * 0.81
-    for name, data, color, marker in datasets:
-        v    = data["ee_linear_speed_m_s"]
-        mean = data[col_mean]
-        mask = mean > top_max
-        if not mask.any():
-            continue
-        for xi, yi in zip(v[mask], mean[mask]):
-            ax.plot(xi, y_annot, marker="^", color=color,
-                    markersize=8, zorder=5, clip_on=False)
-            lbl = _fmt_val(yi, col_mean)
-            ax.text(xi, y_label, lbl, color=color, fontsize=7,
-                    ha="center", va="top",
-                    bbox=dict(boxstyle="round,pad=0.15", fc="white",
-                              ec=color, lw=0.7, alpha=0.85))
+    _annotate_outliers(ax, datasets, col_mean, top_max)
 
     # ── Axes labels / legend / grid ──────────────────────────────────────────
     x_max = max(data["ee_linear_speed_m_s"].max() for _, data, _, _ in datasets)
     ax.set_xlim(0.0, x_max * 1.02)
-    ax.set_xlabel("EE Linear Speed  v = r·ω  (m/s,  r = 0.1 m)", fontsize=11)
-    ax.set_ylabel(cfg["ylabel"], fontsize=11)
-    ax.legend(loc="upper left", fontsize=10, framealpha=0.85)
-    ax.grid(True, alpha=0.3)
+    ax.set_xlabel("EE Linear Speed  v = r·ω  (m/s,  r = 0.1 m)")
+    ax.set_ylabel(cfg["ylabel"])
+    ax.legend(loc="upper left", framealpha=_STYLE["legend_framealpha"])
+    ax.grid(True, alpha=_STYLE["grid_alpha"])
 
     fig.suptitle(
         f"Force Error Comparison — {cfg['title']} vs. EE Linear Speed",
-        fontsize=13,
     )
 
     out = os.path.join(PLOTS_DIR, cfg["out"])
     os.makedirs(PLOTS_DIR, exist_ok=True)
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=_STYLE["plot_dpi"], bbox_inches="tight")
     plt.close(fig)
     print(f"[PLOT] {cfg['out']}")
-
-
-def _fmt_val(v, col):
-    """Format an outlier value with appropriate precision/units."""
-    if col in ("avg_force_z_error", "var_force_z_error"):
-        if abs(v) >= 1_000:
-            return f"{v/1_000:.1f}k"
-        return f"{v:.0f}"
-    if col in ("avg_position_error", "var_position_error"):
-        if abs(v) >= 0.1:
-            return f"{v:.2f}"
-        return f"{v:.3f}"
-    return f"{v:.3g}"
 
 
 def main():
