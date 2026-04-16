@@ -40,21 +40,20 @@ plt.rcParams.update({
     "ytick.labelsize": 8,
 })
 
-FIGSIZE = (10, 11)
+FIGSIZE = (3, 3.25)
 
 _STYLE = {
-    "plot_linewidth":     1.5,
-    "plot_markersize":    4,
+    "plot_linewidth":     0.5,
+    "plot_markersize":    1,
     "fill_alpha":         0.15,
     "hline_linewidth":    0.9,
     "hline_alpha":        0.55,
     "annot_fontsize":     7.5,
-    "outlier_markersize": 8,
+    "outlier_markersize": 4,
     "outlier_fontsize":   7,
     "bbox_lw":            0.7,
-    "grid_alpha":         0.3,
     "legend_framealpha":  0.85,
-    "plot_dpi":           150,
+    "plot_dpi":           600,
 }
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -150,7 +149,7 @@ COMBINED_METRICS = [
         title="Force Z Error  (mean ± std)",
         out="force_error_combined.png",
         break_y=3.0,
-        compress=17.0,
+        compress=10.0,
         top_max=20.0,
         yticks=[0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 5, 8, 11, 14, 17, 20],
     ),
@@ -324,11 +323,10 @@ def make_plot(cfg, datasets, surface_label="flat surface"):
     ax.set_xlabel("EE Linear Speed  v = r·ω  (m/s,  r = 0.1 m)")
     ax.set_ylabel(cfg["ylabel"])
     ax.legend(loc="upper left", framealpha=_STYLE["legend_framealpha"])
-    ax.grid(True, alpha=_STYLE["grid_alpha"])
 
-    fig.suptitle(
-        f"{cfg['title']} vs. EE Linear Speed  [{surface_label}]",
-    )
+    # fig.suptitle(
+    #     f"{cfg['title']} vs. EE Linear Speed  [{surface_label}]",
+    # )
 
     out = os.path.join(PLOTS_DIR, cfg["out"])
     os.makedirs(PLOTS_DIR, exist_ok=True)
@@ -391,11 +389,11 @@ def make_combined_plot(cfg, datasets):
     ax.set_xlabel("EE Linear Speed  v = r·ω  (m/s,  r = 0.1 m)")
     ax.set_ylabel(cfg["ylabel"])
     ax.legend(loc="upper left", framealpha=_STYLE["legend_framealpha"])
-    ax.grid(True, alpha=_STYLE["grid_alpha"])
 
-    fig.suptitle(
-        f"Force Error Comparison — {cfg['title']} vs. EE Linear Speed",
-    )
+
+    # fig.suptitle(
+    #     f"Force Error Comparison — {cfg['title']} vs. EE Linear Speed",
+    # )
 
     out = os.path.join(PLOTS_DIR, cfg["out"])
     os.makedirs(PLOTS_DIR, exist_ok=True)
@@ -436,8 +434,8 @@ def main():
         print("No data found. Run experiments first.")
         return
 
-    for cfg in metrics:
-        make_plot(cfg, datasets, surface_label)
+    # for cfg in metrics:
+    #     make_plot(cfg, datasets, surface_label)
 
     for cfg in COMBINED_METRICS:
         make_combined_plot(cfg, datasets)
