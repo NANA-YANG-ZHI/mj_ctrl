@@ -95,6 +95,9 @@
 \usepackage{amssymb}    % for math symbols
 \usepackage{todonotes}  % optional: for \todo{FILL} and \missingfigure
 \usepackage{tcolorbox}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{booktabs}
 % ------------------------------------------------------------------
 
 %%%%%%%%%%%%%%%%%%%
@@ -192,27 +195,114 @@ on a flat or inclined surface while maintaining a constant normal contact force.
 
 \section{Problem Statement}
 
-% TODO (FILL): Formally state the control problem: controlling end-effector
-% contact force in the constrained (normal) direction while tracking a
-% desired trajectory in the motion directions, on flat and inclined surfaces.
+This thesis addresses the problem of simultaneously regulating contact force
+and tracking a desired end-effector trajectory for a robot manipulator in
+persistent contact with a rigid surface.
+Formally, the task couples two objectives that must be achieved in orthogonal
+subspaces of the end-effector space at all times:
+
+\begin{enumerate}
+    \item \textbf{Force regulation.}
+          In the \emph{constrained} (contact-normal) direction, the measured
+          end-effector contact force $F^\Phi_\text{ext}$ must track a constant
+          desired value $F^\Phi_\text{desired}$at high speed.
+    \item \textbf{Trajectory tracking.}
+          In the \emph{unconstrained} (tangential) subspace,
+          the end-effector must follow a circular reference trajectory of
+          radius $r = 0.1\,\mathrm{m}$ centred on the surface.
+\end{enumerate}
+
+The central difficulty is \emph{dynamic coupling}: at high end-effector speeds,
+Coriolis forces, centrifugal acceleration, and Jacobian time-variation introduce
+significant cross-coupling between the motion and force subspaces, causing force
+errors to grow with speed even when the nominal decoupling is theoretically exact.
+A secondary difficulty is \emph{surface friction}: tangential friction forces
+from the contact surface couple back into the normal direction and degrade force
+regulation, an effect that worsens as end-effector speed increases.
+
+The problem is studied on two surface geometries:
+\begin{itemize}
+    \item \textbf{Flat surface} — contact normal aligned with the world
+          $z$-axis; constraint frame and selection matrices are canonical.
+    \item \textbf{Slope surface ($30^\circ$)} — contact normal obtained by
+          rotating the canonical normal by the slope's rotation matrix;
+          selection matrices must be adapted to the inclined geometry.
+\end{itemize}
+
+A further challenge is the \emph{construction} of the constraint Jacobian
+$\mathbf{J}_\Phi$ required by the control law.
+The hybrid force-impedance framework of Iskandar et al.~\cite{iskandar2023}
+assumes $\mathbf{J}_\Phi$ is available but does not detail a general
+procedure for deriving it from the surface geometry.
+This thesis closes that gap by developing a constructive route — via the
+force selection matrix — that yields $\mathbf{J}_\Phi$ directly from
+a geometric description of the contact surface.
+
+Finally, this thesis investigates whether the residual force errors that
+persist in the model-based controller — particularly under friction and at
+high speed — can be reduced by a learning-based compensator.
+A Proximal Policy Optimisation (PPO) policy is trained to output an additive
+torque correction on top of the hybrid controller and is compared against
+the model-based approach in both simulation and on the real robot.
 
 
 \section{Contributions}
 
 The main contributions of this thesis are:
 
-\begin{itemize}
-    \item Implementation and evaluation of the Hybrid Force-Impedance Control
-          framework \cite{iskandar2023} in simulation and on real hardware.
-    \item Systematic study of force control methods (\(F_\text{desired}\),
-          PD, PI, velocity-term compensation) on flat and slope surfaces.
-    \item Extension of the controller from a flat surface (\(\Phi = z\))
-          to an inclined surface (slope \(30^\circ\)) using constraint-frame
-          Jacobians.
-    \item Transfer and validation on the Franka Panda real robot using
-          \texttt{libfranka} and Pinocchio.
-    \item Analysis of friction effects on contact force regulation.
-\end{itemize}
+\begin{enumerate}
+
+    \item \textbf{Implementation and evaluation of the Hybrid Force-Impedance
+          Control framework.}
+          The controller of Iskandar et al.~\cite{iskandar2023} is implemented
+          in MuJoCo simulation and deployed on the Franka Research~3 real robot
+          via \texttt{libfranka} and Pinocchio, validating the framework on
+          physical hardware.
+
+    \item \textbf{Unified simulation-to-real software architecture.}
+          A \texttt{MujocoRobotInterface} wrapper is developed that mirrors the
+          \texttt{libfranka} \texttt{RobotState} interface, enabling the same
+          \texttt{HybridController} and trajectory code to run in simulation and
+          on hardware without modification.
+
+    \item \textbf{Constructive derivation of the constraint Jacobian.}
+          Iskandar et al.~\cite{iskandar2023} assume the constraint Jacobian
+          $\mathbf{J}_\Phi$ is provided but do not specify how to construct
+          it for a given contact geometry.
+          This thesis derives a constructive procedure: the force selection
+          matrix $\mathbf{S}_f$ is defined by inspection from the surface
+          normal, and the constraint Jacobian follows directly as
+          $\mathbf{J}_\Phi = \mathbf{S}_f^\top \mathbf{J}$, making the
+          framework applicable to arbitrary planar surfaces.
+
+    \item \textbf{Extension to inclined surfaces via block-diagonal rotation.}
+          The canonical flat-surface selection matrices are generalised to a
+          $30^\circ$ inclined slope by applying a $6\times6$ block-diagonal
+          rotation, yielding a surface-independent construction procedure.
+
+    \item \textbf{Systematic comparison of force control strategies.}
+          Four force control strategies — desired-force feedforward,
+          PD feedback, PI feedback, and the velocity-term compensation
+          (paper method) — are evaluated on flat and slope surfaces across
+          end-effector speeds from $0.03$ to $1.57\,\mathrm{m/s}$, with and
+          without surface friction.
+
+    \item \textbf{Analysis of friction effects on force regulation.}
+          The interaction between tangential surface friction and the
+          velocity-term compensation is analysed, demonstrating that friction
+          couples into the normal force channel and increases force error in
+          proportion to end-effector speed.
+
+    \item \textbf{Learning-based PPO residual compensation.}
+          A Proximal Policy Optimisation (PPO) policy is trained to output an
+          additive joint-torque correction on top of the model-based hybrid
+          controller, targeting the residual force error that persists under
+          friction and at high speed.
+          The PPO compensator is compared against the paper method in
+          simulation with friction and on the real robot, assessing its
+          ability to bridge the gap left by unmodelled friction dynamics.
+
+\end{enumerate}
 
 
 \section{Thesis Structure}
@@ -251,7 +341,7 @@ The external wrench $F^{\text{ext}} \in \mathbb{R}^{m}$, denoting the force and 
 \end{equation}
 where $m = 6$ when the full Cartesian space is considered. The Jacobian also relates joint velocities to end-effector velocities in operational space via $\dot{y} = J(q)\dot{q}$, where $\dot{y} \in \mathbb{R}^{m}$ contains the translational and rotational end-effector velocities.
 
-The reference paper by Iskandar~et~al.~\cite{ref2} adopts a simplified version of this model, omitting friction terms:
+The reference paper by Iskandar~et~al.~\cite{iskandar_hybrid_2023} adopts a simplified version of this model, omitting friction terms:
 \begin{equation}
     M(q)\ddot{q} + C(q,\dot{q})\dot{q} + g(q) = \tau + \tau^{\text{ext}}.
     \label{eq:joint_dynamics_simple}
@@ -347,295 +437,109 @@ Section~\ref{sec:hybrid_force_frameworks}.
 \section{Constraint Jacobian and Selection Matrices}
 \label{sec:constraints_selection}
 % ==================================================================
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): constraint visualisation like paper
-    \missingfigure{constraint visualisation like paper}
-    \caption{Schematic relating joint space $q$ to Cartesian task space $x$
-             via Jacobian $J$.}
-    \label{fig:constraint visualisation like paper}
-\end{figure}
-% ------------------------------------------------------------------
-% RUNNING EXAMPLE SETUP — introduced once at the top
-% ------------------------------------------------------------------
-\begin{tcolorbox}[
-    colback  = blue!5,
-    colframe = blue!40,
-    title    = {Running Example: Flat-Surface Contact Task},
-    fonttitle= \bfseries\small,
-    left=6pt, right=6pt, top=4pt, bottom=4pt
-]
-\small
-Throughout this section the following concrete setup is used to
-illustrate each equation.
-The robot end-effector presses against a \textbf{flat horizontal
-surface} located at height $z = 0.2\,\mathrm{m}$ in the base
-frame, and is required to maintain a constant normal contact force
-of $\lambda_d = 10\,\mathrm{N}$ in the $z$-direction.
-Only one direction is constrained ($m = 1$); the end-effector
-remains free to translate in $x$ and $y$ and to rotate about all
-three axes ($6 - m = 5$ free directions).
-\end{tcolorbox}
 
-\bigskip
+\subsection{Holonomic Constraints and Constraint Jacobian}
+\label{subsec:holonomic_constraints}
 
-When a robot end-effector is in physical contact with an environment,
-its motion is no longer unconstrained. The environment imposes geometric
-restrictions on the reachable end-effector configurations, which can be
-described by a set of holonomic constraint equations. Assuming that these
-constraints depend only on the joint configuration $\mathbf{q}$ and not
-explicitly on time, they take the form
+A central concept in the hybrid force-impedance control framework presented by
+Iskandar et al.~\cite{iskandar2023hybrid} is the explicit treatment of kinematic
+constraints imposed by the environment on the robot end-effector.
+When the end-effector comes into contact with a surface, the surface restricts
+end-effector motion in certain directions while leaving others free.
+The framework captures this mathematically by introducing holonomic constraints.
+Specifically, the kinematic, holonomic constraints
+$\boldsymbol{\Phi}(\mathbf{q}) \in \mathbb{R}^{c}$
+at the end-effector are formulated as
 %
 \begin{equation}
-    \boldsymbol{\phi}(\mathbf{q}) = \mathbf{0},
-    \label{eq:constraint}
+    \boldsymbol{\Phi}(\mathbf{q}) = \mathbf{0},
+    \label{eq:holonomic_constraint}
 \end{equation}
 %
-where $\boldsymbol{\phi}: \mathbb{R}^n \to \mathbb{R}^m$ is a
-vector-valued function with shape $(m \times 1)$ and $m$ is the number
-of independent constraints imposed by the contact surface.
-Each scalar component of $\boldsymbol{\phi}$ corresponds to one
-independent geometric restriction.
-
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~1 — Constraint equation \eqref{eq:constraint}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-With $m = 1$ and the surface at $z = 0.2\,\mathrm{m}$, the single
-constraint equation is:
-\begin{equation*}
-    \phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.2 = 0
-\end{equation*}
-When $\phi = 0$ the end-effector sits exactly on the surface.
-When $\phi > 0$ it is above the surface (contact lost);
-$\phi < 0$ is physically impossible (penetration).
-\end{tcolorbox}
-
-\bigskip
-
-Differentiating \eqref{eq:constraint} with respect to time yields a
-velocity-level constraint on the admissible joint velocities:
+where $\boldsymbol{\Phi}(\mathbf{q})$ is a continuously differentiable,
+twice-differentiable function of the joint configuration $\mathbf{q}$, and $c$
+denotes the number of constrained directions.
+Without loss of generality, a rigid environment is assumed.
+Differentiating this constraint with respect to time yields the velocity-level
+constraint
 %
 \begin{equation}
-    \mathbf{J}_{\phi}(\mathbf{q})\,\dot{\mathbf{q}} = \mathbf{0},
-    \label{eq:vel_constraint}
+    \mathbf{J}_{\dot{\Phi}}(\mathbf{q})\,\dot{\mathbf{q}} = \mathbf{0},
+    \label{eq:velocity_constraint}
 \end{equation}
 %
-where $\mathbf{J}_{\phi}(\mathbf{q}) = \partial\boldsymbol{\phi}/\partial\mathbf{q}
-\in \mathbb{R}^{m \times n}$ is the \emph{constraint Jacobian}, assumed to
-have full row rank $m$ in the neighbourhood of the operating point.
-Equation~\eqref{eq:vel_constraint} states that joint velocities must lie
-in the null space of $\mathbf{J}_{\phi}$; equivalently, for any virtual
-joint displacement $\delta\mathbf{q}$,
+where \emph{constraint Jacobian} is defined as
+\begin{equation}
+\mathbf{J}_{\dot{\Phi}}(\mathbf{q})
+  = \dfrac{\partial\boldsymbol{\Phi}(\mathbf{q})}{\partial\mathbf{q}}
+  \in \mathbb{R}^{c \times n}
+  \label{eq:definition_constraint_jac}
+\end{equation}
+.
+This matrix maps joint velocities into the constraint subspace; when the
+constraint is active, the product $\mathbf{J}_{\dot{\Phi}}\dot{\mathbf{q}}$
+must remain zero, enforcing zero velocity in the constrained direction(s).
+
+The remaining, unconstrained operational-space coordinates
+$\mathbf{x}(\mathbf{q}) \in \mathbb{R}^{m-c}$ are described by a complementary
+Jacobian
+$\mathbf{J}_{\dot{x}}(\mathbf{q}) = \partial\mathbf{x}(\mathbf{q})/\partial\mathbf{q}$.
+Together with a null-space Jacobian $\mathbf{J}_{v}(\mathbf{q})$ for
+kinematically redundant motion, these form a stacked Jacobian matrix
+$\bar{\mathbf{J}}(\mathbf{q}) \in \mathbb{R}^{n \times n}$ that partitions the
+full joint-velocity space into constraint, motion, and null-space subspaces.
+This decomposition is the foundation of the control law: force is directly
+commanded in the constraint subspace while impedance control governs the motion
+subspace.
+
+Importantly, while the role of the constraint Jacobian $\mathbf{J}_{\dot{\Phi}}$
+is clearly defined in this framework---namely as the partial derivative of the
+constraint function $\boldsymbol{\Phi}$ with respect to the joint coordinates---the
+paper does not detail a general procedure for constructing it for arbitrary contact
+geometries.
+The constraint function $\boldsymbol{\Phi}(\mathbf{q})$ must be provided based on
+knowledge of the environment geometry, and the constraint Jacobian follows from its
+gradient.
+How this is done in practice for specific surface geometries is the subject of
+~\ref{sec:constraint_frame}.
+
+\subsection{Selection Matrix Framework}
+
+To address the computation of the constraint Jacobian for specific task geometries, textbook by Siciliano et al.~\cite{Siciliano_Sciavicco_Villani_Oriolo_2009} provides a constructive path to identifying the force and motion subspaces, based on the concept of \emph{selection matrices}.
+
+In the absence of friction, any reaction force arising at the end-effector from contact with
+the environment must point in a direction that is normal to the constraint surface. Consequently, even though the end-effector wrench $\boldsymbol{h}_e \in \mathbb{R}^6$,
+has six components in general, the contact with the environment can only produce wrenches in the directions dictated by the constraint geometry. This is captured by the decomposition
+\begin{equation}
+    \boldsymbol{h}_e = \boldsymbol{S}_f(\boldsymbol{q})\,\boldsymbol{\lambda},
+    \label{eq:reaction_force}
+\end{equation}
+where $\boldsymbol{\lambda} \in \mathbb{R}^m$ is a vector of \emph{constraint
+forces} encoding the magnitude of the contact along each of the $m$ constrained directions,
+and $\boldsymbol{S}_f(\boldsymbol{q}) \in \mathbb{R}^{6 \times m}$ is the
+\emph{force selection matrix}.
+Each column of $\boldsymbol{S}_f$ is a unit wrench vector aligned with the normal to one
+constraint hypersurface, expressed in the six-dimensional space of end-effector forces and
+torques. The matrix thus acts as a \emph{direction encoder}: it takes the scalar contact
+magnitudes in $\boldsymbol{\lambda}$ and maps them into the correct directions in wrench
+space. For a robot pressing on a frictionless flat surface, for instance, $\boldsymbol{S}_f$
+reduces to a single column containing the surface normal, and $\lambda$ is simply the
+scalar contact force. A key result is that, for a given selection matrix $\mathbf{S}_{f}$, the constraint
+Jacobian can be recovered as
 %
 \begin{equation}
-    \mathbf{J}_{\phi}(\mathbf{q})\,\delta\mathbf{q} = \mathbf{0}.
-    \label{eq:virt_constraint}
-\end{equation}
-
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~2 — Constraint Jacobian \eqref{eq:vel_constraint}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-Differentiating $\phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.2$ gives:
-\begin{equation*}
-    \mathbf{J}_{\phi}(\mathbf{q})\,\dot{\mathbf{q}}
-    = \frac{\partial z_{ee}}{\partial \mathbf{q}}\,\dot{\mathbf{q}}
-    = \dot{z}_{ee} = 0
-\end{equation*}
-This is a $(1 \times 6)$ row vector — one row because $m = 1$.
-It states that no joint motion is allowed to produce a
-$z$-velocity at the end-effector; the robot may only move
-in $x$, $y$, and rotationally while maintaining contact.
-\end{tcolorbox}
-
-\paragraph{Contact forces via the principle of virtual work.}
-In the absence of friction, the environment exerts purely normal
-forces on the end-effector whenever the robot tends to violate the
-constraint. A fundamental property of frictionless constraints is
-that reaction forces act perpendicular to the constraint surface and
-therefore perform no work over any displacement consistent with the
-constraint. Formally, $\delta W_\text{reaction} = 0$ for all
-$\delta\mathbf{q}$ satisfying \eqref{eq:virt_constraint}.
-
-Applying the principle of virtual work to the joint torques
-$\boldsymbol{\tau}$ requires that
-$\boldsymbol{\tau}^{T}\delta\mathbf{q} = 0$ holds for every admissible
-virtual displacement. Since all such $\delta\mathbf{q}$ belong to the
-null space of $\mathbf{J}_{\phi}$, the torque vector must lie in the
-row space of $\mathbf{J}_{\phi}$. This leads directly to the
-parametrisation
-%
-\begin{equation}
-    \boldsymbol{\tau} = \mathbf{J}_{\phi}^{T}(\mathbf{q})\,\boldsymbol{\lambda},
-    \label{eq:joint_torque}
+    \mathbf{J}_{\varphi}(\mathbf{q}) = \mathbf{S}_{f}^{\top}\,\mathbf{J}(\mathbf{q}),
+    \label{eq:constraint_jacobian_from_selection}
 \end{equation}
 %
-where $\boldsymbol{\lambda} \in \mathbb{R}^{m}$ is the vector of
-Lagrange multipliers, physically representing the contact force
-magnitude in each constrained direction.
 
-% ------------------------------------------------------------------
-% Step 1 — General definition of S_f from constraint geometry
-% ------------------------------------------------------------------
-\subparagraph{General definition of $\mathbf{S}_f(\mathbf{q})$.}
-Using the standard Jacobian-transpose relationship
-$\boldsymbol{\tau} = \mathbf{J}^{T}(\mathbf{q})\,\mathbf{h}_e$,
-where $\mathbf{h}_e \in \mathbb{R}^{6}$ is the physical contact wrench at the
-end-effector, and assuming a non-singular Jacobian $\mathbf{J}$,
-the end-effector wrench can be expressed as
-%
-\begin{equation}
-    \mathbf{h}_e
-    = \mathbf{J}^{-T}(\mathbf{q})\,\boldsymbol{\tau}
-    = \mathbf{J}^{-T}(\mathbf{q})\,\mathbf{J}_{\phi}^{T}(\mathbf{q})\,
-      \boldsymbol{\lambda}
-    =: \mathbf{S}_{f}(\mathbf{q})\,\boldsymbol{\lambda},
-    \label{eq:ee_force}
-\end{equation}
-%
-where the \emph{force selection matrix} is defined as
-%
-\begin{equation}
-    \mathbf{S}_{f}(\mathbf{q})
-    = \mathbf{J}^{-T}(\mathbf{q})\,\mathbf{J}_{\phi}^{T}(\mathbf{q})
-    \;\in\mathbb{R}^{6 \times m}.
-    \label{eq:Sf}
-\end{equation}
-%
-The $m$ columns of $\mathbf{S}_{f}(\mathbf{q})$ span the
-\emph{force-controlled subspace} $\mathcal{R}(\mathbf{S}_f)$: the set of
-Cartesian wrench directions that the environment is able to exert on the
-end-effector consistent with the constraint geometry.
-Because both $\mathbf{J}$ and $\mathbf{J}_{\phi}$ depend on the joint
-configuration, $\mathbf{S}_{f}$ is in general configuration-dependent.
-Note also that the constraint Jacobian can always be recovered from
-$\mathbf{S}_f$ via
-$\mathbf{J}_{\phi}(\mathbf{q}) = \mathbf{S}_{f}^{T}(\mathbf{q})\,\mathbf{J}(\mathbf{q})$,
-so the constraint equations \eqref{eq:vel_constraint} can equivalently be written
-as $\mathbf{S}_{f}^{T}(\mathbf{q})\,\mathbf{v}_e = \mathbf{0}$, where
-$\mathbf{v}_e = \mathbf{J}(\mathbf{q})\,\dot{\mathbf{q}}$ is the end-effector
-velocity.
+Complementary to the force selection matrix, a \emph{velocity selection matrix} $\boldsymbol{S}_v(\boldsymbol{q})$ of dimension $6 \times (6 - m)$ can be defined, satisfying the orthogonality condition $\boldsymbol{S}_f^T(\boldsymbol{q})\boldsymbol{S}_v(\boldsymbol{q}) = \boldsymbol{O}$, such that its column space $\mathcal{R}(\boldsymbol{S}_v)$ spans the \emph{velocity-controlled.} Together, $\boldsymbol{S}_f$ and $\boldsymbol{S}_v$ constitute a complete decomposition of the end-effector task space into force-controlled and velocity-controlled subspaces, which is the foundational structure of hybrid motion/force control.
 
-% ------------------------------------------------------------------
-% Step 2 — Simplification for axis-aligned flat surfaces
-% ------------------------------------------------------------------
-\subparagraph{Simplification for axis-aligned flat surfaces.}
-For a contact surface whose outward normal is aligned with a fixed
-base-frame axis, the constraint Jacobian $\mathbf{J}_{\phi}$ reduces to a
-single row of the full Jacobian — namely the row corresponding to the
-normal direction — and the product $\mathbf{J}^{-T}\mathbf{J}_{\phi}^T$
-collapses to the corresponding standard basis vector.
-As a result, $\mathbf{S}_f$ becomes a \emph{constant} matrix that can be
-written by inspection, with no dependence on the robot configuration.
-This simplification is exact (not an approximation) whenever the contact
-normal is constant and expressed in the fixed base frame.
-Treating $\mathbf{S}_f$ as time-invariant is therefore valid for flat
-stationary surfaces, and it is adopted throughout this section to allow
-the selection matrices and the compliance matrix $\mathbf{C}$ to be
-treated as constants in the subsequent differentiation steps.
+For practical task specification, the framework introduces the \emph{constraint frame} $O_c$-$x_cy_cz_c$, an orthogonal reference frame aligned with the geometry of the contact.
 
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~4 — Force selection matrix and end-effector wrench
-           \eqref{eq:ee_force}--\eqref{eq:Sf}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-For a flat horizontal surface with the contact normal aligned with
-the base-frame $z$-axis, the constraint Jacobian picks out only the
-$z$-row of $\mathbf{J}$, and the formula \eqref{eq:Sf} reduces to:
-\begin{equation*}
-    \mathbf{S}_{f}
-    = \mathbf{J}^{-T}\,\mathbf{J}_{\phi}^{T}
-    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix}
-    \in \mathbb{R}^{6\times 1}
-\end{equation*}
-This constant vector can be written by inspection: it simply
-selects the $z$-force component of the end-effector wrench.
-With $\lambda = 10\,\mathrm{N}$, the resulting $6$-dimensional
-end-effector wrench is:
-\begin{equation*}
-    \mathbf{h}_e
-    = \mathbf{S}_f\,\lambda
-    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix} \cdot 10
-    = \begin{bmatrix}0\\0\\10\\0\\0\\0\end{bmatrix}\,\mathrm{N}
-\end{equation*}
-Only the $z$-component is nonzero, confirming that the environment
-exerts a purely normal force of $10\,\mathrm{N}$ on the end-effector
-with no forces or moments in the five unconstrained directions.
-\end{tcolorbox}
+% \subsection{Relation to the Dynamic Hybrid Control Formulation}
 
-\bigskip
-
-% ------------------------------------------------------------------
-% Step 3 — Velocity-controlled subspace and S_v
-% ------------------------------------------------------------------
-\subparagraph{Velocity-controlled subspace and $\mathbf{S}_v$.}
-The complementary \emph{velocity-controlled subspace} captures all
-end-effector motions that are not blocked by the constraint.
-It is spanned by the columns of a matrix
-$\mathbf{S}_{v}(\mathbf{q}) \in \mathbb{R}^{6\times(6-m)}$, which must
-satisfy the \emph{reciprocity condition}
-%
-\begin{equation}
-    \mathbf{S}_{f}^{T}(\mathbf{q})\,\mathbf{S}_{v}(\mathbf{q}) = \mathbf{O}.
-    \label{eq:reciprocity}
-\end{equation}
-%
-Equation~\eqref{eq:reciprocity} is not a statement of geometric
-orthogonality — forces and velocities belong to different vector spaces
-— but rather the \emph{power-duality} (reciprocity) condition: contact
-forces in $\mathcal{R}(\mathbf{S}_f)$ do no work on end-effector
-velocities in $\mathcal{R}(\mathbf{S}_v)$, consistent with a rigid,
-frictionless constraint. In practice, $\mathbf{S}_v$ is any full-column-rank
-matrix whose columns span the null space of $\mathbf{S}_{f}^{T}$; for simple
-geometries it can be written by inspection. The end-effector velocity in the
-unconstrained directions is then parametrised as
-%
-\begin{equation}
-    \mathbf{v}_e = \mathbf{S}_{v}(\mathbf{q})\,\boldsymbol{\nu},
-    \label{eq:ve_Sv}
-\end{equation}
-%
-where $\boldsymbol{\nu} \in \mathbb{R}^{6-m}$ is the velocity vector in the
-motion subspace.
-
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~5 — Velocity-controlled subspace $\mathbf{S}_v$ and
-           reciprocity \eqref{eq:reciprocity}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-With the contact normal in the $z$-direction ($m = 1$), the null space
-of $\mathbf{S}_f^T = [0,0,1,0,0,0]$ consists of all six-vectors whose
-third entry is zero. A basis for this null space is:
-\begin{equation*}
-    \mathbf{S}_v =
-    \begin{bmatrix}
-        1 & 0 & 0 & 0 & 0 \\
-        0 & 1 & 0 & 0 & 0 \\
-        0 & 0 & 0 & 0 & 0 \\
-        0 & 0 & 1 & 0 & 0 \\
-        0 & 0 & 0 & 1 & 0 \\
-        0 & 0 & 0 & 0 & 1
-    \end{bmatrix}
-    \in \mathbb{R}^{6\times 5}
-\end{equation*}
-The five columns correspond to the five unconstrained directions:
-translation in $x$ and $y$, and rotation about all three axes
-(roll, pitch, yaw). The reciprocity condition is verified:
-\begin{equation*}
-    \mathbf{S}_f^T \mathbf{S}_v
-    = \begin{bmatrix}0&0&1&0&0&0\end{bmatrix}
-      \mathbf{S}_v
-    = \mathbf{0}_{1\times 5}
-\end{equation*}
-This confirms that a normal contact force in $z$ performs no work on
-any of the five free end-effector motions — the two subspaces are
-reciprocal, and neither channel interferes with the other.
-\end{tcolorbox}
+% A further related perspective is provided by Yoshikawa~\cite{yoshikawa1987dynamic}, who proposed a dynamic hybrid position/force control scheme in which the end-effector constraint is described by a set of constraint hypersurfaces expressed in the end-effector coordinate frame. The constraint is characterized via the matrix $E_F \in \mathbb{R}^{m \times 6}$, whose rows are the unit normals to the constraint surfaces, yielding the constraint condition $E_F \dot{r} = 0$. The complementary subspace of unconstrained motion directions is spanned by $E_P \in \mathbb{R}^{(6-m) \times 6}$, which together with $E_F$ defines the \emph{constraint frame} for hybrid control~\cite{yoshikawa1987dynamic}. This formulation is notably related to the selection matrix approach, with $E_F^T$ playing a role analogous to $\boldsymbol{S}_f$ and $E_P^T$ to $\boldsymbol{S}_v$. The key contribution of Yoshikawa's work is the rigorous incorporation of robot dynamics into the hybrid control law, showing that, away from singularities, the desired position and force trajectories can be simultaneously realized, and deriving the corresponding joint driving forces from the constrained dynamics~\cite{yoshikawa1987dynamic}.
 
 % ==================================================================
 % ==================================================================
@@ -655,64 +559,29 @@ inverse-dynamics linearisation; and (iii)~hybrid force-impedance control
 \cite{iskandar_hybrid_2023}, which additionally compensates inertial cross-coupling
 and velocity-dependent terms. 
 
-% ==================================================================
 \subsection{Impedance Control and Force Superposition}
-\label{sec:impedance_control}
+\label{sec:impedance_control_force_superposition}
 
-Impedance control does not
-directly regulate force or position in isolation. Instead, it shapes the
-\emph{dynamic relationship} between the end-effector motion and the contact
-force — specifying a desired mechanical impedance: a target mass–spring–damper behaviour. 
-
-Let $\tilde{\mathbf{y}} = \mathbf{y} - \mathbf{y}_d$ denote the
-position error between the current end-effector pose $\mathbf{y}$ and the
-desired pose $\mathbf{y}_d$, both expressed in Cartesian space. The potential
-energy stored in the virtual spring is $V(\tilde{\mathbf{y}})$, and the
-gradient $\partial V / \partial \mathbf{y}$ gives the restoring force.
-The desired Cartesian wrench is
-%
-\begin{equation}
-    \mathbf{F}_{\text{imp}}
-    = -\left(\frac{\partial V(\tilde{\mathbf{y}})}{\partial \mathbf{y}}
-      \right)^T
-      - \mathbf{D}_{y}\,\dot{\mathbf{y}},
-    \label{eq:F_imp}
-\end{equation}
-%
-where $\mathbf{D}_{y}$ is a positive definite damping matrix. For a quadratic
-potential $V = \tfrac{1}{2}\tilde{\mathbf{y}}^T\mathbf{K}_y\tilde{\mathbf{y}}$
-this reduces to the standard spring–damper:
-$\mathbf{F}_{\text{imp}} = -\mathbf{K}_y\tilde{\mathbf{y}} - \mathbf{D}_y\dot{\mathbf{y}}$.
-
-This wrench is mapped to joint torques via the Jacobian transpose, with gravity
-compensation added:
+Impedance control shapes the dynamic relationship between end-effector motion
+and contact force, specifying a desired mass--spring--damper behaviour rather
+than regulating force or position directly. This approach adds simply a force tracking term on top. The impedance
+wrench can be provided as $\mathbf{F}_{\text{imp}} = -\mathbf{K}_y\tilde{\mathbf{y}} -
+\mathbf{D}_y\dot{\mathbf{y}}$ $\mathbf{F}_{\text{imp}} = -(\partial V / \partial \mathbf{y})^T -
+\mathbf{D}_y\dot{\mathbf{y}}$, with virtual
+spring potential and a damping matrix. The corresponding joint torques are
 %
 \begin{equation}
     \boldsymbol{\tau}_{\text{imp}}
-    = \mathbf{J}(\mathbf{q})^T\,\mathbf{F}_{\text{imp}}
-      + \mathbf{g}(\mathbf{q}).
+    = \mathbf{J}^T\mathbf{F}_{\text{imp}} + \mathbf{g}(\mathbf{q}),
     \label{eq:tau_imp}
 \end{equation}
 %
-Equations~\eqref{eq:F_imp}--\eqref{eq:tau_imp} constitute the basic impedance
-control law. Note that the inertia matrix $\mathbf{M}$ and the
-Coriolis/centrifugal matrix $\mathbf{C}$ do not appear.
-
-\paragraph{Limitation.}
-A straightforward extension is to superimpose a desired contact force
-$\mathbf{F}^{\text{des}}$ on top of the impedance torque. The combined
-control law is
-%
-\begin{align}
-    \boldsymbol{\tau} &= \boldsymbol{\tau}_{\text{imp}}
-                          + \boldsymbol{\tau}_{f}, \label{eq:tau_total} \\
-    \boldsymbol{\tau}_{f} &= \mathbf{J}(\mathbf{q})^T\,\mathbf{F}^{\text{des}}.
-    \label{eq:tau_f}
-\end{align}
-%
-The term $\boldsymbol{\tau}_{f}$ can be purely feed-forward
-($\mathbf{F}^{\text{des}}$ is the desired force magnitude), or it can include
-closed-loop force feedback with PI gain to reduce steady-state error.
+which involves no explicit inertia or Coriolis compensation compared to \eqref{eq:joint_dynamics_simple}. A straightforward extension is to superimpose a desired contact force $\mathbf{F}^{\text{des}}$ on top of the
+impedance torque. The combined control law is:
+$\boldsymbol{\tau} = \boldsymbol{\tau}_{\text{imp}} +
+\mathbf{J}^T\mathbf{F}^{\text{des}}$,
+where the force term may be purely feed-forward or augmented with PI feedback
+to reduce steady-state error.
 
 \paragraph{Limitation.}
 Because $\mathbf{M}(\mathbf{q})\ddot{\mathbf{q}}$ and
@@ -725,118 +594,56 @@ A more principled decoupling — and explicit compensation of inertial and
 Coriolis terms — is provided by the methods described in the following
 subsections.
 
-% ==================================================================
 \subsection{Hybrid Force/Velocity Control}
 \label{sec:hybrid_force_velocity}
-% ==================================================================
 
-The scheme regulates a desired contact force $\boldsymbol{\lambda}_d(t)$
-in the constrained directions and a desired end-effector velocity
-$\boldsymbol{\nu}_d(t)$ in the unconstrained directions.
-The velocity reference is a natural
-choice here since the robot slides along the surface rather than
-targeting a fixed Cartesian point.
+This scheme is proposed by \cite{Siciliano_Sciavicco_Villani_Oriolo_2009} and regulates a desired contact force $\boldsymbol{\lambda}_d(t)$ in
+the constrained directions and a desired end-effector velocity $\boldsymbol{\nu}_d(t)$
+in the unconstrained directions.
 
 \paragraph{Inverse-dynamics linearisation.}
-Starting from the operational-space dynamics \eqref{eq:op_dynamics},
-the control input is chosen as the inverse-dynamics law
-%
-\begin{equation}
-    \boldsymbol{\gamma}_e
-    = \mathbf{B}_e(\mathbf{q})\,\boldsymbol{\alpha}
-      + \mathbf{n}_e(\mathbf{q},\dot{\mathbf{q}})
-      + \mathbf{h}_e,
-    \label{eq:inv_dyn}
-\end{equation}
-%
-which cancels $\mathbf{B}_e$, $\mathbf{n}_e$, and $\mathbf{h}_e$ exactly
-and reduces the closed-loop end-effector dynamics to
-$\dot{\mathbf{v}}_e = \boldsymbol{\alpha}$, where $\boldsymbol{\alpha}$ is
-a free auxiliary input in Cartesian space.
+Starting from the \emph{operational-space dynamics} \eqref{eq:op_dynamics}, the inverse-dynamics control input
+$\boldsymbol{\gamma}_e = \mathbf{B}_e\boldsymbol{\alpha} + \mathbf{n}_e + \mathbf{h}_e$
+cancels all nonlinear terms and reduces the closed-loop end-effector dynamics to
+$\dot{\mathbf{v}}_e = \boldsymbol{\alpha}$, where $\boldsymbol{\alpha}$ is a
+free auxiliary input in Cartesian space.
 
-\paragraph{Task-space decomposition for a compliant environment.}
-When the contact surface has finite stiffness, a change in contact
-force $\boldsymbol{\lambda}$ produces a measurable surface deformation
-$\delta\mathbf{x} = \mathbf{C}\,\mathbf{S}_{f}\,\boldsymbol{\lambda}$,
-where $\mathbf{C}$ is the environmental compliance matrix. Accounting
-for this coupling, the end-effector velocity can be decomposed into a
-free-motion component and a compliance-induced component:
-%
-\begin{equation}
-    \mathbf{v}_e
-    = \mathbf{S}_{v}\,\boldsymbol{\nu}
-    + \mathbf{C}\,\mathbf{S}_{f}\,\dot{\boldsymbol{\lambda}},
-    \label{eq:vel_decomp}
-\end{equation}
-%
-where $\boldsymbol{\nu}$ denotes the end-effector velocity in the
-motion subspace and $\dot{\boldsymbol{\lambda}}$ reflects the rate of
-change of the contact force. Assuming the reference frame, the
-selection matrices, and the compliance matrix to be
-\textbf{time-invariant} (valid for a flat stationary surface expressed
-in the fixed base frame), differentiating \eqref{eq:vel_decomp} yields
-the acceleration-level decomposition
-%
-\begin{equation}
-    \dot{\mathbf{v}}_e
-    = \mathbf{S}_{v}\,\dot{\boldsymbol{\nu}}
-    + \mathbf{C}\,\mathbf{S}_{f}\,\ddot{\boldsymbol{\lambda}}.
-    \label{eq:acc_decomp}
-\end{equation}
-
-\begin{tcolorbox}[
-    colback=gray!8, colframe=gray!45,
-    title={Example~6 — Velocity decomposition \eqref{eq:vel_decomp}},
-    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
-\small
-Suppose at some instant the robot is sliding along the surface at
-$\boldsymbol{\nu} = [0.1,\;0,\;0,\;0,\;0]^T\,\mathrm{m/s}$
-(moving in $x$ only) while the contact force is building up at
-$\dot{\lambda} = 2\,\mathrm{N/s}$.
-With surface stiffness $k = 1000\,\mathrm{N/m}$ (compliance
-$C = 1/k = 0.001\,\mathrm{m/N}$), the end-effector velocity is:
-\begin{equation*}
-    \mathbf{v}_e
-    = \underbrace{\mathbf{S}_v\,\boldsymbol{\nu}}_{\text{sliding in }x}
-    + \underbrace{C\,\mathbf{S}_f\,\dot{\lambda}}_{\text{surface deformation in }z}
-    = \begin{bmatrix}0.1\\0\\0\\0\\0\\0\end{bmatrix}
-    + \begin{bmatrix}0\\0\\0.002\\0\\0\\0\end{bmatrix}
-    = \begin{bmatrix}0.1\\0\\0.002\\0\\0\\0\end{bmatrix}\,\mathrm{m/s}
-\end{equation*}
-The small $z$-velocity ($0.002\,\mathrm{m/s}$) comes entirely from
-the surface compressing as the contact force increases —
-not from a commanded motion.
-\end{tcolorbox}
+\paragraph{Task-space decomposition.}
+For a compliant environment with compliance matrix $\mathbf{C}$, a changing
+contact force induces a surface deformation, so the end-effector velocity
+decomposes as
+$\mathbf{v}_e = \mathbf{S}_v\boldsymbol{\nu} + \mathbf{C}\mathbf{S}_f\dot{\boldsymbol{\lambda}}$,
+where the first term is the free sliding motion and the second is the
+compliance-induced deformation velocity. Assuming the selection matrices and
+$\mathbf{C}$ to be time-invariant (valid for a flat stationary surface in the
+fixed base frame), differentiation gives
+$\dot{\mathbf{v}}_e = \mathbf{S}_v\dot{\boldsymbol{\nu}} + \mathbf{C}\mathbf{S}_f\ddot{\boldsymbol{\lambda}}$.
 
 \paragraph{Decoupled control laws.}
-Applying an inverse-dynamics control law to linearise the end-effector
-dynamics reduces the closed-loop system to
-$\dot{\mathbf{v}}_e = \boldsymbol{\alpha}$, where
-$\boldsymbol{\alpha}$ is a new auxiliary input in Cartesian space.
-Choosing
+Choosing the auxiliary input as
+$\boldsymbol{\alpha} = \mathbf{S}_v\boldsymbol{\alpha}_\nu + \mathbf{C}\mathbf{S}_f\mathbf{f}_\lambda$
+achieves complete decoupling:
 %
 \begin{equation}
-    \boldsymbol{\alpha}
-    = \mathbf{S}_{v}\,\boldsymbol{\alpha}_{\nu}
-    + \mathbf{C}\,\mathbf{S}_{f}\,\mathbf{f}_{\lambda}
-    \label{eq:alpha}
+    \dot{\boldsymbol{\nu}} = \boldsymbol{\alpha}_\nu, \qquad
+    \ddot{\boldsymbol{\lambda}} = \mathbf{f}_\lambda.
+    \label{eq:decoupled}
 \end{equation}
 %
-and substituting \eqref{eq:acc_decomp} into the closed-loop equation
-achieves complete decoupling between the two subspaces:
-%
-\begin{align}
-    \dot{\boldsymbol{\nu}} &= \boldsymbol{\alpha}_{\nu},
-    \label{eq:motion_dyn} \\
-    \ddot{\boldsymbol{\lambda}} &= \mathbf{f}_{\lambda}.
-    \label{eq:force_dyn}
-\end{align}
+The motion input $\boldsymbol{\alpha}_\nu$ and force input $\mathbf{f}_\lambda$
+act on independent channels, so a feedforward-PD controller can be designed
+for the velocity subspace and a PD/PI controller for the force subspace
+without cross-channel interference.
 
-Commanding $\boldsymbol{\alpha}_{\nu}$ accelerates the sliding motion independently
-of the contact force. $\mathbf{f}_{\lambda}$ directly commands the force
-acceleration. Neither channel affects the other, so independent
-controllers can be designed for the motion subspace (feedforward-PD on
-velocity) and the force subspace (PD or PI on contact force).
+\paragraph{Limitations.}
+The decoupling relies on exact inverse-dynamics cancellation, requiring an
+accurate dynamic model. The compliance matrix $\mathbf{C}$ is environment-dependent
+and difficult to identify precisely. More fundamentally, the time-invariance
+assumption on $\mathbf{S}_f$ and $\mathbf{S}_v$ restricts the method to flat,
+stationary surfaces; on curved surfaces the contact frame rotates during motion,
+rendering the selection matrices configuration-dependent and invalidating the
+decomposition. Additionally, the control law mixes geometric and analytic
+Jacobians across the force and motion channels, adding implementation complexity.
 
 \paragraph{Comments.}
 1. selection matrices related Jacobian should be geometrical jacobian, however the operational space dynamic forces should be computed using analytical jacobians. A mixture of jacobians are used in the final control law. - complicated
@@ -846,8 +653,8 @@ velocity) and the force subspace (PD or PI on contact force).
 \subsection{Hybrid Force-Impedance Control}
 \label{sec:hybrid_force_impedance}
 
-This framework derives the force control law directly from the full constrained joint-space
-dynamics.
+This framework derives the force control law directly from the full constrained \emph{joint-space
+dynamics.}
 % Unlike the superposition approach in Section~\ref{sec:hybrid_force_velocity},
 % it explicitly accounts for inertial cross-coupling between the force and
 % motion subspaces, making the scheme valid for fast end-effector motions.
@@ -1063,127 +870,21 @@ $\mathbf{F}_{\text{PI}} = -k_{P}(\mathbf{F}^{\text{ext}}_{\dot{\Phi}} -
 can be added to \eqref{eq:F_ctrl_force} to reject steady-state errors from
 unmodelled dynamics.
 
-\section{Friction in Contact Tasks}
-
-% TODO (FILL): Briefly introduce Coulomb + viscous friction models. Explain
-% how tangential friction forces appear in the force subspace and complicate
-% contact force regulation.
-% Reference: Adaptive Control Based Friction Estimation (Huang et al., 2025).
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Illustration: normal force vs. tangential friction force on
-    % a surface, and their interaction with J_motion and J_φ.
-    \missingfigure{Normal force vs.\ tangential friction force on a surface}
-    \caption{Illustration of normal force versus tangential friction force on
-             a surface, and their interaction with $J_\text{motion}$ and
-             $J_\Phi$.}
-    \label{fig:friction}
-\end{figure}
-
 
 % ==================================================================
 \chapter{Methodology and Controller Design}
 \label{chap:methodology}
 % ==================================================================
 
-\section{System Overview}
-
-This section describes the simulation environment, the real-robot hardware
-interface, and the unified software architecture that allows the same
-controller code to run in both settings with minimum modification.
-
-\subsection{Simulation Setup (MuJoCo)}
-\label{sec:mujoco_setup}
-
-All simulation experiments are conducted in MuJoCo~\cite{mujoco} using the
-Franka Research~3 (FR3) robot model.
-The simulation scene is constructed via an XML description: 
-% TODO: source of this xml file: https://github.com/google-deepmind/mujoco_menagerie/tree/main/franka_fr3
-
-The contact model is configured at the end-effector attachment geom with
-\texttt{condim=6} (enabling full 6-dimensional friction forces) and
-\texttt{friction="1~0.02~0.01"} (sliding, torsional, rolling friction
-coefficients).
-To study the effect of surface friction, alternative XML variants set
-\texttt{condim=1}, which disables tangential friction.
-The simulation timestep is set to \(1\,\mathrm{ms}\) (\texttt{dt = 0.001}),
-matching the \(1\,\mathrm{kHz}\) control rate of the real robot.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Simulation scene screenshot: FR3 approaching
-    % slope/flat board in MuJoCo.
-    \missingfigure{MuJoCo simulation scene: FR3 approaching slope/flat board}
-    \caption{MuJoCo simulation scene showing the FR3 robot approaching the
-             slope/flat board.}
-    \label{fig:mujoco_scene}
-\end{figure}
-
-\subsection{Real-Robot Setup (Franka FR3 + libfranka)}
-\label{sec:real_robot_setup}
-
-The real-robot experiments use a Franka Research~3 (FR3) manipulator
-controlled via \texttt{libfranka}.
-The \texttt{libfranka} interface exposes a \(1\,\mathrm{kHz}\) torque control
-loop: at each millisecond tick, the controller reads the current
-\texttt{RobotState} (joint positions, velocities, external force estimate, and
-previous commanded torques) and returns a new torque command.
-
-Robot dynamics — Jacobian, joint inertia matrix, Coriolis matrix, and gravity
-vector — are computed using Pinocchio~\cite{pinocchio} with the FR3 URDF model.
-Pinocchio is used almost identically in both simulation and real-robot code: it
-receives the current joint configuration \(q\) and velocity \(\dot{q}\) from
-the robot state and returns the required kinematic and dynamic quantities.
-This ensures that the controller does not depend on MuJoCo's internal dynamics
-and that simulation-to-real transfer requires no algorithmic changes. Only one exception is FR3 already has gravity compensation and don't need to calculate from Pinocchio.
-
-\subsection{Unified Software Architecture}
-\label{sec:unified_arch}
-
-A key design goal of this work is to run the same controller code in
-simulation and on the real robot.
-This is achieved through the \texttt{MujocoRobotInterface} wrapper, which
-mimics the \texttt{libfranka} \texttt{Robot} and \texttt{RobotState}
-interfaces.
-\texttt{MujocoRobotInterface} exposes the same fields as a libfranka
-\texttt{RobotState}:
-\begin{itemize}
-    \item \texttt{q} — joint positions (\(\mathbb{R}^7\))
-    \item \texttt{dq} — joint velocities (\(\mathbb{R}^7\))
-    \item \texttt{O\_T\_EE} — end-effector homogeneous transformation in the
-          base frame, flattened in column-major order (\(\mathbb{R}^{16}\))
-    \item \texttt{O\_F\_ext\_hat\_K} — estimated external wrench (force and
-          torque) in the stiffness frame (\(\mathbb{R}^6\))
-    \item \texttt{tau\_J\_d} — last commanded joint torques (\(\mathbb{R}^7\))
-\end{itemize}
-Because both environments expose this unified \texttt{RobotState} interface,
-the \texttt{HybridController} and \texttt{CartesianSpacePDController} classes
-operate identically in simulation and on hardware without any
-environment-specific branching.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (DIAGRAM): Software architecture:
-    % libfranka / MujocoRobotInterface → unified RobotState →
-    % controller stack (CartesianSpacePDController → HybridController)
-    \missingfigure{Software architecture: libfranka\,/\,MujocoRobotInterface
-                   $\to$ unified RobotState $\to$ controller stack
-                   (CartesianSpacePDController $\to$ HybridController)}
-    \caption{Software architecture showing how \texttt{libfranka} and
-             \texttt{MujocoRobotInterface} both expose a unified
-             \texttt{RobotState}, which feeds into the controller stack
-             (\texttt{CartesianSpacePDController} $\to$
-             \texttt{HybridController}).}
-    \label{fig:system_architecture}
-\end{figure}
-
-
 \section{Task Definition}
+\label{sec:task_definition}
 
 Two contact tasks are studied in this work, both consisting of drawing a
-horizontal circle while maintaining a constant normal contact force against a
-surface.
+circle while maintaining a constant normal contact force against a surface.
+Full experimental details — hardware setup, software architecture, and
+results — are given in Chapter~\ref{chap:experiments}; here the task geometry
+is introduced because it directly determines the constraint-frame construction
+developed in the following sections.
 
 \paragraph{Task 1 — Flat surface.}
 The end-effector draws a circle on a flat horizontal surface
@@ -1195,8 +896,7 @@ spans the \(xy\)-plane and all three rotation axes.
 The end-effector draws a circle on a surface inclined at \(30^\circ\)
 (\(\texttt{euler} = [30^\circ, 0^\circ, 0^\circ]\)).
 The constraint direction is the surface normal, obtained by rotating the
-world \(z\)-axis by the slope rotation matrix \(R\).
-TODO: slope angle is an variable
+world \(z\)-axis by the slope rotation matrix \(R_\text{slope}\).
 
 \paragraph{Trajectory parametrisation.}
 In both tasks the circle has radius \(r = 0.1\,\mathrm{m}\), centred at a
@@ -1220,19 +920,8 @@ The desired end-effector position, velocity, and acceleration at time \(t\) are
               \end{bmatrix},
 \end{align}
 where \(p_c\) is the circle centre in the world frame and \(R_\text{slope}\)
-is the slope rotation matrix.
+is the slope rotation matrix (identity for the flat surface).
 The desired orientation is kept constant throughout the circle motion.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): 3D trajectory visualisation: desired circle path on flat
-    % and slope surfaces.
-    \missingfigure{3D trajectory: desired circle path on flat surface and on slope}
-    \caption{Three-dimensional trajectory visualisation showing the desired
-             circle path on the flat surface (left) and the slope surface
-             (right).}
-    \label{fig:trajectory_3d}
-\end{figure}
 
 \begin{figure}[htbp]
     \centering
@@ -1245,30 +934,129 @@ The desired orientation is kept constant throughout the circle motion.
 \end{figure}
 
 
-\section{Constraint Frame and Selection Matrices}
+\section{Implementation of Constraint Frame and Selection Matrices}
 \label{sec:constraint_frame}
 
-The hybrid force/velocity controller partitions the six-dimensional
-end-effector space into a one-dimensional \emph{force subspace}
-(the constraint direction, normal to the contact surface) and a
-five-dimensional \emph{motion subspace} (the tangent plane and all
-rotational directions).
-This partitioning is encoded by two constant selection matrices,
-\(S_f \in \mathbb{R}^{6 \times 1}\) and \(S_v \in \mathbb{R}^{6 \times 5}\),
-which satisfy \(S_f^\top S_v = 0\) and together span all six Cartesian
-directions.
+This section develops the constraint-frame formalism using the flat-surface
+circle-drawing task (Task~1) as a running example.
+The robot end-effector presses against a \textbf{flat horizontal surface} at
+height $z = 0.46\,\mathrm{m}$ in the base frame while drawing a circle of
+radius $r = 0.1\,\mathrm{m}$ in the $xy$-plane.
+It is required to maintain a constant normal contact force of
+$\lambda_d = -8\,\mathrm{N}$ in the $z$-direction, pointing into surface.
+Only one direction is constrained ($m = 1$); the end-effector remains free
+to translate in $x$ and $y$ and to rotate about all three axes
+($6 - m = 5$ free directions). In order to make it easy for end-effector to keep contact with surface. the end-effector rotation is set as constant and parallel to the surface.
 
-\paragraph{Canonical selection matrices.}
-For a flat horizontal surface the constraint direction is the world
-\(z\)-axis, so the canonical force selection vector is
+% ------------------------------------------------------------------
+% Holonomic constraint
+% ------------------------------------------------------------------
+\subsection*{Holonomic constraint}
+
+When the end-effector is in physical contact with the surface, the environment
+imposes a geometric restriction on the reachable configurations.
+Assuming the constraint depends only on the joint configuration
+$\mathbf{q}$ (holonomic), it takes the form $\boldsymbol{\phi}(\mathbf{q}) = \mathbf{0}$\eqref{eq:holonomic_constraint}, 
+where $\boldsymbol{\phi}: \mathbb{R}^n \to \mathbb{R}^m$ and $m$ is the number
+of independent constraints.
+
+\begin{tcolorbox}[
+    colback=gray!8, colframe=gray!45,
+    title={Example~1 — Constraint equation \eqref{eq:holonomic_constraint}},
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
+\small
+With $m = 1$ and the surface at $z = 0.46\,\mathrm{m}$, the single
+constraint equation is:
+\begin{equation*}
+    \phi(\mathbf{q}) = z_{ee}(\mathbf{q}) - 0.46 = 0
+\end{equation*}
+When $\phi = 0$ the end-effector sits exactly on the surface.
+When $\phi > 0$ it is above the surface (contact lost);
+$\phi < 0$ is penetrating into surface.
+\end{tcolorbox}
+
+% ------------------------------------------------------------------
+% Force selection matrix S_f
+% ------------------------------------------------------------------
+\subsection*{Constraint Jacobian and Force selection matrix \(\mathbf{S}_f\)}
+
+The hybrid force/velocity controller partitions the six-dimensional
+end-effector space into a \emph{force subspace} (constrained directions)
+and a \emph{motion subspace} (free directions).
+For a surface whose outward normal is aligned with a fixed base-frame axis,
+the constraint Jacobian $\mathbf{J}_{\phi}$ picks out only the corresponding
+row of the full Jacobian, and the force selection vector
+$\mathbf{S}_f \in \mathbb{R}^{6 \times 1}$ reduces to the matching standard
+basis vector — a \emph{constant} that can be written by inspection.
+For the flat horizontal surface with the normal in the $z$-direction:
+%
 \begin{equation}
-    S_{f,c} = \begin{bmatrix}0&0&1&0&0&0\end{bmatrix}^\top \in \mathbb{R}^{6},
+    \mathbf{S}_{f}
+    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix}
+    \in \mathbb{R}^{6\times 1}.
+    \label{eq:Sf_flat}
 \end{equation}
-and the canonical motion selection matrix selects the remaining five
-directions: \(x\) tangential (row~0), \(y\) tangential (row~1), and the
-three rotation axes \(r_x\) (row~3), \(r_y\) (row~4), \(r_z\) (row~5):
+We can deduct this selection matrix from the definition of constraint Jacobian \eqref{eq:definition_constraint_jac} as well.
+For a flat horizontal surface with constant height $h$, the holonomic constraint is expressed as
+%
 \begin{equation}
-    S_{v,c} =
+    \boldsymbol{\Phi}(\mathbf{q}) = z(\mathbf{q}) - h = 0,
+    \label{eq:constraint_flat_surface}
+\end{equation}
+%
+\begin{equation}
+    \mathbf{J}_{\phi} = \frac{\partial \boldsymbol{\phi}}{\partial \mathbf{q}} = 
+    \frac{\partial \boldsymbol{\phi}}{\partial \mathbf{x}} \cdot \frac{\partial \mathbf{x}}{\partial \mathbf{q}} = 
+    \frac{\partial (z - h)}{\partial \mathbf{x}} \cdot \mathbf{J}
+    \label{eq:constraint_jacobian}
+\end{equation}
+\begin{equation}
+    \mathbf{J}_{\phi} = \begin{bmatrix}0 & 0 & 1 & 0 & 0 & 0\end{bmatrix} ^T \cdot \mathbf{J}
+    \label{eq:constraint_jacobian_flat}
+\end{equation}
+
+The deducted force selection matrix $\mathbf{S}_f$ yields out same result as the manuel inspection.
+
+
+\begin{tcolorbox}[
+    colback=gray!8, colframe=gray!45,
+    title={Example~4 — Force selection matrix and end-effector wrench},
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
+\small
+$\lambda$ is a vector of constraint forces encoding the magnitude of the contact along constrained directions, in this example, along z axis. With $\mathbf{S}_f$ it can be mapped back to the six-dimensional end-effector wrench space as:
+
+\begin{equation*}
+    \mathbf{h}_e
+    = \mathbf{S}_f\,\lambda
+    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix} \cdot 8
+    = \begin{bmatrix}0\\0\\8\\0\\0\\0\end{bmatrix}\,\mathrm{N}
+\end{equation*}
+\end{tcolorbox}
+
+% ------------------------------------------------------------------
+% Motion selection matrix S_v
+% ------------------------------------------------------------------
+\subsection*{Motion selection matrix \(\mathbf{S}_v\)}
+
+The complementary \emph{motion-controlled subspace} is spanned by the columns
+of $\mathbf{S}_{v} \in \mathbb{R}^{6\times(6-m)}$, which must satisfy the
+\emph{reciprocity condition}
+%
+\begin{equation}
+    \mathbf{S}_{f}^{T}\,\mathbf{S}_{v} = \mathbf{O}.
+    \label{eq:reciprocity}
+\end{equation}
+%
+This is the \emph{power-duality} (reciprocity) condition: contact forces in
+$\mathcal{R}(\mathbf{S}_f)$ do no work on velocities in
+$\mathcal{R}(\mathbf{S}_v)$, consistent with a rigid frictionless constraint.
+For the flat surface ($m = 1$, normal in $z$), the canonical choices are
+%
+\begin{equation}
+    \mathbf{S}_{f,c}
+    = \begin{bmatrix}0\\0\\1\\0\\0\\0\end{bmatrix},
+    \qquad
+    \mathbf{S}_{v,c} =
     \begin{bmatrix}
         1 & 0 & 0 & 0 & 0 \\
         0 & 1 & 0 & 0 & 0 \\
@@ -1276,57 +1064,172 @@ three rotation axes \(r_x\) (row~3), \(r_y\) (row~4), \(r_z\) (row~5):
         0 & 0 & 1 & 0 & 0 \\
         0 & 0 & 0 & 1 & 0 \\
         0 & 0 & 0 & 0 & 1
-    \end{bmatrix} \in \mathbb{R}^{6 \times 5}.
+    \end{bmatrix}
+    \in \mathbb{R}^{6 \times 5}.
+    \label{eq:Sv_flat}
 \end{equation}
-Note that \(r_z\) (yaw around the surface normal) is deliberately included in
-the motion subspace rather than the force subspace; fixing it would
-over-constrain the orientation and cause drift in the yaw direction.
+%
+The five columns of $\mathbf{S}_{v,c}$ correspond to the five unconstrained
+directions: translation in $x$ (row~0) and $y$ (row~1), and rotation about
+$r_x$ (row~3), $r_y$ (row~4), and $r_z$ (row~5).
+Note that yaw $r_z$ is deliberately placed in the motion subspace; fixing it
+would over-constrain the orientation and cause yaw drift during circular motion.
 
-\paragraph{Slope generalisation via block-diagonal rotation.}
-For the \(30^\circ\) inclined slope, the constraint direction is no longer
-aligned with the world \(z\)-axis.
-The surface normal in the world frame is obtained by rotating the
-canonical normal \([0,0,1]^\top\) by the slope's Euler-angle rotation
-matrix \(R_\text{slope} \in \mathrm{SO}(3)\).
-The full \(6 \times 6\) block-diagonal rotation mapping both translational and
-rotational components is
-\begin{equation}
-    \mathbf{R} =
-    \begin{bmatrix} R_\text{slope} & 0 \\ 0 & R_\text{slope} \end{bmatrix}
-    \in \mathbb{R}^{6 \times 6},
-\end{equation}
-and the world-frame selection matrices are
-\begin{equation}
-    S_f = \mathbf{R}\,S_{f,c}, \qquad S_v = \mathbf{R}\,S_{v,c}.
-\end{equation}
+\begin{tcolorbox}[
+    colback=gray!8, colframe=gray!45,
+    title={Example~5 — Motion selection matrix $\mathbf{S}_v$ and
+           reciprocity \eqref{eq:reciprocity}},
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt]
+\small
+With $\mathbf{S}_f^T = [0,0,1,0,0,0]$, the null space consists of all
+six-vectors whose third entry is zero. The canonical basis is:
+\begin{equation*}
+    \mathbf{S}_{v,c} =
+    \begin{bmatrix}
+        1 & 0 & 0 & 0 & 0 \\
+        0 & 1 & 0 & 0 & 0 \\
+        0 & 0 & 0 & 0 & 0 \\
+        0 & 0 & 1 & 0 & 0 \\
+        0 & 0 & 0 & 1 & 0 \\
+        0 & 0 & 0 & 0 & 1
+    \end{bmatrix}
+    \in \mathbb{R}^{6\times 5}
+\end{equation*}
+Rows: $v_x$ (circle tangential), $v_y$ (circle tangential), $v_z$
+(zero — constrained), $\omega_x$, $\omega_y$, $\omega_z$.
+Reciprocity check:
+\begin{equation*}
+    \mathbf{S}_{f,c}^T\,\mathbf{S}_{v,c}
+    = \begin{bmatrix}0&0&1&0&0&0\end{bmatrix}
+      \mathbf{S}_{v,c}
+    = \mathbf{0}_{1\times 5}
+\end{equation*}
+The normal contact force performs no work on any of the five free
+end-effector motions — the two subspaces are reciprocal.
+During circle drawing, the velocity command $\boldsymbol{\nu}(t) =
+[\dot{x}_d,\,\dot{y}_d,\,0,\,0,\,0]^\top$ is carried entirely within
+$\mathcal{R}(\mathbf{S}_{v,c})$, confirming that motion and force
+channels are decoupled by construction.
+\end{tcolorbox}
 
-\paragraph{Constraint and motion Jacobians.}
+% ------------------------------------------------------------------
+% Projected Jacobians
+% ------------------------------------------------------------------
+\subsection*{Constraint and motion Jacobians}
+
 The projected Jacobians used by the controller are
 \begin{equation}
-    J_\Phi = S_f^\top J, \qquad J_\text{motion} = S_v^\top J,
+    J_\Phi = \mathbf{S}_{f,c}^\top J, \qquad
+    J_\text{motion} = \mathbf{S}_{v,c}^\top J,
+    \label{eq:proj_jacobians}
 \end{equation}
-where \(J \in \mathbb{R}^{6 \times 7}\) is the full geometric Jacobian of
+where $J \in \mathbb{R}^{6 \times 7}$ is the full geometric Jacobian of
 the end-effector.
-
-\paragraph{Key simplification for planar surfaces.}
-Because \(S_f\) and \(\mathbf{R}\) depend only on the surface geometry — not
-on the robot configuration — they are \emph{constant} throughout the motion.
-This implies \(\dot{J}_\Phi \approx \dot{S}_f^\top J + S_f^\top \dot{J}
-= S_f^\top \dot{J}\), and in the force dynamics derivation the term
-\(\dot{J}_\Phi\) can be treated as arising solely from the Jacobian
-time-derivative \(\dot{J}\).
+Because $\mathbf{S}_{f,c}$ and $\mathbf{S}_{v,c}$ depend only on the surface
+geometry and not on the robot configuration, they are \emph{constant}
+throughout the circle motion.
+This implies $\dot{J}_\Phi = \mathbf{S}_{f,c}^\top \dot{J}$, so in the
+force dynamics derivation the term $\dot{J}_\Phi$ arises solely from the
+Jacobian time-derivative $\dot{J}$.
 This simplification does \emph{not} hold for curved surfaces (e.g.\ a sphere),
 where the normal direction rotates as the end-effector moves.
 
 \begin{figure}[htbp]
     \centering
     % TODO (PLOT): Visual: selection matrix S_f (6×1) and S_v (6×5)
-    % structures for flat vs. slope.
-    \missingfigure{Selection matrix structures $S_f$ (6×1) and $S_v$ (6×5) for flat vs.\ slope}
-    \caption{Structure of the selection matrices $S_f$ ($6\times1$) and
-             $S_v$ ($6\times5$) for the flat surface (left) and the slope
-             surface (right).}
+    % structures for flat surface.
+    \missingfigure{Selection matrix structures $S_{f,c}$ (6×1) and $S_{v,c}$ (6×5) for flat surface}
+    \caption{Structure of the canonical selection matrices $\mathbf{S}_{f,c}$
+             ($6\times1$) and $\mathbf{S}_{v,c}$ ($6\times5$) for the flat
+             horizontal surface.}
     \label{fig:selection_matrices}
+\end{figure}
+
+
+% ==================================================================
+\section{Slope Surface: Constraint Frame via Block-Diagonal Rotation}
+\label{sec:slope_frame}
+% ==================================================================
+
+For the inclined surface (Task~2), the constraint direction is no longer
+aligned with the world $z$-axis.
+The approach taken here is to rotate the canonical flat-surface matrices
+by the surface inclination, which requires no re-derivation of the
+selection-matrix theory.
+
+\subsection*{Block-diagonal rotation matrix}
+
+Let $R_\text{slope} \in \mathrm{SO}(3)$ be the rotation matrix that maps
+the world frame into the surface frame (i.e.\ the $z$-axis of the surface
+frame is the outward surface normal).
+To rotate a full $6$-dimensional end-effector vector — which concatenates
+linear and angular parts — both halves must be rotated independently.
+The full $6\times 6$ block-diagonal rotation is
+\begin{equation}
+    \mathbf{R} =
+    \begin{bmatrix} R_\text{slope} & \mathbf{0} \\ \mathbf{0} & R_\text{slope} \end{bmatrix}
+    \in \mathbb{R}^{6 \times 6}.
+    \label{eq:R_block}
+\end{equation}
+The world-frame selection matrices for the slope are then
+\begin{equation}
+    \mathbf{S}_f = \mathbf{R}\,\mathbf{S}_{f,c}, \qquad
+    \mathbf{S}_v = \mathbf{R}\,\mathbf{S}_{v,c}.
+    \label{eq:slope_selection}
+\end{equation}
+
+\subsection*{Concrete numbers for a \(30^\circ\) slope}
+
+For a surface inclined at $\alpha = 30^\circ$ about the $x$-axis,
+the slope rotation matrix is
+\begin{equation}
+    R_\text{slope} =
+    \begin{bmatrix}
+        1 & 0 & 0 \\
+        0 & \cos 30^\circ & -\sin 30^\circ \\
+        0 & \sin 30^\circ &  \cos 30^\circ
+    \end{bmatrix}
+    =
+    \begin{bmatrix}
+        1 & 0 & 0 \\
+        0 & \tfrac{\sqrt{3}}{2} & -\tfrac{1}{2} \\
+        0 & \tfrac{1}{2} & \tfrac{\sqrt{3}}{2}
+    \end{bmatrix}.
+\end{equation}
+Applying \eqref{eq:slope_selection} to the canonical force selection vector
+$\mathbf{S}_{f,c} = [0,0,1,0,0,0]^\top$ yields the slope surface normal in
+the world frame:
+\begin{equation}
+    \mathbf{S}_f =
+    \mathbf{R}\,\mathbf{S}_{f,c}
+    =
+    \begin{bmatrix}
+        0 \\ -\tfrac{1}{2} \\ \tfrac{\sqrt{3}}{2} \\ 0 \\ -\tfrac{1}{2} \\ \tfrac{\sqrt{3}}{2}
+    \end{bmatrix}
+    \approx
+    \begin{bmatrix}
+        0 \\ -0.500 \\ 0.866 \\ 0 \\ -0.500 \\ 0.866
+    \end{bmatrix}
+    \in \mathbb{R}^{6}.
+\end{equation}
+The full motion selection matrix $\mathbf{S}_v = \mathbf{R}\,\mathbf{S}_{v,c}$
+follows by multiplying each column of $\mathbf{S}_{v,c}$ by $\mathbf{R}$.
+Because $\mathbf{R}$ is fixed for a planar slope (the surface normal is
+constant in the world frame), both $\mathbf{S}_f$ and $\mathbf{S}_v$ are
+\emph{constant} throughout the experiment — the same simplification that
+holds for the flat surface.
+The projected Jacobians are computed identically to \eqref{eq:proj_jacobians}
+using the rotated matrices in place of the canonical ones.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Visual: selection matrix structures for 30° slope vs flat.
+    \missingfigure{Selection matrix structures $S_f$ (6×1) and $S_v$ (6×5) for the 30° slope surface}
+    \caption{Structure of the selection matrices $\mathbf{S}_f$ ($6\times1$)
+             and $\mathbf{S}_v$ ($6\times5$) for the $30^\circ$ slope surface,
+             obtained by applying the block-diagonal rotation
+             \eqref{eq:R_block} to the canonical flat-surface matrices.}
+    \label{fig:selection_matrices_slope}
 \end{figure}
 
 
@@ -1443,7 +1346,7 @@ system to third order, and stability requires careful selection of
 Tuning was found to be sensitive and outside the scope of this work;
 the method is therefore listed as a future extension.
 
-\subsection{Hybrid Force-Impedance with Velocity-Term Compensation}
+\subsection{Hybrid Control with Dynamic Compensation}
 \label{sec:paper_method}
 
 The full method from Iskandar~et~al.~\cite{iskandar_hybrid_2023} augments the
@@ -1623,67 +1526,187 @@ control phase transitions from \textsc{Approaching} to
 \end{figure}
 
 
+\chapter{Simulation Experiments}
+\label{chap:simulation_experiments}
 % ==================================================================
-\chapter{Simulation Experiments --- Flat Surface}
+
+\section{System Overview}
+
+This section describes the simulation environment, the real-robot hardware
+interface, and the unified software architecture that allows the same
+controller code to run in both settings with minimum modification.
+
+\subsection{Simulation Setup (MuJoCo)}
+\label{sec:mujoco_setup}
+
+All simulation experiments are conducted in MuJoCo~\cite{mujoco} using the
+Franka Research~3 (FR3) robot model.
+The simulation scene is constructed via an MJCF description\cite{Zakka_MuJoCo_Menagerie_A_2022}.
+
+The contact model is configured at the end-effector attachment geom with
+\texttt{condim=6} (enabling full 6-dimensional friction forces) and
+\texttt{friction="1~0.02~0.01"} (sliding, torsional, rolling friction
+coefficients).
+To study the effect of surface friction, alternative XML variants set
+\texttt{condim=1}, which disables tangential friction.
+The simulation timestep is set to \(1\,\mathrm{ms}\),
+matching the \(1\,\mathrm{kHz}\) control rate of the real robot.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Simulation scene screenshot: FR3 approaching
+    % slope/flat board in MuJoCo.
+    \missingfigure{MuJoCo simulation scene: FR3 approaching slope/flat board}
+    \caption{MuJoCo simulation scene showing the FR3 robot approaching the
+             slope/flat board.}
+    \label{fig:mujoco_scene}
+\end{figure}
+
+\subsection{Real-Robot Setup (Franka FR3 + libfranka)}
+\label{sec:real_robot_setup}
+
+The real-robot experiments use a Franka Research~3 (FR3) manipulator
+controlled via \texttt{libfranka}.
+The \texttt{libfranka} interface exposes a \(1\,\mathrm{kHz}\) torque control
+loop: at each millisecond tick, the controller reads the current
+\texttt{RobotState} (joint positions, velocities, external force estimate, and
+previous commanded torques) and returns a new torque command.
+
+Robot dynamics — Jacobian, joint inertia matrix, Coriolis matrix, and gravity
+vector — are computed using Pinocchio~\cite{pinocchio} with the FR3 URDF model.
+Pinocchio is used almost identically in both simulation and real-robot code: it
+receives the current joint configuration \(q\) and velocity \(\dot{q}\) from
+the robot state and returns the required kinematic and dynamic quantities.
+This ensures that the controller does not depend on MuJoCo's internal dynamics
+and that simulation-to-real transfer requires no algorithmic changes. Only one exception is FR3 already has gravity compensation and don't need to calculate from Pinocchio.
+
+\subsection{Unified Software Architecture}
+\label{sec:unified_arch}
+
+A key design goal of this work is to run the same controller code in
+simulation and on the real robot.
+This is achieved through the \texttt{MujocoRobotInterface} wrapper, which
+mimics the \texttt{libfranka} \texttt{Robot} and \texttt{RobotState}
+interfaces.
+\texttt{MujocoRobotInterface} exposes the same fields as a libfranka
+\texttt{RobotState}:
+\begin{itemize}
+    \item \texttt{q} — joint positions (\(\mathbb{R}^7\))
+    \item \texttt{dq} — joint velocities (\(\mathbb{R}^7\))
+    \item \texttt{O\_T\_EE} — end-effector homogeneous transformation in the
+          base frame, flattened in column-major order (\(\mathbb{R}^{16}\))
+    \item \texttt{O\_F\_ext\_hat\_K} — estimated external wrench (force and
+          torque) in the stiffness frame (\(\mathbb{R}^6\))
+    \item \texttt{tau\_J\_d} — last commanded joint torques (\(\mathbb{R}^7\))
+\end{itemize}
+Because both environments expose this unified \texttt{RobotState} interface,
+the \texttt{HybridController} and \texttt{CartesianSpacePDController} classes
+operate identically in simulation and on hardware without any
+environment-specific branching.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (DIAGRAM): Software architecture:
+    % libfranka / MujocoRobotInterface → unified RobotState →
+    % controller stack (CartesianSpacePDController → HybridController)
+    \missingfigure{Software architecture: libfranka\,/\,MujocoRobotInterface
+                   $\to$ unified RobotState $\to$ controller stack
+                   (CartesianSpacePDController $\to$ HybridController)}
+    \caption{Software architecture showing how \texttt{libfranka} and
+             \texttt{MujocoRobotInterface} both expose a unified
+             \texttt{RobotState}, which feeds into the controller stack
+             (\texttt{CartesianSpacePDController} $\to$
+             \texttt{HybridController}).}
+    \label{fig:system_architecture}
+\end{figure}
+
+
+\section{Task Definition}
+
+Two contact tasks are studied in this work, both consisting of drawing a
+horizontal circle while maintaining a constant normal contact force against a
+surface.
+
+\paragraph{Task 1 — Flat surface.}
+The end-effector draws a circle on a flat horizontal surface
+(\(\texttt{euler} = [0^\circ, 0^\circ, 0^\circ]\)).
+The constraint direction is the world \(z\)-axis, and the motion subspace
+spans the \(xy\)-plane and all three rotation axes.
+
+\paragraph{Task 2 — Slope surface.}
+The end-effector draws a circle on a surface inclined at \(30^\circ\)
+(\(\texttt{euler} = [30^\circ, 0^\circ, 0^\circ]\)).
+The constraint direction is the surface normal, obtained by rotating the
+world \(z\)-axis by the slope rotation matrix \(R\).
+TODO: slope angle is an variable
+
+\paragraph{Trajectory parametrisation.}
+In both tasks the circle has radius \(r = 0.1\,\mathrm{m}\), centred at a
+fixed contact point on the surface.
+The angular speed \(\omega\) is swept from \(\pi \times 0.1\) to
+\(\pi \times 5\,\mathrm{rad/s}\), corresponding to end-effector linear speeds
+from \(0.0314\) to \(1.571\,\mathrm{m/s}\) at the given radius.
+The desired end-effector position, velocity, and acceleration at time \(t\) are
+\begin{align}
+    p_d(t) &= p_c + R_\text{slope}\,
+              \begin{bmatrix}
+                  r\cos(\omega t) \\ r\sin(\omega t) \\ 0
+              \end{bmatrix}, \\
+    \dot{p}_d(t) &= R_\text{slope}\,
+              \begin{bmatrix}
+                  -r\omega\sin(\omega t) \\ r\omega\cos(\omega t) \\ 0
+              \end{bmatrix}, \\
+    \ddot{p}_d(t) &= R_\text{slope}\,
+              \begin{bmatrix}
+                  -r\omega^2\cos(\omega t) \\ -r\omega^2\sin(\omega t) \\ 0
+              \end{bmatrix},
+\end{align}
+where \(p_c\) is the circle centre in the world frame and \(R_\text{slope}\)
+is the slope rotation matrix.
+The desired orientation is kept constant throughout the circle motion.
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): 3D trajectory visualisation: desired circle path on flat
+    % and slope surfaces.
+    \missingfigure{3D trajectory: desired circle path on flat surface and on slope}
+    \caption{Three-dimensional trajectory visualisation showing the desired
+             circle path on the flat surface (left) and the slope surface
+             (right).}
+    \label{fig:trajectory_3d}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    % TODO (PLOT): Coordinate frame diagram: world frame, constraint frame
+    % (normal to surface), motion frame (tangent plane).
+    \missingfigure{Coordinate frame diagram: world, constraint, and motion frames}
+    \caption{Coordinate frame diagram illustrating the world frame, constraint
+             frame (normal to surface), and motion frame (tangent plane).}
+    \label{fig:coord_frames}
+\end{figure}
+
+
+% ==================================================================
+\section{Simulation: Flat Surface — Without Friction}
 % ==================================================================
 
-\section{Experimental Setup}
+The end-effector draws a circle on a flat horizontal surface
+(\(\texttt{euler} = [0^\circ, 0^\circ, 0^\circ]\)).
+The constraint direction is the world \(z\)-axis, and the motion subspace
+spans the \(xy\)-plane and all three rotation axes. In this experiment, \texttt{condim} is set to 1 in the end effector contact frame, which corresponds to a frictionless contact and only normal force will be generated.
 
-% TODO (FILL): Franka Panda in MuJoCo. Flat board. Circle radius, centre,
-% orientation. Control gains (impedance_pos=500, impedance_ori=250).
-% Simulation timestep, friction settings.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): MuJoCo scene rendering: Panda drawing circle on flat
-    % board with trajectory trace.
-    \missingfigure{MuJoCo scene: Panda drawing circle on flat board}
-    \caption{MuJoCo simulation scene rendering of the Panda robot drawing
-             a circle on the flat board with the trajectory trace.}
-    \label{fig:mujoco_flat}
-\end{figure}
-
-
-\section{Force Tracking Results}
-
-% TODO (FILL): Present contact force results for each method tested.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Contact force z vs. time for F_desired, PD, PI,
-    % Bruno+velocity_term at π/4 and π rad/s (frictionless).
-    \missingfigure{Contact force $z$ vs.\ time for all four methods at $\pi/4$ and $\pi$\,rad/s (frictionless)}
-    \caption{Contact force ($z$-direction) versus time for all four control
-             methods at $\pi/4$\,rad/s (top) and $\pi$\,rad/s (bottom) in
-             the frictionless environment.}
-    \label{fig:force_flat_frictionless}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Steady-state force error and RMS across all methods
-    % and speeds.
-    \missingfigure{Steady-state force error and RMS across all methods}
-    \caption{Steady-state force error and RMS comparison across all control
-             methods and circle speeds.}
-    \label{fig:force_error_summary}
-\end{figure}
-
-
-\section{Speed-Dependent Evaluation of Force Control Methods}
-
-To evaluate the impact of end-effector velocity on force control performance and
-to determine the maximum speed at which adequate force and position regulation
-can be sustained, a parametric simulation study was conducted in which the
-angular speed of a circular contact trajectory was varied systematically.
+We want to investigate the impact of end-effector velocity on both force tracking and 
+motion tracking performance across all methods and determine the operational limit of each control method, at what velocity a good control of force and position can be still maintained. A parametric simulation study was conducted in which the angular speed of a circular contact
+trajectory was varied systematically. 
 The task requires the robot to trace a circle of radius $r = 0.1\,\mathrm{m}$
 on a planar surface while maintaining a constant normal contact force of
-$F_d = 8\,\mathrm{N}$.
+$F_d = -8\,\mathrm{N}$.
 The angular speed $\omega$ was swept over 50 uniformly spaced values in the
 range $\omega \in [0.1\pi,\,5.0\pi]\,\mathrm{rad/s}$, corresponding to
 end-effector linear speeds
 $v = r\omega \in [0.031,\,1.571]\,\mathrm{m/s}$.
-Each trial ran for 10 seconds of simulated time.
+Each trial ran for 10 seconds of simulated time. 
 
 Five control strategies were evaluated:
 (1) pure feedforward force control,
@@ -1701,80 +1724,410 @@ $\bar{e}_F = \mathbb{E}[|F_z - F_d|]$
 and the mean position tracking error $\bar{e}_p$,
 together with their respective variances.
 During the initial approach phase the robot closes contact from free space;
-this produces transient force spikes of up to $8\,\mathrm{N}$ that are
+this produces transient force spikes of up to $-10\,\mathrm{N}$ that are
 unrelated to steady-state control quality.
-Accordingly, force metrics are computed only over the interval
+Accordingly, force metrics and position error are computed only over the interval
 $[1\,\mathrm{s},\,10\,\mathrm{s}]$, discarding the first 1000 samples
 (at $\Delta t = 1\,\mathrm{ms}$) to exclude the approach transient.
-Position error, which does not exhibit such a transient, is computed over
-the full $10\,\mathrm{s}$ window.
 
-\paragraph{Force error analysis.}
-All methods exhibit a monotonically increasing force error with speed, but the
+\subsection{Force Tracking Results}
+
+\begin{figure}[h]
+    \centering
+    % Row 1
+    \begin{subfigure}[b]{0.45\textwidth}
+        \includegraphics[width=\textwidth]{images/force_error_comparison.png}
+        \caption{}
+        \label{fig:force_error_comparison}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \includegraphics[width=\textwidth]{images/force_var_comparison.png}
+        \caption{}
+        \label{fig:force_var_comparison}
+    \end{subfigure}
+    
+    \caption{force error comparison}
+    \label{fig:speed_sweep_force_comparison}
+\end{figure}
+
+As shown in Figure~\ref{fig:speed_sweep_force_comparison}, all methods exhibit a monotonically increasing force error with speed, but the
 rate of increase and the absolute level differ markedly.
 
-The \emph{PD controller} is the sole exception to monotonic growth: it
-produces a roughly constant steady-state offset of
-$\bar{e}_F \approx 1.35$--$1.46\,\mathrm{N}$ across the full stable speed
-range $v \lesssim 1.3\,\mathrm{m/s}$.
-This behaviour is characteristic of PD control in the presence of a constant
-disturbance: the proportional term compensates for velocity-induced coupling
-forces with only marginal gain variation, but the absence of integral action
-leaves a permanent bias determined by the controller gains and the contact
-stiffness.
+The \emph{PD controller} produces a roughly constant steady-state offset of
+$\bar{e}_F \approx 1.35$--$1.5\,\mathrm{N}$ across speed
+range $v \lesssim 1.0\,\mathrm{m/s}$. This behaviour is characteristic of PD control, which brings a constant disturbance. 
 
-The \emph{feedforward} controller, which relies solely on the desired force
-command, accumulates the largest errors.
-Its mean force error grows from $\bar{e}_F = 0.019\,\mathrm{N}$
-at $v = 0.031\,\mathrm{m/s}$ to $\bar{e}_F = 8.16\,\mathrm{N}$
-at $v = 1.35\,\mathrm{m/s}$, effectively reaching the target force magnitude
-itself.
-The PI augmentation (\emph{feedforward\,+\,PI}) reduces this substantially:
-$\bar{e}_F$ grows from $0.003\,\mathrm{N}$ to $3.44\,\mathrm{N}$ over the
-same range, a reduction of roughly $58\,\%$ at the highest stable speed.
+The \emph{feedforward} controller, which relies solely on the desired force command, accumulates the largest errors. The force error grows the most rapidly as the velocity increases as plot 1 shows. The PI augmentation (\emph{feedforward\,+\,PI}) reduces this substantially: $\bar{e}_F$ of feedforward\,+\,PI grows from $0.25\,\mathrm{N}$ at $v = 0.4\,\mathrm{m/s}$ to $1.8\,\mathrm{N}$ at $v = 1.07\,\mathrm{m/s}$ 
 
-The \emph{paper method} achieves lower errors than feedforward\,+\,PI in the
-mid-to-high speed regime:
-$\bar{e}_F = 0.028\,\mathrm{N}$ at $v = 0.031\,\mathrm{m/s}$,
-rising to $3.27\,\mathrm{N}$ at $v = 1.35\,\mathrm{m/s}$.
-The addition of PI correction (\emph{paper\,+\,PI}) yields the best overall
-force tracking: $\bar{e}_F = 0.002\,\mathrm{N}$ at the lowest speed,
-increasing to $2.18\,\mathrm{N}$ at $v = 1.35\,\mathrm{m/s}$, representing
-the best absolute performance across the entire speed sweep.
+The \emph{HFDC} controller achieves lower errors than feedforward\,+\,PI in the
+mid-to-high speed regime. Over the same speed regime from $0.4\,\mathrm{m/s}$ to $1.07\,\mathrm{m/s}$, $\bar{e}_F$ of HFDC grows from $0.23\,\mathrm{N}$ to $0.72\,\mathrm{N}$.
+The addition of PI correction (\emph{HFDC\,+\,PI}) yields the best overall
+force tracking: $\bar{e}_F = 0.08\,\mathrm{N}$ at $v = 0.4\,\mathrm{m/s}$,
+increasing to only $0.23\,\mathrm{N}$ at $v = 1.07\,\mathrm{m/s}$, and maintain $\bar{e}_F$ as $2.3\,\mathrm{N}$ even when $v = 1.35\,\mathrm{m/s}$,  representing
+the best absolute performance across all methods.
 
-\paragraph{Trajectory tracking and critical speed.}
-Position error remains uniformly small---in the range
-$3$--$14\,\mathrm{mm}$---for all methods at speeds below a critical
-threshold.
-A sharp, abrupt increase in $\bar{e}_p$ is observed for all methods near
-$v \approx 1.38$--$1.41\,\mathrm{m/s}$
-($\omega \approx 13.8$--$14.1\,\mathrm{rad/s}$, i.e.\ approximately
-$4.4\pi\,\mathrm{rad/s}$), indicating loss of trajectory tracking.
+\subsection{Motion Tracking Results}
+\begin{figure}[h]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{images/position_error_comparison.png}
+        \caption{}
+        \label{fig:position_error_comparison}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{images/position_var_comparison.png}
+        \caption{}
+        \label{fig:position_var_comparison}
+    \end{subfigure}
+    \caption{position error comparison}
+    \label{fig:speed_sweep_position_error}
+\end{figure}
+Position error remains uniformly small for all methods at speeds below a critical
+threshold, in the range of $3$--$14\,\mathrm{mm}$.
+Figure ~\ref{fig:position_error_comparison} shows a sharp, abrupt increase in $\bar{e}_p$ is observed for all methods near
+$v \approx 1.38$--$1.41\,\mathrm{m/s}$, indicating loss of trajectory tracking.
 The PD controller degrades first, with $\bar{e}_p$ jumping from
 $0.018\,\mathrm{m}$ to $0.112\,\mathrm{m}$ at $v = 1.38\,\mathrm{m/s}$
 ($\omega \approx 13.8\,\mathrm{rad/s}$).
-The feedforward and paper methods lose tracking at $v = 1.41\,\mathrm{m/s}$,
-with $\bar{e}_p$ reaching $0.385\,\mathrm{m}$ and $0.218\,\mathrm{m}$
-respectively.
-The paper\,+\,PI and feedforward\,+\,PI methods degrade more gradually at
+The HFDC\,+\,PI and feedforward\,+\,PI methods degrade more gradually at
 $v = 1.41\,\mathrm{m/s}$ ($\bar{e}_p = 0.057\,\mathrm{m}$ and
 $0.023\,\mathrm{m}$, respectively), suggesting that integral force correction
 moderates the destabilising effect of high-frequency contact dynamics.
-Above $v \approx 1.5\,\mathrm{m/s}$ all methods diverge, with paper\,+\,PI
-and feedforward exhibiting catastrophic instability (force errors exceeding
-$10^3\,\mathrm{N}$).
+Above $v \approx 1.5\,\mathrm{m/s}$ all methods diverge, exhibiting catastrophic instability.
 
-In summary, the model-based paper method and its PI variant provide
-consistently superior force tracking relative to the other strategies across the
-full stable operating range, with paper\,+\,PI achieving the lowest
-steady-state force error at every speed.
-The critical speed limit for sustained contact control is approximately
-$v \approx 1.38\,\mathrm{m/s}$ ($\omega \approx 4.4\pi\,\mathrm{rad/s}$),
-beyond which trajectory tracking degrades irrecoverably for all evaluated
-methods.
+\subsection{Detailed Analysis at Representative Speeds: Slow vs. Fast}
+We now examine the force and motion tracking behavior at representative 
+end-effector speeds. For each selected end effector speed, the force tracking 
+error is defined as $e_F = F_z - F_d$ and reported with sign. A positive error indicates loss of contact or insufficient force application; 
+for example, when the end-effector loses contact entirely, $F_z = 0\,\mathrm{N}$ 
+and the error reaches $e_F = 0 - (-8) = +8\,\mathrm{N}$. Conversely, a negative 
+error indicates excessive force against the surface; for example, $F_z = -10\,\mathrm{N}$ 
+yields $e_F = -10 - (-8) = -2\,\mathrm{N}$.
+
+% ── Position tracking: separate, smaller ─────────────────────────────
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.7\textwidth]{images/speed_3.4/position_tracking_xyz.png}
+    \caption{End-effector position tracking in $x$, $y$, and $z$ at speed multiplier $3.4\times$.
+    All controllers achieve comparable and accurate motion tracking. Mean and maximum absolute errors are computed per axis and over $t > 1\,\text{s}$.
+    In $x$: avg 4.6--4.8\,mm, max 8.2--10.4\,mm across all methods.
+    In $y$: avg 1.6--2.1\,mm, max 3.1--3.5\,mm across all methods.
+    In $z$: Feedforward deviates most (avg 4.7\,mm, max 10.9\,mm),
+    while all other controllers remain within avg 3.1\,mm and max 3.9\,mm.
+    }
+    \label{fig:speed_3.4/position_tracking}
+\end{figure}
 
 
-\section{Effect of Friction}
+Figure~\ref{fig:speed_3.4/position_tracking} presents the position tracking 
+performance at $v = 1.068\,\mathrm{m/s}$ ($\omega \approx 3.4\pi\,\mathrm{rad/s}$). All controllers maintain accurate trajectory following throughout the 
+motion. A transient deviation is observed during the first $0.5\,\mathrm{s}$, 
+attributable to the approach phase prior to surface contact, after which all 
+methods converge to the desired trajectory.
+
+% ── Force plot + table: kept on the same page ────────────────────────
+\begin{figure}[H]
+\centering
+\begin{minipage}{\linewidth}
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/speed_3.4/force_tracking.png}
+    \caption{Signed force error $e_F = F_z - F_d$ for all controllers at speed
+    multiplier $3.4\times$.}
+    \label{fig:speed_3.4/force_tracking}
+\end{minipage}
+
+\vspace{1em}
+
+\begin{minipage}{\linewidth}
+\label{tab:force_errors_speed_3.4}
+\begin{center}
+\begin{small}
+\begin{tabular}{lcc}
+\toprule
+Controller & Mean $|e_F|$ (N) & Max $|e_F|$ (N) \\
+\midrule
+Feedforward        & 5.644 & 16.686 \\
+Feedforward + PI   & 1.735 &  4.190 \\
+PD                 & 1.541 &  3.851 \\
+HFDC               & 0.957 &  1.820 \\
+HFDC + PI          & \textbf{0.349} & \textbf{0.517} \\
+\bottomrule
+\end{tabular}
+\end{small}
+\end{center}
+\caption{Mean and maximum absolute force tracking errors $|e_F|$ for all
+         controllers at speed multiplier $3.4\times$
+         (computed over $t > 1\,\text{s}$ to exclude transients).}
+\end{minipage}
+\end{figure}
+
+The corresponding force tracking results, shown in 
+Figure~\ref{fig:speed_3.4/force_tracking}, reveal significant differences among the controllers 
+at this speed. The pure feedforward ($F_\text{des}$) controller fails to maintain 
+stable contact, exhibiting force errors up to $8\,\mathrm{N}$, which means complete loss of contact. The PD controller, or down to $-20\,\mathrm{N}$, which means
+excessive surface penetration. The PD controller
+displays a notably wide error band, indicating high-frequency force oscillations 
+at this end-effector speed. Both the PD controller and the feedforward with PI 
+($F_\text{des}$ + PI) exhibit a mean force error exceeding $1.5\,\mathrm{N}$ and 
+peak errors of approximately $4\,\mathrm{N}$.
+
+In contrast, HFDC controller and its PI-augmented variant 
+(HFDC + PI) achieve substantially reduced force tracking errors. In particular, 
+HFDC + PI attains a mean force error of $0.235\,\mathrm{N}$ and a maximum force 
+error of $0.524\,\mathrm{N}$, demonstrating (to be filled).
+
+\begin{figure}[h]
+    \centering
+    \captionsetup[subfigure]{font=small}
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{images/speed_3.8/force_tracking.png}
+        \caption{Signed force error $e_F = F_z - F_d$ for all controllers
+        at speed multiplier $3.8\times$.
+        Mean and maximum absolute errors (computed over $t > 1\,\text{s}$):\\
+        FF: avg $= 7.330\,\text{N}$, max $= 21.533\,\text{N}$;\\
+        FF + PI: avg $= 2.573\,\text{N}$, max $= 8.000\,\text{N}$;\\
+        PD: avg $= 1.996\,\text{N}$, max $= 8.000\,\text{N}$;\\
+        HFDC: avg $= 1.690\,\text{N}$, max $= 8.000\,\text{N}$;\\
+        HFDC + PI: avg $= 0.904\,\text{N}$, max $= 8.000\,\text{N}$.}
+        \label{fig:speed_3.8/force_tracking}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{images/speed_3.8/position_tracking_xyz.png}
+        \caption{End-effector position tracking in $x$, $y$, and $z$ for all
+        controllers at speed multiplier $3.8\times$.
+        All controllers achieve comparable and accurate motion tracking. Mean and maximum absolute errors are computed per axis and over $t > 1\,\text{s}$.
+        In $x$: avg 5.0--5.7\,mm, max 8.4--11.6\,mm across all methods.
+        In $y$: avg 2.6--4.7\,mm, max 4.4--8.6\,mm.
+        In $z$: Feedforward deviates most (avg 6.2\,mm, max 14.7\,mm),
+        while all other controllers remain within avg 3.0\,mm and max 3.9\,mm.}
+        \label{fig:speed_3.8/position_tracking}
+    \end{subfigure}
+    \caption{Force tracking error and end-effector trajectory at $v \approx 1.07\,\mathrm{m/s}$ 
+    ($\omega \approx 3.4\pi\,\mathrm{rad/s}$). First 2s are plotted.}
+    \label{fig:force_position_details_3.8}
+\end{figure}
+
+Based on the speed sweep results, three distinct operating regimes are identified 
+for the HFDC and HFDC+PI controllers within the circular drawing scenario at 
+radius $r = 0.1\,\mathrm{m}$. Below $v \approx 1.07\,\mathrm{m/s}$ 
+($\omega \approx 3.4\pi\,\mathrm{rad/s}$), both controllers maintain stable 
+contact and accurate force tracking without loss of contact or excessive surface 
+penetration. In the intermediate regime, 
+$1.07 \lesssim v \lesssim 1.38\,\mathrm{m/s}$ 
+($3.4\pi \lesssim \omega \lesssim 4.4\pi\,\mathrm{rad/s}$), intermittent loss 
+of contact occurs; however, the controllers recover without producing dangerous 
+penetration forces, as illustrated in Figure~\ref{fig:force_position_details_3.8}. 
+Beyond $v \approx 1.38\,\mathrm{m/s}$ ($\omega \approx 4.4\pi\,\mathrm{rad/s}$), 
+force tracking degrades irrecoverably for all evaluated methods and precise 
+trajectory following can no longer be maintained, as shown in 
+Figure~\ref{fig:force_position_details_4.4}.
+
+In summary, HFDC and HFDC+PI provide consistently superior force tracking 
+relative to all other evaluated controllers across the full stable operating 
+range, with HFDC+PI achieving the lowest steady-state force error at every speed within operational range.
+
+
+
+\begin{figure}[h]
+    \centering
+    \captionsetup[subfigure]{font=small}
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{images/speed_4.4/force_tracking.png}
+        \caption{Signed force error $e_F = F_z - F_d$ for all controllers.
+        All controllers exhibit marked deterioration compared to lower speeds.
+        Mean and maximum absolute errors (computed over $t > 1\,\text{s}$):\\
+        FF: avg $= 8.042\,\text{N}$, max $= 37.232\,\text{N}$;\\
+        FF + PI: avg $= 4.265\,\text{N}$, max $= 8.298\,\text{N}$;\\
+        PD: avg $= 7.684\,\text{N}$, max $= 8.251\,\text{N}$;\\
+        HFDC: avg $= 3.702\,\text{N}$, max $= 8.550\,\text{N}$;\\
+        HFDC + PI: avg $= 5.003\,\text{N}$, max $= 11.917\,\text{N}$.}
+        \label{fig:speed_4.4/force_tracking}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{images/speed_4.4/position_tracking_xyz.png}
+        \caption{End-effector position tracking in $x$, $y$, and $z$ for all
+        controllers. Mean and maximum absolute errors are computed per axis and over $t > 1\,\text{s}$:
+        PD becomes effectively unstable across all axes
+        ($x$: avg 88.3\,mm, max 466.8\,mm;
+         $y$: avg 34.8\,mm, max 235.1\,mm;
+         $z$: avg 24.4\,mm, max 257.9\,mm).
+        HFDC + PI also exhibits pronounced degradation
+        ($x$: avg 12.4\,mm, max 84.0\,mm).
+        Feedforward degrades notably in $z$ (avg 11.3\,mm, max 26.9\,mm).
+        Only HFDC maintains broadly acceptable tracking across all axes.
+        (avg $\leq$5.5\,mm, max $\leq$12.4\,mm in $x$/$y$;
+        avg 3.2\,mm, max 5.0\,mm in $z$).}
+        \label{fig:speed_4.4/position_tracking}
+    \end{subfigure}
+    \caption{Force tracking error and end-effector trajectory at speed
+    multiplier $4.4\times$ ($v \approx 1.38\,\mathrm{m/s}$).}
+    \label{fig:force_position_details_4.4}
+\end{figure}
+
+
+
+
+
+\subsection{Contact Force Compensation Analysis}
+
+
+
+
+\section{Simulation: Flat Surface — Effect of Friction}
+
+\subsection{Effect of Surface Friction on HFDC}
+\label{sec:friction_sweep}
+
+To characterise the sensitivity of \emph{HFDC} controller to
+surface contact conditions, a parametric simulation study is conducted in
+which the sliding friction coefficient $\mu_s$ of the end-effector contact
+geometry is varied systematically.
+The robot model used is the Franka Research~3 (FR3) simulated in
+MuJoCo with a 6-dimensional contact model
+(\texttt{condim}~$= 6$), which models both tangential friction and rolling friction. For the dominant sliding component, the friction model can be simplified as the standard Coulomb friction cone constraint:
+$
+    \|\mathbf{f}_{\mathrm{tan}}\| \leq \mu_s \, f_{\mathrm{n}},
+    \label{eq:friction_cone}
+$
+where $\mathbf{f}_{\mathrm{tan}}$ denotes the tangential
+contact force vector and $f_{\mathrm{n}} \geq 0$ is the contact normal
+force, and $\mu_s$ is the sliding friction coefficient.
+The remaining contact parameters are held constant throughout the sweep:
+torsional friction coefficient $0.02$ and rolling friction coefficient
+$0.01$.
+
+The end-effector is commanded to draw the same circle of radius $r = 0.1\,\mathrm{m}$ in the robot base frame, at a fixed
+angular speed $\omega = 2\pi\,\mathrm{rad/s}$, corresponding to an end-effector
+tangential speed of $v = r\omega \approx 0.628\,\mathrm{m/s}$.
+The desired contact force along the surface normal (the robot $z$-axis
+in the local contact frame) is $F_d = -8\,\mathrm{N}$. The first $t_{\mathrm{skip}} = 1$\,s
+is excluded from metric computation to allow transients to decay.
+
+Two variants of the Hybrid Force–Position–Damping (HFDC) controller are 
+evaluated: 1) \emph{HFDC}, 2)\emph{HFDC+PI}: augmented with PI term with gains $K_p = 2.0$ and $K_i = 5.0$.
+
+The friction coefficient is swept over ten values
+$\mu \in \{0.1,\,0.2,\,\ldots,\,1.0\}$.
+For each value, the following scalar metrics are recorded over the
+post-skip interval:
+mean absolute force tracking error $\overline{|e_F|}$,
+variance of the force error $\sigma^2_{e_F}$,
+mean Euclidean position tracking error $\overline{e_p}$,
+and position error variance $\sigma^2_{e_p}$. 
+
+Given these metrics, two distinct behavioural regimes are evident, separated by a critical
+friction coefficient $\mu^* \approx 0.4$--$0.5$.
+For $\mu_s \geq \mu^*$, both controllers achieve stable force tracking, with
+$\overline{|e_F|}$ below 1\,N.
+The PI augmentation reduces the steady-state error by approximately a factor of
+three (HFDC: $0.977$\,N at $\mu_s=1.0$; HFDC+PI: $0.337$\,N).
+For $\mu_s < \mu^*$, force tracking degrades severely and monotonically as
+$\mu$ decreases: at $\mu = 0.1$, $\overline{|e_F|}$ reaches over $7$\,N
+for both HFDC and HFDC+PI.
+
+\subsubsection{Contact Slip as the Mechanism of Force Tracking Failure}
+
+The large force errors observed at low $\mu_s$ are caused by contact slip. The end-effector is intentionally sliding along the surface in a circular trajectory, which is the desired behaviour. The problem is a different kind of slip: the contact losing its mechanical grounding when the friction cone constraint is violated. To regulate the normal force while moving tangentially, the controller relies on a stable, well-defined contact frame. At $\mu_s = 0.1$ and a desired normal force of $-8\,\mathrm{N}$, the friction cone permits a maximum tangential force of only 0.8 N. Controllers, executing a circular path at $v \approx 0.628\,\mathrm{m/s}$, require tangential forces well above this limit. The cone constraint is therefore violated continuously, and the contact enters a persistent slip regime.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[t]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{images/tracking_friction_0.7/force_tracking.png}
+        \caption{Signed force error $e_F = F_z - F_d$ for HFDC and HFDC+PI
+        without and with surface friction ($\mu_s = 0.7$).
+        Mean and maximum absolute errors $|e_F|$ (computed over $t > 1\,\text{s}$):\\
+        HFDC (no friction): avg $= 0.257\,\text{N}$, max $= 0.602\,\text{N}$;\\
+        HFDC+PI (no friction): avg $= 0.086\,\text{N}$, max $= 0.176\,\text{N}$;\\
+        HFDC ($\mu_s=0.7$): avg $= 0.879\,\text{N}$, max $= 2.595\,\text{N}$;\\
+        HFDC+PI ($\mu_s=0.7$): avg $= 0.308\,\text{N}$, max $= 1.256\,\text{N}$.\\
+        Surface friction increases force error by a factor of $3\text{--}4\times$.}
+        \label{fig:force_tracking_wfriction_vs_without_0.7}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{images/tracking_friction_0.7/position_tracking_xyz.png}
+        \caption{End-effector position tracking in $x$, $y$, and $z$ without
+        and with surface friction ($\mu_s = 0.7$).
+        Mean and maximum absolute errors per axis (computed over $t > 1\,\text{s}$):\\
+        \textit{Without friction} ---
+        $x$: avg $= 2.0\,\text{mm}$, max $= 4.9\,\text{mm}$;
+        $y$: avg $= 0.7\,\text{mm}$, max $= 2.0\,\text{mm}$;
+        $z$: avg $= 3.3\,\text{mm}$, max $= 3.5\,\text{mm}$.\\
+        \textit{With friction} ($\mu_s = 0.7$) ---
+        $x$: avg $= 4.4\text{--}4.5\,\text{mm}$, max $= 6.9\text{--}7.2\,\text{mm}$;
+        $y$: avg $= 5.6\text{--}5.7\,\text{mm}$, max $= 9.0\,\text{mm}$;
+        $z$: avg $= 8.3\text{--}8.4\,\text{mm}$, max $= 8.7\text{--}9.0\,\text{mm}$.\\
+        HFDC and HFDC+PI perform similarly within each friction condition.
+        Overall, surface friction increases position errors by approximately
+        $2\text{--}8\times$ across all axes compared to the frictionless baseline.}
+        \label{fig:position_tracking_wfriction_vs_without_0.7}
+    \end{subfigure}
+    \caption{Comparison of force and position tracking performance without and
+    with surface friction at $\mu_s = 0.7$. Angular speed is
+    $\omega = 2\pi\,\mathrm{rad/s}$. The frictionless baseline (condim = 1)
+    serves as a reference to quantify how much surface friction degrades
+    tracking performance.}
+    \label{fig:wfriction_vs_without_0.7}
+\end{figure}
+
+
+
+\subsubsection{Frictional Disturbances in the Stable Contact Regime}
+
+Above the critical threshold $\mu_s >= \mu^*$, the contact maintains a stable stick state and force tracking error drops to below 1 N. However, even in this regime, friction is not without cost.
+
+To isolate the effect of surface friction on force tracking performance, a separate experiment is conducted under identical speed and trajectory conditions but with a frictionless contact model (condim = 1). Figure ~\ref{fig:force_tracking_wfriction_vs_without_0.7} shows the force Z error time series for all four controller-friction combinations. In the frictionless case, HFDC achieves an average error of 0.322 N with a smooth, low-amplitude oscillation that follows the circular trajectory frequency. Adding integral action (HFDC+PI) further reduces this to an average of just 0.114 N and a maximum of 0.179 N — demonstrating that the proposed controller is capable of near-perfect normal force tracking when the contact is undisturbed by friction. In comparison, with surface friction present ($\mu_s=0.7$), HFDC alone produces persistent force oscillations at the trajectory frequency, with an average error of 0.942 N and peaks reaching 2.595 N.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.6\textwidth}
+        \includegraphics[width=\textwidth]{images/compensation_comparison/frictionless/compensation_comparison.png}
+        \caption{Frictionless contact (condim\,=\,1).
+        Mean and maximum absolute errors $|e_F|$ (computed over $t > 1\,\text{s}$):\\
+        No contact force comp.: avg $= 0.257\,\text{N}$, max $= 0.602\,\text{N}$;\\
+        No velocity term: avg $= 0.285\,\text{N}$, max $= 0.957\,\text{N}$;\\
+        No control force comp.: avg $= 1.726\,\text{N}$, max $= 4.533\,\text{N}$;\\
+        All compensations ON: avg $= 0.257\,\text{N}$, max $= 0.602\,\text{N}$.}
+        \label{fig:compensation_comparison}
+    \end{subfigure}
+
+    \vspace{0.5em}
+
+    \begin{subfigure}[b]{0.6\textwidth}
+        \includegraphics[width=\textwidth]{images/compensation_comparison/friction_0.7/compensation_comparison.png}
+        \caption{Frictional contact ($\mu_s = 0.7$).
+        Mean and maximum absolute errors $|e_F|$ (computed over $t > 1\,\text{s}$):\\
+        No contact force comp.: avg $= 1.698\,\text{N}$, max $= 6.082\,\text{N}$;\\
+        No velocity term: avg $= 0.867\,\text{N}$, max $= 2.910\,\text{N}$;\\
+        No control force comp.: avg $= 1.731\,\text{N}$, max $= 8.000\,\text{N}$;\\
+        All compensations ON: avg $= 0.879\,\text{N}$, max $= 2.595\,\text{N}$.}
+        \label{fig:compensation_comparison_surface_friction}
+    \end{subfigure}
+
+    \caption{Force tracking error time series for each compensation term
+    variant of HFDC, at angular speed $\omega = 2\pi$~rad/s. Each curve
+    removes one term from the full force control law~\eqref{eq:paper_method}
+    while keeping all others active.}
+    \label{fig:compensation_term_analysis}
+\end{figure}
+
+
+
+\subsubsection{Contact Force Compensation Analysis}
+To further understand the source of this friction-induced degradation, Figure~\ref{fig:compensation_comparison_surface_frictio} isolates the contribution of each compensation term in the force control law under the same frictional conditions ($\mu_s = 0.7$) and at same angular speed $\omega = 2\pi\,\mathrm{rad/s}$. The four variants compared are: the full controller with all terms active, and three cases in which the contact force compensation, velocity term, and control force compensation are each individually removed.
+
+The most significant degradation occurs when either the contact force compensation or the control force compensation is removed. Disabling the contact force compensation raises the average error from 0.880~N to 1.698~N and the peak error from 2.595~N to 6.082~N — nearly doubling the average and more than doubling the peak. This confirms that the contact force compensation, which accounts for tangential contact forces from the motion space projected into the constraint direction, does meaningfully attenuate the disturbance introduced by surface friction. Removing the control force compensation produces an even larger peak error of 8.000~N (average 1.724~N), with large intermittent spikes visible throughout the trajectory. By contrast, disabling the velocity term has a negligible effect: the average error remains virtually unchanged at 0.868~N with a peak of 2.910~N, indicating that Coriolis and Jacobian time-derivative contributions are not a primary factor at this trajectory speed.
+
+Despite the benefit of these compensation terms, none of them fully eliminates the friction-induced oscillations. All four variants exhibit persistent force error at the circular trajectory frequency, and even the full controller retains an average error of 0.880~N and a peak of 2.595~N under friction — substantially above the frictionless baseline of 0.114~N average. This residual error reflects an inherent limitation of the current formulation: the compensation terms are derived from motion space forces and cannot fully capture Coulomb friction at the contact interface.
+
+Taken together, these results demonstrate that HFDC+PI achieves near-ideal normal force tracking in a frictionless contact environment, with an average error below 0.12~N. The introduction of surface friction degrades this performance, but the contact force and control force compensation terms meaningfully attenuate this effect. The remaining error under friction motivates the learning-based approach presented in the following section, where a reinforcement learning agent is trained to compensate for the residual disturbance that the model-based terms cannot capture.
+
+
+
 
 % TODO (FILL): Show how friction degrades force tracking. Explain the role
 % of tangential friction force in the constraint subspace and how it differs
@@ -1800,8 +2153,10 @@ methods.
     \label{fig:friction_norm}
 \end{figure}
 
+% TODO (FILL): angular speed sweep across 5 methods. Explain why faster motion
+% increases force coupling and why the velocity-term compensation becomes
+% more critical.
 
-\section{Contact Force Compensation Analysis}
 
 % TODO (FILL): Deep dive into contact_force_compensation = Λ_φ J_φ M⁻¹ Jᵀ_motion F_ext_x.
 % Show its effect when added (+1), subtracted (–1), or zeroed.
@@ -1819,114 +2174,245 @@ methods.
 \end{figure}
 
 
-\section{Impedance Gain Sensitivity}
-
-% TODO (FILL): Show how impedance_pos values (100, 500, 1000, 1500) affect
-% EE stability and force tracking. Identify stable operating range.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Force tracking and EE position for impedance_pos ∈
-    % {500, 1000, 1500} — 3-subplot comparison.
-    \missingfigure{Force tracking and EE position for impedance\_pos $\in\{500, 1000, 1500\}$}
-    \caption{Force tracking and end-effector position for
-             $k_\text{imp} \in \{500, 1000, 1500\}$\,N/m --- three-subplot
-             comparison.}
-    \label{fig:impedance_sensitivity}
-\end{figure}
-
-
 % ==================================================================
-\chapter{Simulation Experiments --- Slope Surface (\texorpdfstring{$30^\circ$}{30 deg})}
+\section{Simulation: Slope Surface (\texorpdfstring{$30^\circ$}{30 deg}) --- Without Friction}
 % ==================================================================
 
-\section{Slope Setup and Constraint Frame Adaptation}
+The angular speed sweep described for the flat surface is repeated on the
+$30^\circ$ slope with frictionless contact (\texttt{condim}~$= 1$).
+The slope geometry introduces a gravitational component along the surface
+normal direction and rotates the motion and constraint subspaces relative to
+the world frame.
+All experimental parameters are held constant: circle radius $r = 0.1\,\mathrm{m}$,
+desired normal force $F_d = -8\,\mathrm{N}$, speed range
+$\omega \in [0.1\pi,\,5.0\pi]\,\mathrm{rad/s}$
+($v \in [0.031,\,1.571]\,\mathrm{m/s}$),
+and a $10\,\mathrm{s}$ trial duration with metrics computed over
+$t > 1\,\mathrm{s}$ to exclude approach transients.
 
-% TODO (FILL): Describe MuJoCo XML modification for 30° slope, coordinate
-% frame rotation, and how J_φ is computed using the rotated S_f. Explain
-% why J̇_φ ≈ 0 for planar slope.
+\subsection{Force Tracking Results}
 
-\begin{figure}[htbp]
+\begin{figure}[h]
     \centering
-    % TODO (PLOT): MuJoCo scene: Panda on slope environment with constraint
-    % frame axes overlaid.
-    \missingfigure{MuJoCo scene: Panda on slope with constraint frame axes}
-    \caption{MuJoCo simulation scene of the Panda robot on the $30^\circ$
-             slope environment with the constraint frame axes overlaid.}
-    \label{fig:mujoco_slope}
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../angular_speed_sweep/plots/force_error_comparison_slope30.png}
+        \caption{Mean absolute force tracking error $\bar{e}_F$ versus
+                 end-effector speed for all five controllers on the
+                 $30^\circ$ slope (frictionless).
+                 HFDC and HFDC\,+\,PI remain below $0.7\,\mathrm{N}$ up to
+                 $v \approx 1.2\,\mathrm{m/s}$, above which PD,
+                 Feedforward\,+\,PI, and HFDC\,+\,PI escalate sharply.
+                 HFDC is the only method to maintain low error above this
+                 threshold.}
+        \label{fig:force_error_comparison_slope30}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../angular_speed_sweep/plots/force_var_comparison_slope30.png}
+        \caption{Force error variance versus end-effector speed on the
+                 $30^\circ$ slope.
+                 Variance spikes coincide with the onset of intermittent
+                 contact loss and re-contact events above the stability
+                 threshold, confirming that degradation is driven by
+                 transient instability rather than a steady-state bias.}
+        \label{fig:force_var_comparison_slope30}
+    \end{subfigure}
+    \caption{Force tracking error and variance versus end-effector speed on
+             the $30^\circ$ slope surface (frictionless).}
+    \label{fig:speed_sweep_force_comparison_slope30}
 \end{figure}
 
+Figure~\ref{fig:speed_sweep_force_comparison_slope30} shows the mean absolute
+force error and its variance across the full speed range on the slope.
+The qualitative ordering of methods is consistent with the flat-surface results:
+HFDC\,+\,PI achieves the lowest force error at moderate speeds, followed by
+HFDC, PD, Feedforward\,+\,PI, and feedforward.
+However, the critical speed at which errors escalate is substantially lower on
+the slope.
+PD, Feedforward\,+\,PI, and HFDC\,+\,PI all exhibit a sharp increase in both
+error and variance near $v \approx 1.2\,\mathrm{m/s}$
+($\omega \approx 3.8\pi\,\mathrm{rad/s}$), compared with
+$v \approx 1.38\,\mathrm{m/s}$ on the flat surface — a reduction of
+approximately $13\,\%$ in the stability threshold.
+Notably, HFDC without PI augmentation remains stable above this threshold,
+maintaining a mean force error of $0.820\,\mathrm{N}$ at
+$v = 1.194\,\mathrm{m/s}$.
 
-\section{Velocity Term Analysis on Slope}
+\subsection{Motion Tracking Results}
 
-% TODO (FILL): Show J̇_φ computation problem (was zero due to un-updated
-% Pinocchio data). After fix, analyse two sub-terms:
-% Λ_φ J_φ M⁻¹ C q̇ (red) and –Λ_φ J̇_φ q̇ (blue). Show they nearly cancel.
-
-\begin{figure}[htbp]
+\begin{figure}[h]
     \centering
-    % TODO (PLOT): Velocity term components (red: Coriolis part,
-    % blue: J̇_φ part) and their sum ≈ 0 on slope.
-    \missingfigure{Velocity term components on slope: Coriolis (red) and $\dot{J}_\Phi$ (blue)}
-    \caption{Velocity term components on the slope: Coriolis part (red) and
-             $-\Lambda_\Phi \dot{J}_\Phi \dot{q}$ part (blue), and
-             their sum which is approximately zero.}
-    \label{fig:velocity_term_slope}
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../angular_speed_sweep/plots/position_error_comparison_slope30.png}
+        \caption{Mean position tracking error $\bar{e}_p$ versus end-effector
+                 speed on the $30^\circ$ slope (frictionless).
+                 All methods remain within $3$--$14\,\mathrm{mm}$ below the
+                 stability threshold.
+                 Above $v \approx 1.2\,\mathrm{m/s}$, PD diverges first
+                 ($\bar{e}_p > 100\,\mathrm{mm}$), followed by Feedforward\,+\,PI
+                 and HFDC\,+\,PI; only HFDC and feedforward maintain bounded
+                 tracking above this speed.}
+        \label{fig:position_error_comparison_slope30}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../angular_speed_sweep/plots/position_var_comparison_slope30.png}
+        \caption{Position error variance versus end-effector speed on the
+                 $30^\circ$ slope.
+                 The variance spike at $v \approx 1.2\,\mathrm{m/s}$
+                 confirms that trajectory divergence is caused by intermittent
+                 instability rather than a systematic tracking offset.}
+        \label{fig:position_var_comparison_slope30}
+    \end{subfigure}
+    \caption{Position tracking error and variance versus end-effector speed on
+             the $30^\circ$ slope surface (frictionless).}
+    \label{fig:speed_sweep_position_error_slope30}
 \end{figure}
 
-\begin{figure}[htbp]
+As shown in Figure~\ref{fig:speed_sweep_position_error_slope30}, position
+tracking errors remain uniformly small — in the range $3$--$14\,\mathrm{mm}$
+— for all methods below the stability threshold.
+Beyond $v \approx 1.2\,\mathrm{m/s}$, the PD controller diverges first, with
+mean position error rising to $123\,\mathrm{mm}$ and peak deviations exceeding
+$380\,\mathrm{mm}$ in all axes at multiplier $3.8\times$.
+Feedforward\,+\,PI and HFDC\,+\,PI also lose stable tracking at this speed,
+exhibiting peak errors of up to $271\,\mathrm{mm}$ and $125\,\mathrm{mm}$,
+respectively.
+Feedforward and HFDC are the only methods to maintain bounded position errors
+above the threshold.
+
+\subsection{Detailed Analysis at Representative Speeds}
+
+Force tracking error is defined as $e_F = F_z - F_d$ and reported with sign.
+A positive error indicates loss of contact or insufficient force; for example,
+complete contact loss gives $e_F = 0 - (-8) = +8\,\mathrm{N}$.
+A negative error indicates excessive force application,
+e.g.\ $F_z = -10\,\mathrm{N}$ yields $e_F = -2\,\mathrm{N}$.
+All metrics are computed over $t > 1\,\mathrm{s}$.
+
+\begin{figure}[h]
     \centering
-    % TODO (PLOT): Force tracking: with J̇_φ (Pinocchio attachment frame)
-    % vs. without J̇_φ — showing negligible difference on slope.
-    \missingfigure{Force tracking: with $\dot{J}_\Phi$ vs.\ without $\dot{J}_\Phi$ on slope}
-    \caption{Force tracking on the slope with and without the
-             $\dot{J}_\Phi$ term, demonstrating the negligible difference.}
-    \label{fig:slope_jdot_comparison}
+    \captionsetup[subfigure]{font=small}
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{../angular_speed_sweep/plots/tracking_speed_3.4_slope30/force_tracking.png}
+        \caption{Signed force error $e_F = F_z - F_d$ for all controllers at
+        speed multiplier $3.4\times$ on the $30^\circ$ slope.
+        Mean and maximum absolute errors (computed over $t > 1\,\text{s}$):\\
+        FF: avg $= 3.472\,\text{N}$, max $= 11.694\,\text{N}$;\\
+        FF + PI: avg $= 1.102\,\text{N}$, max $= 3.123\,\text{N}$;\\
+        PD: avg $= 1.341\,\text{N}$, max $= 3.232\,\text{N}$;\\
+        HFDC: avg $= 0.644\,\text{N}$, max $= 2.004\,\text{N}$;\\
+        HFDC + PI: avg $= 0.201\,\text{N}$, max $= 0.637\,\text{N}$.}
+        \label{fig:slope30_speed_3.4/force_tracking}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{../angular_speed_sweep/plots/tracking_speed_3.4_slope30/position_tracking_xyz.png}
+        \caption{End-effector position tracking in $x$, $y$, and $z$ for all
+        controllers at speed multiplier $3.4\times$ on the $30^\circ$ slope.
+        All controllers achieve accurate trajectory following.
+        Mean and maximum absolute errors over $t > 1\,\text{s}$:\\
+        In $x$: avg $4.1$--$4.2\,\text{mm}$, max $7.7$--$9.1\,\text{mm}$.\\
+        In $y$: avg $0.5$--$0.7\,\text{mm}$, max $0.9$--$1.4\,\text{mm}$.\\
+        In $z$: avg $3.4$--$3.6\,\text{mm}$, max $4.5$--$6.1\,\text{mm}$.}
+        \label{fig:slope30_speed_3.4/position_tracking}
+    \end{subfigure}
+    \caption{Force tracking error and end-effector trajectory at speed
+    multiplier $3.4\times$ ($v \approx 1.068\,\mathrm{m/s}$,
+    $\omega \approx 3.4\pi\,\mathrm{rad/s}$) on the $30^\circ$ slope.
+    First $2\,\mathrm{s}$ are plotted.}
+    \label{fig:force_position_details_slope30_3.4}
 \end{figure}
 
+At $v \approx 1.068\,\mathrm{m/s}$ (multiplier $3.4\times$), all five
+controllers remain stable on the slope.
+Position tracking errors are bounded across all axes for every method,
+with mean errors of $4\,\mathrm{mm}$ in $x$, below $1\,\mathrm{mm}$ in $y$,
+and $3.4$--$3.6\,\mathrm{mm}$ in $z$ — comparable to the flat-surface case at
+the same speed.
+Force tracking is more demanding due to the gravitational load component along
+the slope normal.
+HFDC\,+\,PI achieves the best result: mean error $0.201\,\mathrm{N}$,
+maximum $0.637\,\mathrm{N}$.
+HFDC without PI follows at $0.644\,\mathrm{N}$ mean ($2.004\,\mathrm{N}$
+maximum), while PD and Feedforward\,+\,PI reach $1.341\,\mathrm{N}$ and
+$1.102\,\mathrm{N}$ mean errors, respectively.
+The pure feedforward controller exhibits the largest error at
+$3.472\,\mathrm{N}$, reflecting its inability to compensate for the additional
+gravitational disturbance introduced by the slope.
 
-\section{Slope Performance: Slow vs.\ Fast}
-
-% TODO (FILL): Present force tracking at π/4 and π rad/s on 30° slope.
-% Compare with flat surface results. Note that Bruno+velocity_term performs
-% well in frictionless environment.
-
-\begin{figure}[htbp]
+\begin{figure}[h]
     \centering
-    % TODO (PLOT): Contact force tracking on slope: π/4 rad/s (top) and
-    % π rad/s (bottom) — desired vs. actual.
-    \missingfigure{Contact force tracking on slope: $\pi/4$\,rad/s (top) and $\pi$\,rad/s (bottom)}
-    \caption{Contact force tracking on the $30^\circ$ slope at
-             $\pi/4$\,rad/s (top) and $\pi$\,rad/s (bottom), showing
-             desired versus actual force.}
-    \label{fig:force_slope}
+    \captionsetup[subfigure]{font=small}
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{../angular_speed_sweep/plots/tracking_speed_3.8_slope30/force_tracking.png}
+        \caption{Signed force error $e_F = F_z - F_d$ for all controllers at
+        speed multiplier $3.8\times$ on the $30^\circ$ slope.
+        All controllers except HFDC exhibit severe degradation.
+        Mean and maximum absolute errors (computed over $t > 1\,\text{s}$):\\
+        FF: avg $= 4.461\,\text{N}$, max $= 17.319\,\text{N}$;\\
+        FF + PI: avg $= 7.917\,\text{N}$, max $= 45.451\,\text{N}$;\\
+        PD: avg $= 8.000\,\text{N}$, max $= 8.000\,\text{N}$ (sustained contact loss);\\
+        HFDC: avg $= 0.820\,\text{N}$, max $= 2.760\,\text{N}$;\\
+        HFDC + PI: avg $= 7.198\,\text{N}$, max $= 90.678\,\text{N}$.}
+        \label{fig:slope30_speed_3.8/force_tracking}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\linewidth}
+        \includegraphics[width=\linewidth]{../angular_speed_sweep/plots/tracking_speed_3.8_slope30/position_tracking_xyz.png}
+        \caption{End-effector position tracking in $x$, $y$, and $z$ for all
+        controllers at speed multiplier $3.8\times$ on the $30^\circ$ slope.
+        Mean and maximum absolute errors over $t > 1\,\text{s}$:\\
+        PD loses contact entirely
+        ($x$: avg $122.9\,\text{mm}$, max $382.4\,\text{mm}$;
+         $y$: avg $228.8\,\text{mm}$, max $464.1\,\text{mm}$;
+         $z$: avg $364.7\,\text{mm}$, max $487.3\,\text{mm}$).
+        FF + PI and HFDC + PI show intermittent instability
+        ($x$: avg $19.6$ and $10.0\,\text{mm}$;
+         max $271$ and $125\,\text{mm}$, respectively).
+        Only feedforward and HFDC maintain bounded tracking
+        (all axes avg $\leq 5.1\,\text{mm}$, max $\leq 9.3\,\text{mm}$).}
+        \label{fig:slope30_speed_3.8/position_tracking}
+    \end{subfigure}
+    \caption{Force tracking error and end-effector trajectory at speed
+    multiplier $3.8\times$ ($v \approx 1.194\,\mathrm{m/s}$,
+    $\omega \approx 3.8\pi\,\mathrm{rad/s}$) on the $30^\circ$ slope.
+    First $2\,\mathrm{s}$ are plotted.}
+    \label{fig:force_position_details_slope30_3.8}
 \end{figure}
 
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): EE trajectory on slope: 3D path plot and X/Y/Z time series.
-    \missingfigure{End-effector trajectory on slope: 3D path and X/Y/Z time series}
-    \caption{End-effector trajectory on the slope: three-dimensional path
-             plot (left) and $X/Y/Z$ position time series (right).}
-    \label{fig:ee_trajectory_slope}
-\end{figure}
+At $v \approx 1.194\,\mathrm{m/s}$ (multiplier $3.8\times$), the slope
+surface produces a decisive divergence in controller behaviour.
+The PD controller loses contact entirely: a sustained mean force error of
+$8.000\,\mathrm{N}$ throughout the measurement window indicates that the
+end-effector never re-establishes stable contact.
+Position errors exceed $460\,\mathrm{mm}$ peak in several axes, confirming
+full trajectory divergence.
+Feedforward\,+\,PI and HFDC\,+\,PI exhibit intermittent instability: the PI
+integrator accumulates large corrective commands during contact loss events,
+producing force spikes of up to $45.5\,\mathrm{N}$ and $90.7\,\mathrm{N}$
+respectively upon re-contact, which in turn drive further instability.
+HFDC without PI correction is the only feedback-augmented controller to
+maintain stable operation: force error remains at $0.820\,\mathrm{N}$ mean
+with a $2.760\,\mathrm{N}$ maximum, and position tracking stays within
+$9.3\,\mathrm{mm}$ across all axes.
 
-
-\section{Franka vs.\ KUKA Comparison in Simulation}
-
-% TODO (FILL): Describe adaptation from KUKA iiwa to Franka Panda XML
-% (torque actuator, attachment collision). Note Panda has larger force error
-% and less stability at π rad/s compared to KUKA.
-
-\begin{figure}[htbp]
-    \centering
-    % TODO (PLOT): Side-by-side force tracking: KUKA iiwa vs. Franka Panda,
-    % with and without friction, at π rad/s.
-    \missingfigure{Force tracking: KUKA iiwa vs.\ Franka Panda, with/without friction, $\pi$\,rad/s}
-    \caption{Side-by-side force tracking comparison between the KUKA iiwa
-             and Franka Panda at $\pi$\,rad/s, with and without friction.}
-    \label{fig:kuka_vs_panda}
-\end{figure}
+\paragraph{Comparison with the flat surface.}
+These results reveal a consistent reduction in stability limit when
+transitioning from flat to slope surface.
+On the flat surface, the first controller to lose stable tracking is PD at
+$v \approx 1.38\,\mathrm{m/s}$ (multiplier $4.4\times$); on the slope, the
+same controller diverges at $v \approx 1.194\,\mathrm{m/s}$ (multiplier
+$3.8\times$) — a reduction of approximately $13\,\%$.
+A further distinction is the reversal of the HFDC\,+\,PI advantage: on the
+flat surface, HFDC\,+\,PI degrades more gradually than PD; on the slope, both
+fail at the same speed.
+This is consistent with integral windup during contact loss events, which is
+exacerbated by the gravitational disturbance on the slope.
+By contrast, HFDC's model-based compensation — which explicitly accounts for
+constraint-frame inertia and the slope rotation — provides robustness that
+purely feedback-based augmentations cannot match at high contact-transition
+rates.
 
 
 % ==================================================================

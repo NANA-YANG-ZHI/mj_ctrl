@@ -185,6 +185,11 @@ class HybridControllerConfig:
     # Torque rate limiting (max Nm change per timestep)
     max_delta_tau: float = 1.0
 
+    # Compensation term toggles (paper force control method only)
+    use_control_force_compensation: bool = True
+    use_contact_force_compensation: bool = True
+    use_velocity_term: bool = True
+
     def __post_init__(self):
         if self.impedance_pos is None:
             self.impedance_pos = np.asarray([100.0, 100.0, 100.0])
@@ -512,9 +517,10 @@ class HybridController:
             contact_force_compensation = 1 * (Mx_constraint @ J_phi @ M_inv @ (J_motion.T @ F_ext_x_new))
             velocity_term = 1 * Mx_constraint @ (J_phi @ M_inv @ C - J_phi_dot) @ dq
             F_ctrl_constraint = (
-                self.config.F_desired_contact +
-                control_force_compensation +
-                contact_force_compensation + velocity_term
+                self.config.F_desired_contact
+                + (control_force_compensation if self.config.use_control_force_compensation else np.zeros_like(control_force_compensation))
+                + (contact_force_compensation if self.config.use_contact_force_compensation else np.zeros_like(contact_force_compensation))
+                + (velocity_term if self.config.use_velocity_term else np.zeros_like(velocity_term))
             )
 
         elif method == "pd":

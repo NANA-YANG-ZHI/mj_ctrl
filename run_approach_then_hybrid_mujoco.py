@@ -9,6 +9,8 @@ import argparse
 import mujoco
 import mujoco.viewer
 import numpy as np
+import os
+import re
 import time
 import pinocchio as pino
 from scipy.spatial.transform import Rotation
@@ -37,7 +39,7 @@ def main() -> None:
         "--robot",
         type=str,
         default="fr3",
-        choices=["fr3", "kuka", "panda"],
+        choices=["fr3", "kuka", "panda", "fr3_friction"],
         help="Robot type: fr3, kuka, or panda (default: fr3)"
     )
     parser.add_argument(
@@ -127,12 +129,97 @@ def main() -> None:
         default=0.0,
         help="Angular speed multiplier (omega/pi); used as part of the saved data filename"
     )
+    parser.add_argument(
+        "--surface-friction",
+        type=float,
+        default=None,
+        dest="surface_friction",
+        help="Override the sliding friction coefficient (first value in friction='mu ...'). "
+             "Requires --robot fr3_friction. Generates a temp XML with the specified value."
+    )
+    parser.add_argument(
+        "--no-control-force-compensation",
+        dest="use_control_force_compensation",
+        action="store_false",
+        default=True,
+        help="Disable the control force compensation term in F_ctrl_constraint (paper method only)"
+    )
+    parser.add_argument(
+        "--no-contact-force-compensation",
+        dest="use_contact_force_compensation",
+        action="store_false",
+        default=True,
+        help="Disable the contact force compensation term in F_ctrl_constraint (paper method only)"
+    )
+    parser.add_argument(
+        "--no-velocity-term",
+        dest="use_velocity_term",
+        action="store_false",
+        default=True,
+        help="Disable the velocity term in F_ctrl_constraint (paper method only)"
+    )
+    parser.add_argument(
+        "--slope-angle",
+        type=float,
+        default=30.0,
+        help="Slope angle in degrees around the X axis (default: 30.0)"
+    )
     args = parser.parse_args()
 
     # ============================================================
     # 1. Get Robot Configuration
     # ============================================================
     robot_cfg = get_robot_config(args.robot)
+
+    # If --surface-friction is given, generate a temp MuJoCo XML with the overridden value.
+    # Pinocchio only needs kinematics, so its XML stays unchanged.
+    if args.surface_friction is not None:
+        mu = args.surface_friction
+        base_xml = robot_cfg.pinocchio_xml_path
+        with open(base_xml, 'r') as _f:
+            robot_xml_str = _f.read()
+        # Make meshdir absolute so the temp XML can live anywhere
+        assets_dir = os.path.abspath(os.path.join(os.path.dirname(base_xml), 'assets'))
+        robot_xml_str = robot_xml_str.replace('meshdir="assets"', f'meshdir="{assets_dir}"')
+        # Replace first friction coefficient: friction="<old> 0.02 0.01"
+        robot_xml_str = re.sub(
+            r'(friction=")[0-9.]+( [0-9.]+ [0-9.]+")',
+            rf'\g<1>{mu:.4f}\2',
+            robot_xml_str
+        )
+        # Unique temp dir per friction value — safe for parallel runs
+        tmp_dir = f"/tmp/mj_ctrl_friction_{mu:.4f}"
+        os.makedirs(tmp_dir, exist_ok=True)
+        robot_tmp_path = os.path.join(tmp_dir, "robot.xml")
+        with open(robot_tmp_path, 'w') as _f:
+            _f.write(robot_xml_str)
+        scene_tmp_content = (
+            '<mujoco model="fr3 scene">\n'
+            '  <include file="robot.xml"/>\n\n'
+            '  <statistic center="0.2 0 0.4" extent=".8"/>\n\n'
+            '  <visual>\n'
+            '    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>\n'
+            '    <rgba haze="0.15 0.25 0.35 1"/>\n'
+            '    <global azimuth="120" elevation="-20"/>\n'
+            '  </visual>\n\n'
+            '  <asset>\n'
+            '    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>\n'
+            '    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"\n'
+            '      markrgb="0.8 0.8 0.8" width="300" height="300"/>\n'
+            '    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>\n'
+            '  </asset>\n\n'
+            '  <worldbody>\n'
+            '    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>\n'
+            '    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>\n'
+            '  </worldbody>\n'
+            '</mujoco>\n'
+        )
+        scene_tmp_path = os.path.join(tmp_dir, "scene.xml")
+        with open(scene_tmp_path, 'w') as _f:
+            _f.write(scene_tmp_content)
+        robot_cfg.mujoco_scene_xml_path = scene_tmp_path
+        print(f"[CONFIG] Surface friction override: mu={mu:.4f}")
+
     print(f"\n[CONFIG] Using robot: {robot_cfg.name}")
     print(f"[CONFIG] Pinocchio XML: {robot_cfg.pinocchio_xml_path}")
     print(f"[CONFIG] MuJoCo XML: {robot_cfg.mujoco_scene_xml_path}")
@@ -146,6 +233,7 @@ def main() -> None:
     common_config.angular_speed = args.angular_speed
     common_config.force_control_method = args.force_control_method
     common_config.use_pi = args.use_pi
+    common_config.euler = np.array([np.deg2rad(args.slope_angle), 0.0, 0.0])
 
     approach_config = CartesianSpacePDControlConfig()
     hybrid_config = HybridControllerConfig()
@@ -155,6 +243,9 @@ def main() -> None:
         hybrid_config.Ki_force = args.ki_force
     if args.kd_force is not None:
         hybrid_config.Kd_force = args.kd_force
+    hybrid_config.use_control_force_compensation = args.use_control_force_compensation
+    hybrid_config.use_contact_force_compensation = args.use_contact_force_compensation
+    hybrid_config.use_velocity_term = args.use_velocity_term
 
     # Initial joint configuration (before approach)
     q0 = np.array([0.0225, 0.7064, -0.0243, -2.3135, -0.0095, 3.0422, -0.2441])
@@ -235,8 +326,12 @@ def main() -> None:
             # Read initial robot state
             robot_state, duration = mujoco_interface.readOnce()
             O_T_EE = np.array(robot_state.O_T_EE).reshape(4, 4).T
-            target_rot = O_T_EE[:3, :3]
             start_pos = O_T_EE[:3, 3]
+
+            # Compute slope-aware target orientation: slope rotation * default EE orientation
+            rot_slope = Rotation.from_euler('xyz', common_config.euler)
+            rot_default = Rotation.from_quat(np.roll(robot_cfg.target_quat, -1))
+            target_rot = (rot_slope * rot_default).as_matrix()
 
             # Initialize approach controller
             control_phase = ControlPhase.APPROACHING
@@ -396,7 +491,15 @@ def main() -> None:
                 position_error = np.empty(0)
 
             ee_linear_speed = 0.1 * args.angular_speed  # circle radius = 0.1 m
-            fname = f"data_{args.multiplier:.1f}.npz"
+            disabled_parts = []
+            if not args.use_control_force_compensation:
+                disabled_parts.append("no_ctrl")
+            if not args.use_contact_force_compensation:
+                disabled_parts.append("no_contact")
+            if not args.use_velocity_term:
+                disabled_parts.append("no_vel")
+            comp_suffix = ("_" + "_".join(disabled_parts)) if disabled_parts else "_all"
+            fname = f"data_{args.multiplier:.1f}{comp_suffix}.npz"
             fpath = _os.path.join(args.data_dir, fname)
             np.savez(
                 fpath,

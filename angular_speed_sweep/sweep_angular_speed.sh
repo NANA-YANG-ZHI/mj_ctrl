@@ -30,6 +30,7 @@ KD_FORCE="${KD_FORCE:-}"      # e.g. "0.5" — passed as --kd-force; empty = use
 KI_FORCE="${KI_FORCE:-5.0}"   # e.g. "5.0" — passed as --ki-force; empty = use default
 NUM_WORKERS="${NUM_WORKERS:-10}"
 SKIP_SECONDS="${SKIP_SECONDS:-1.0}"
+SLOPE_ANGLE="${SLOPE_ANGLE:-0.0}"
 
 OUTPUT_DIR="${SCRIPT_DIR}/plots/${SWEEP_NAME}"
 TMP_DIR="${OUTPUT_DIR}/tmp_results"
@@ -87,6 +88,7 @@ run_one() {
         --skip-seconds "${SKIP_SECONDS}" \
         --save-data \
         --data-dir "${DATA_DIR}" \
+        --slope-angle "${SLOPE_ANGLE}" \
         ${PI_FLAG} \
         ${KP_FLAG} \
         ${KD_FLAG} \
@@ -114,7 +116,7 @@ run_one() {
 }
 
 export -f run_one
-export OUTPUT_DIR TMP_DIR DATA_DIR REPO_DIR FORCE_CONTROL_METHOD USE_PI KP_FORCE KD_FORCE KI_FORCE SKIP_SECONDS SAVE_PLOT_MULTIPLIERS
+export OUTPUT_DIR TMP_DIR DATA_DIR REPO_DIR FORCE_CONTROL_METHOD USE_PI KP_FORCE KD_FORCE KI_FORCE SKIP_SECONDS SLOPE_ANGLE SAVE_PLOT_MULTIPLIERS
 
 # ---------------------------------------------------------------
 # Dispatch workers with a simple job-pool (no GNU parallel needed)

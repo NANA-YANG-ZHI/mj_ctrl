@@ -163,6 +163,7 @@ class MujocoRobotInterface:
             # current_force_world[:3] = force_world
             # current_force_world[3:] = moment_world
             # local force
+            contact_rot = np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])
             current_force_local[:3] = contact_rot @ contact_force_local[:3]
             current_force_local[3:] = contact_force_local[3:]
         # return current_force_world, current_force_local, contact_pos

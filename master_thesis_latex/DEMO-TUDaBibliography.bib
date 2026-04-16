@@ -34,6 +34,95 @@
 
 %Beispiel BibTeX-Datenbank für die Verwendung von biblatex und biber
 
+
+@article{caccavale_six-dof_1999,
+	title = {Six-{DOF} impedance control based on angle/axis representations},
+	volume = {15},
+	copyright = {https://ieeexplore.ieee.org/Xplorehelp/downloads/license-information/IEEE.html},
+	issn = {1042296X},
+	url = {http://ieeexplore.ieee.org/document/760350/},
+	doi = {10.1109/70.760350},
+	number = {2},
+	urldate = {2026-03-30},
+	journal = {IEEE Transactions on Robotics and Automation},
+	author = {Caccavale, F. and Natale, C. and Siciliano, B. and Villani, L.},
+	month = apr,
+	year = {1999},
+	pages = {289--300},
+}
+
+@inproceedings{albu-schaffer_passivity_2004,
+	title = {A {Passivity} {Based} {Cartesian} {Impedance} {Controller} for {Flexible} {Joint} {Robots}  {Part} {II}: {Full} {State} {Feedback}, {Impedance} {Design} and {Experiments}},
+	shorttitle = {A {Passivity} {Based} {Cartesian} {Impedance} {Controller} for {Flexible} {Joint} {Robots}  {Part} {II}},
+	url = {https://elib.dlr.de/12091/},
+	abstract = {Deutsches Zentrum für Luft- und Raumfahrt e.V., elib - DLR electronic library},
+	urldate = {2026-03-30},
+	booktitle = {Proceedings},
+	author = {Albu-Schäffer, Alin Olimpiu and Ott, C. and Hirzinger, G.},
+	year = {2004},
+	pages = {2666--2672},
+}
+
+@article{albu-schaffer_unified_2007,
+	title = {A {Unified} {Passivity}-based {Control} {Framework} for {Position}, {Torque} and {Impedance} {Control} of {Flexible} {Joint} {Robots}},
+	volume = {26},
+	copyright = {https://journals.sagepub.com/page/policies/text-and-data-mining-license},
+	issn = {0278-3649, 1741-3176},
+	url = {https://journals.sagepub.com/doi/10.1177/0278364907073776},
+	doi = {10.1177/0278364907073776},
+	abstract = {This paper describes a general passivity-based framework for the control of flexible joint robots. Recent results on torque, position, as well as impedance control of flexible joint robots are summarized, and the relations between the individual contributions are highlighted. It is shown that an inner torque feedback loop can be incorporated into a passivity-based analysis by interpreting torque feedback in terms of shaping of the motor inertia. This result, which implicitly was already included in earlier work on torque and position control, can also be used for the design of impedance controllers. For impedance control, furthermore, potential energy shaping is of special interest. It is shown how, based only on the motor angles, a potential function can be designed which simultaneously incorporates gravity compensation and a desired Cartesian stiffness relation for the link angles. All the presented controllers were experimentally evaluated on DLR lightweight robots and their performance and robustness shown with respect to uncertain model parameters. Experimental results with position controllers as well as an impact experiment are presented briefly, and an overview of several applications is given in which the controllers have been applied.},
+	language = {en},
+	number = {1},
+	urldate = {2026-03-30},
+	journal = {The International Journal of Robotics Research},
+	author = {Albu-Schäffer, Alin and Ott, Christian and Hirzinger, Gerd},
+	month = jan,
+	year = {2007},
+	pages = {23--39},
+}
+
+@inproceedings{iskandar_joint-level_2020,
+	title = {Joint-{Level} {Control} of the {DLR} {Lightweight} {Robot} {SARA}},
+	url = {https://ieeexplore.ieee.org/document/9340700},
+	doi = {10.1109/IROS45743.2020.9340700},
+	abstract = {Lightweight robots are known to be intrinsically elastic in their joints. The established classical approaches to control such systems are mostly based on motor-side coordinates since the joints are comparatively stiff. However, that inevitably introduces errors in the coordinates that actually matter: the ones on the link side. Here we present a new joint-torque controller that uses feedback of the link-side positions. Passivity during interaction with the environment is formally shown as well as asymptotic stability of the desired equilibrium in the regulation case. The performance of the control approach is experimentally validated on DLR's new generation of lightweight robots, namely the SARA robot, which enables this step from motor-side-based to link-sided-based control due to sensors with higher resolution and improved sampling rate.},
+	urldate = {2026-03-30},
+	booktitle = {2020 {IEEE}/{RSJ} {International} {Conference} on {Intelligent} {Robots} and {Systems} ({IROS})},
+	author = {Iskandar, Maged and Ott, Christian and Eiberger, Oliver and Keppler, Manuel and Albu-Schäffer, Alin and Dietrich, Alexander},
+	month = oct,
+	year = {2020},
+	note = {ISSN: 2153-0866},
+	keywords = {Asymptotic stability, Robot kinematics, Robot sensing systems, Control systems, Regulation, Intelligent sensors, Intelligent robots},
+	pages = {8903--8910},
+}
+
+@article{iskandar_hybrid_2023,
+	title = {Hybrid {Force}-{Impedance} {Control} for {Fast} {End}-{Effector} {Motions}},
+	volume = {8},
+	issn = {2377-3766},
+	url = {https://www.scopus.com/pages/publications/85159672483},
+	doi = {10.1109/LRA.2023.3270036},
+	abstract = {Controlling the contact force on various surfaces is essential in many robotic applications such as in service tasks or industrial use cases. Mostly, classical impedance and hybrid motion-force control approaches are employed for these kinds of physical interaction scenarios. In this work, an extended Cartesian impedance control algorithm is developed, which includes geometrical constraints and enables explicit force tracking in a hybrid manner. The unified framework features compliant behavior in the free (motion) task directions and explicit force tracking in the constrained directions. Advantageously, the involved force subspace in contact direction is fully dynamically decoupled from dynamics in the motion subspace. The experimental validation with a torque-controlled robotic manipulator on both flat and curved surfaces demonstrates the performance during highly dynamic desired trajectories and confirms the theoretical claims of the approach.},
+	number = {7},
+	urldate = {2026-03-30},
+	journal = {IEEE Robotics and Automation Letters},
+	author = {Iskandar, Maged and Ott, Christian and Albu-Schaffer, Alin and Siciliano, Bruno and Dietrich, Alexander},
+	month = jul,
+	year = {2023},
+	keywords = {Force control, contact control, high-speed robot polishing, hybrid motion force control, robot force control},
+	pages = {3931--3938},
+}
+
+ @inbook{Siciliano_Sciavicco_Villani_Oriolo_2009, address={London}, title={Dynamics}, ISBN={9781846286421}, url={https://doi.org/10.1007/978-1-84628-642-1_7}, DOI={10.1007/978-1-84628-642-1_7}, abstractNote={Derivation of the dynamic model of a manipulator plays an important role for simulation of motion, analysis of manipulator structures, and design of control algorithms. Simulating manipulator motion allows control strategies and motion planning techniques to be tested without the need to use a physically available system. The analysis of the dynamic model can be helpful for mechanical design of prototype arms. Computation of the forces and torques required for the execution of typical motions provides useful information for designing joints, transmissions and actuators. The goal of this chapter is to present two methods for derivation of the equations of motion of a manipulator in the joint space. The first method is based on the Lagrange formulation and is conceptually simple and systematic. The second method is based on the Newton–Euler formulation and yields the model in a recursive form; it is computationally more efficient since it exploits the typically open structure of the manipulator kinematic chain. Then, a technique for dynamic parameter identification is presented. Further, the problems of direct dynamics and inverse dynamics are formalized, and a technique for trajectory dynamic scaling is introduced, which adapts trajectory planning to the dynamic characteristics of the manipulator. The chapter ends with the derivation of the dynamic model of a manipulator in the operational space and the definition of the dynamic manipulability ellipsoid.}, booktitle={Robotics: Modelling, Planning and Control}, publisher={Springer}, year={2009}, pages={247–302}, language={en} }
+
+@software{Zakka_MuJoCo_Menagerie_A_2022,
+author = {Zakka, Kevin and Tassa, Yuval and {MuJoCo Menagerie Contributors}},
+month = sep,
+title = {{MuJoCo Menagerie: A collection of high-quality simulation models for MuJoCo}},
+year = {2022}
+}
+
+
 @online{imrad,
 	title = {IMRAD},
 	url = {https://en.wikipedia.org/wiki/IMRAD},
@@ -237,3 +326,4 @@
 	date = {2025-01-26},
 	url = {https://www.tu-darmstadt.de/studieren/studierende_tu/studienorganisation_und_tucan/hilfe_und_faq/artikel_details_de_en_37824.de.jsp},
 }
+

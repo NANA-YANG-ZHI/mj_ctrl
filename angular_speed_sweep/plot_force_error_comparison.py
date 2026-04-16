@@ -6,8 +6,8 @@ Each plot uses a piecewise linear y-scale:
 
 Extreme outliers (instability events) are clipped to TOP_MAX and annotated.
 
-Plots generated
----------------
+Plots generated (flat surface, no --slope-angle)
+-------------------------------------------------
 force_error_comparison.png     – avg_force_z_error  (N)
 force_var_comparison.png       – var_force_z_error  (N²)
 position_error_comparison.png  – avg_position_error (m)
@@ -15,12 +15,17 @@ position_var_comparison.png    – var_position_error (m²)
 force_error_combined.png       – mean ± std for force Z error  (GP-style band)
 position_error_combined.png    – mean ± std for position error (GP-style band)
 
+With --slope-angle 30 the output files are named with a _slope30 suffix.
+
 Usage
 -----
     python angular_speed_sweep/plot_force_error_comparison.py
+    python angular_speed_sweep/plot_force_error_comparison.py --slope-angle 30
 """
 
+import argparse
 import os
+import re
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -28,61 +33,83 @@ import matplotlib.ticker as ticker
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR = os.path.join(SCRIPT_DIR, "plots")
 
-METHODS = [
-    ("Feedforward",      os.path.join(PLOTS_DIR, "feedforward",    "data"), "tab:blue",   "o"),
-    ("Feedforward + PI", os.path.join(PLOTS_DIR, "feedforward_pi", "data"), "tab:orange", "s"),
-    ("PD",               os.path.join(PLOTS_DIR, "pd",             "data"), "tab:green",  "^"),
-    ("Paper",            os.path.join(PLOTS_DIR, "paper",          "data"), "tab:red",    "D"),
-    ("Paper + PI",       os.path.join(PLOTS_DIR, "paper_pi",       "data"), "tab:purple", "P"),
+METHOD_KEYS = [
+    ("Feedforward",      "feedforward",    "tab:blue",   "o"),
+    ("Feedforward + PI", "feedforward_pi", "tab:orange", "s"),
+    ("PD",               "pd",             "tab:green",  "^"),
+    ("HFDC",             "paper",          "tab:red",    "D"),
+    ("HFDC + PI",        "paper_pi",       "tab:purple", "P"),
 ]
 
-# ── Per-metric plot configuration ────────────────────────────────────────────
-METRICS = [
-    dict(
-        col="avg_force_z_error",
-        ylabel="Avg |Force Z Error| (N)",
-        title="Avg Force Z Error",
-        out="force_error_comparison.png",
-        break_y=3.0,
-        compress=17.0,
-        top_max=20.0,
-        yticks=[0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 5, 8, 11, 14, 17, 20],
-        fmt="{:.0f}",
-    ),
-    dict(
-        col="var_force_z_error",
-        ylabel="Var Force Z Error (N²)",
-        title="Force Z Error Variance",
-        out="force_var_comparison.png",
-        break_y=15.0,
-        compress=15.0,
-        top_max=120.0,
-        yticks=[0, 3, 6, 9, 12, 15, 30, 50, 80, 100, 120],
-        fmt="{:.0f}",
-    ),
-    dict(
-        col="avg_position_error",
-        ylabel="Avg Position Error (m)",
-        title="Avg Position Error",
-        out="position_error_comparison.png",
-        break_y=0.020,
-        compress=25.0,
-        top_max=0.50,
-        yticks=[0, 0.004, 0.008, 0.012, 0.016, 0.020, 0.10, 0.20, 0.35, 0.50],
-        fmt="{:.3f}",
-    ),
-    dict(
-        col="var_position_error",
-        ylabel="Var Position Error (m²)",
-        title="Position Error Variance",
-        out="position_var_comparison.png",
-        break_y=2e-4,
-        compress=30.0,
-        top_max=0.055,
-        yticks=[0, 5e-5, 1e-4, 1.5e-4, 2e-4, 5e-3, 0.01, 0.02, 0.035, 0.055],
-        fmt="{:.4f}",
-    ),
-]
+
+def build_methods(slope_angle):
+    """Return (label, data_dir, color, marker) list for the given slope angle.
+
+    slope_angle=0.0 → flat-surface directories (feedforward/, paper_pi/, …)
+    slope_angle=30  → slope directories        (slope30.0_feedforward/, …)
+    """
+    methods = []
+    for label, key, color, marker in METHOD_KEYS:
+        if slope_angle == 0.0:
+            dir_name = key
+        else:
+            dir_name = f"slope{slope_angle}_{key}"
+        data_dir = os.path.join(PLOTS_DIR, dir_name, "data")
+        methods.append((label, data_dir, color, marker))
+    return methods
+
+
+def build_metrics(slope_angle):
+    """Return METRICS list with output filenames adjusted for slope angle."""
+    suffix = "" if slope_angle == 0.0 else f"_slope{slope_angle:g}"
+    return [
+        dict(
+            col="avg_force_z_error",
+            ylabel="Avg |Force Z Error| (N)",
+            title="Avg Force Z Error",
+            out=f"force_error_comparison{suffix}.png",
+            break_y=3.0,
+            compress=17.0,
+            top_max=20.0,
+            yticks=[0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 5, 8, 11, 14, 17, 20],
+            fmt="{:.0f}",
+        ),
+        dict(
+            col="var_force_z_error",
+            ylabel="Var Force Z Error (N²)",
+            title="Force Z Error Variance",
+            out=f"force_var_comparison{suffix}.png",
+            break_y=15.0,
+            compress=15.0,
+            top_max=120.0,
+            yticks=[0, 3, 6, 9, 12, 15, 30, 50, 80, 100, 120],
+            fmt="{:.0f}",
+        ),
+        dict(
+            col="avg_position_error",
+            ylabel="Avg Position Error (m)",
+            title="Avg Position Error",
+            out=f"position_error_comparison{suffix}.png",
+            break_y=0.020,
+            compress=25.0,
+            top_max=0.50,
+            yticks=[0, 0.004, 0.008, 0.012, 0.016, 0.020, 0.10, 0.20, 0.35, 0.50],
+            fmt="{:.3f}",
+        ),
+        dict(
+            col="var_position_error",
+            ylabel="Var Position Error (m²)",
+            title="Position Error Variance",
+            out=f"position_var_comparison{suffix}.png",
+            break_y=2e-4,
+            compress=30.0,
+            top_max=0.055,
+            yticks=[0, 5e-5, 1e-4, 1.5e-4, 2e-4, 5e-3, 0.01, 0.02, 0.035, 0.055],
+            fmt="{:.4f}",
+        ),
+    ]
+
+
 
 
 # ── Combined (GP-style) plot configuration ───────────────────────────────────
@@ -122,7 +149,7 @@ def load_all(data_dir):
     import glob
     npz_files = sorted(
         glob.glob(os.path.join(data_dir, "data_*.npz")),
-        key=lambda p: float(os.path.basename(p)[5:-4])  # sort by multiplier float
+        key=lambda p: float(re.match(r'data_([0-9.]+)', os.path.basename(p)).group(1))
     )
     rows = {k: [] for k in (
         "ee_linear_speed_m_s",
@@ -172,7 +199,7 @@ def make_piecewise(break_y, compress):
     return forward, inverse
 
 
-def make_plot(cfg, datasets):
+def make_plot(cfg, datasets, surface_label="flat surface"):
     col     = cfg["col"]
     break_y = cfg["break_y"]
     compress= cfg["compress"]
@@ -234,7 +261,7 @@ def make_plot(cfg, datasets):
     ax.grid(True, alpha=0.3)
 
     fig.suptitle(
-        f"Force Error Comparison — {cfg['title']} vs. EE Linear Speed",
+        f"{cfg['title']} vs. EE Linear Speed  [{surface_label}]",
         fontsize=13,
     )
 
@@ -340,8 +367,28 @@ def _fmt_val(v, col):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Compare control-method metrics vs EE linear speed."
+    )
+    parser.add_argument(
+        "--slope-angle",
+        type=float,
+        default=0.0,
+        help="Slope angle in degrees (default: 0 = flat surface). "
+             "Reads from slope<angle>_<method>/data directories and "
+             "adds _slope<angle> suffix to output filenames.",
+    )
+    args = parser.parse_args()
+
+    slope_angle = args.slope_angle
+    surface_label = f"{slope_angle:g}° slope" if slope_angle != 0.0 else "flat surface"
+    print(f"[INFO] Surface: {surface_label}")
+
+    methods = build_methods(slope_angle)
+    metrics = build_metrics(slope_angle)
+
     datasets = []
-    for name, data_dir, color, marker in METHODS:
+    for name, data_dir, color, marker in methods:
         if not os.path.isdir(data_dir):
             print(f"[SKIP] {name}: data dir not found ({data_dir})")
             continue
@@ -351,8 +398,8 @@ def main():
         print("No data found. Run experiments first.")
         return
 
-    for cfg in METRICS:
-        make_plot(cfg, datasets)
+    for cfg in metrics:
+        make_plot(cfg, datasets, surface_label)
 
     for cfg in COMBINED_METRICS:
         make_combined_plot(cfg, datasets)
