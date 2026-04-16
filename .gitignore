@@ -8,3 +8,7 @@ __pycache__/
 .idea/modules.xml
 .idea/vcs.xml
 .idea/inspectionProfiles/profiles_settings.xml
+
+angular_speed_sweep/**/control_torques.png
+angular_speed_sweep/**/joint_g_torques.png
+angular_speed_sweep/**/joint_torques.png

@@ -7,9 +7,16 @@ import sys
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import scienceplots
+from tueplots import bundles
 
-plt.style.use('science')
+plt.rcParams.update(bundles.icml2024(usetex=False))
+plt.rcParams.update({
+    "font.size": 10,
+    "axes.labelsize": 8,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    # "legend.fontsize": 14,
+})
 
 
 def _parse_col(val: str) -> float:

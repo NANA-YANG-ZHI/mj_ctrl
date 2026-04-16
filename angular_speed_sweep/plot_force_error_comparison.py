@@ -21,10 +21,7 @@ Usage
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import scienceplots
 import matplotlib.ticker as ticker
-
-plt.style.use('science')
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR = os.path.join(SCRIPT_DIR, "plots")
