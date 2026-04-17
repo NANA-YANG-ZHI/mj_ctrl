@@ -161,8 +161,8 @@ def main() -> None:
     parser.add_argument(
         "--slope-angle",
         type=float,
-        default=30.0,
-        help="Slope angle in degrees around the X axis (default: 30.0)"
+        default=0.0,
+        help="Slope angle in degrees around the X axis (default: 0.0 = flat)"
     )
     args = parser.parse_args()
 

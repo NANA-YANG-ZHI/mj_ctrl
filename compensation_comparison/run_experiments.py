@@ -45,6 +45,8 @@ def parse_args():
     parser.add_argument("--skip-seconds", type=float, default=1.0)
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--surface-friction", type=float, default=None)
+    parser.add_argument("--slope-angle", type=float, default=0.0,
+                        help="Slope angle in degrees (default: 0.0 = flat surface)")
     parser.add_argument("--data-dir", required=True,
                         help="Directory to save .npz data files")
     return parser.parse_args()
@@ -66,6 +68,7 @@ def build_cmd(args, extra_flags):
         cmd += ["--angular-speed", str(args.angular_speed)]
     if args.surface_friction is not None:
         cmd += ["--surface-friction", str(args.surface_friction)]
+    cmd += ["--slope-angle", str(args.slope_angle)]
     if args.headless:
         cmd.append("--headless")
     cmd.extend(extra_flags)
