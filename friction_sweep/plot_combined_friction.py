@@ -104,7 +104,7 @@ def make_combined_plot(cfg, datasets, out_dir):
                         alpha=0.20, color=color, linewidth=0)
         ax.plot(mu[valid], mean[valid],
                 marker=marker, color=color, label=name,
-                linewidth=1.5, markersize=5, markerfacecolor=color)
+                linewidth=1, markersize=2, markerfacecolor=color)
 
     ax.set_xlabel("Sliding Friction Coefficient μ")
     ax.set_ylabel(cfg["ylabel"])
