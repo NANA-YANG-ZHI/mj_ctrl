@@ -1,30 +1,63 @@
 #!/usr/bin/env bash
-# Run compensation ablation experiments for two conditions and plot each.
+# Run compensation ablation experiments and plot each.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ── Run 1: Frictionless ───────────────────────────────────────────────
+# ── [COMMENTED OUT] Run 1: Flat surface, frictionless ────────────────────────
+# echo "=========================================================="
+# echo " Run 1: Frictionless (flat surface)"
+# echo "=========================================================="
+# python "$SCRIPT_DIR/run_experiments.py" \
+#     --robot fr3 \
+#     --headless \
+#     --circle-duration 10.0 \
+#     --slope-angle 0.0 \
+#     --data-dir "$SCRIPT_DIR/data/frictionless"
+
+# ── [COMMENTED OUT] Run 2: Flat surface, friction μ=0.7 ──────────────────────
+# echo ""
+# echo "=========================================================="
+# echo " Run 2: Surface friction μ=0.7 (flat surface)"
+# echo "=========================================================="
+# python "$SCRIPT_DIR/run_experiments.py" \
+#     --robot fr3_friction \
+#     --headless \
+#     --circle-duration 10.0 \
+#     --slope-angle 0.0 \
+#     --surface-friction 0.7 \
+#     --data-dir "$SCRIPT_DIR/data/friction_0.7"
+
+# ── Run 3: Slope 30°, frictionless ───────────────────────────────────────────
 echo "=========================================================="
-echo " Run 1: Frictionless"
+echo " Run 3: Slope 30° — frictionless"
 echo "=========================================================="
 
 python "$SCRIPT_DIR/run_experiments.py" \
     --robot fr3 \
     --headless \
     --circle-duration 10.0 \
-    --data-dir "$SCRIPT_DIR/data/frictionless"
+    --slope-angle 30.0 \
+    --data-dir "$SCRIPT_DIR/data/slope30_frictionless"
 
-# ── Run 2: Surface friction μ=0.7 ─────────────────────────────────────
 echo ""
+
+# ── Run 4: Slope 30°, friction μ=0.7 ─────────────────────────────────────────
 echo "=========================================================="
-echo " Run 2: Surface friction μ=0.7"
+echo " Run 4: Slope 30° — friction μ=0.7"
 echo "=========================================================="
 
 python "$SCRIPT_DIR/run_experiments.py" \
     --robot fr3_friction \
     --headless \
     --circle-duration 10.0 \
+    --slope-angle 30.0 \
     --surface-friction 0.7 \
-    --data-dir "$SCRIPT_DIR/data/friction_0.7"
+    --data-dir "$SCRIPT_DIR/data/slope30_friction_0.7"
 
+echo ""
+echo "=========================================================="
+echo " Done. Data saved to:"
+echo "   $SCRIPT_DIR/data/slope30_frictionless/"
+echo "   $SCRIPT_DIR/data/slope30_friction_0.7/"
+echo "=========================================================="
