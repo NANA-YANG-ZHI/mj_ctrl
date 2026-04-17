@@ -2415,6 +2415,46 @@ purely feedback-based augmentations cannot match at high contact-transition
 rates.
 
 
+\subsubsection{Contact Force Compensation Analysis}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.6\textwidth}
+        \includegraphics[width=\textwidth]{../compensation_comparison/plots/slope30_frictionless/compensation_comparison.png}
+        \caption{Frictionless contact (\texttt{condim}\,=\,1).
+        Mean and maximum absolute errors $|e_F|$ (computed over $t > 1\,\text{s}$):\\
+        No contact force comp.: avg $= 0.226\,\text{N}$, max $= 0.567\,\text{N}$;\\
+        No velocity term: avg $= 0.275\,\text{N}$, max $= 1.016\,\text{N}$;\\
+        No control force comp.: avg $= 1.298\,\text{N}$, max $= 2.952\,\text{N}$;\\
+        All compensations ON: avg $= 0.226\,\text{N}$, max $= 0.567\,\text{N}$.}
+        \label{fig:compensation_comparison_slope30_frictionless}
+    \end{subfigure}
+
+    \vspace{0.5em}
+
+    \begin{subfigure}[b]{0.6\textwidth}
+        \includegraphics[width=\textwidth]{../compensation_comparison/plots/slope30_friction_0.7/compensation_comparison.png}
+        \caption{Frictional contact ($\mu_s = 0.7$).
+        Mean and maximum absolute errors $|e_F|$ (computed over $t > 1\,\text{s}$):\\
+        No contact force comp.: avg $= 1.611\,\text{N}$, max $= 5.427\,\text{N}$;\\
+        No velocity term: avg $= 0.890\,\text{N}$, max $= 2.977\,\text{N}$;\\
+        No control force comp.: avg $= 1.388\,\text{N}$, max $= 3.705\,\text{N}$;\\
+        All compensations ON: avg $= 0.883\,\text{N}$, max $= 2.519\,\text{N}$.}
+        \label{fig:compensation_comparison_slope30_friction}
+    \end{subfigure}
+
+    \caption{Force tracking error time series for each compensation term variant
+    of HFDC on the $30^\circ$ slope, at angular speed $\omega = 2\pi$~rad/s.
+    Each curve removes one term from the full force control law while keeping
+    all others active.}
+    \label{fig:compensation_term_analysis_slope30}
+\end{figure}
+
+Figure~\ref{fig:compensation_term_analysis_slope30} applies the same compensation term ablation to the $30^\circ$ slope. Under frictionless contact, the pattern replicates the flat-surface result (Figure~\ref{fig:compensation_term_analysis}): removing the contact force compensation leaves performance unchanged (avg $= 0.226\,\mathrm{N}$, max $= 0.567\,\mathrm{N}$ — identical to the full controller), since frictionless contact produces no tangential contact forces to compensate. The only term with meaningful impact is the control force compensation: its removal raises the average error to $1.298\,\mathrm{N}$ and the peak to $2.952\,\mathrm{N}$. The velocity term remains secondary (avg $= 0.275\,\mathrm{N}$, max $= 1.016\,\mathrm{N}$).
+
+Introducing surface friction ($\mu_s = 0.7$) shifts the picture in the same way as on the flat surface: the contact force compensation becomes consequential, and its removal raises the average error from $0.883\,\mathrm{N}$ to $1.611\,\mathrm{N}$ and the peak from $2.519\,\mathrm{N}$ to $5.427\,\mathrm{N}$. The control force compensation similarly degrades performance when removed (avg $1.388\,\mathrm{N}$), while the velocity term contributes negligibly (avg $0.890\,\mathrm{N}$). These results confirm that the compensation term hierarchy established on the flat surface generalises to the inclined geometry.
+
+
 % ==================================================================
 \chapter{Real Robot Experiments}
 % ==================================================================
