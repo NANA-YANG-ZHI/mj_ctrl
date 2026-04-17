@@ -142,30 +142,33 @@ def build_metrics(slope_angle):
 # ── Combined (GP-style) plot configuration ───────────────────────────────────
 # Each entry pairs a mean column with its variance column.
 # The shaded band shows mean ± std (√var), clipped to [0, top_max].
-COMBINED_METRICS = [
-    dict(
-        col_mean="avg_force_z_error",
-        col_var="var_force_z_error",
-        ylabel=f"Avg |Force Z Error| ± {STD_RATIO:.1f}Std  (N)",
-        title="Force Z Error  (mean ± std)",
-        out="force_error_combined.png",
-        break_y=3.0,
-        compress=10.0,
-        top_max=20.0,
-        yticks=[0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 5, 8, 11, 14, 17, 20],
-    ),
-    dict(
-        col_mean="avg_position_error",
-        col_var="var_position_error",
-        ylabel=f"Avg Position Error ± {STD_RATIO:.1f}Std  (m)",
-        title="Position Error  (mean ± std)",
-        out="position_error_combined.png",
-        break_y=0.020,
-        compress=25.0,
-        top_max=0.50,
-        yticks=[0, 0.004, 0.008, 0.012, 0.016, 0.020, 0.10, 0.20, 0.35, 0.50],
-    ),
-]
+def build_combined_metrics(slope_angle):
+    """Return combined plot configs with filenames adjusted for slope angle."""
+    suffix = "" if slope_angle == 0.0 else f"_slope{slope_angle:g}"
+    return [
+        dict(
+            col_mean="avg_force_z_error",
+            col_var="var_force_z_error",
+            ylabel=f"Avg |Force Z Error| ± {STD_RATIO:.1f}Std  (N)",
+            title="Force Z Error  (mean ± std)",
+            out=f"force_error_combined{suffix}.png",
+            break_y=3.0,
+            compress=10.0,
+            top_max=20.0,
+            yticks=[0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 5, 8, 11, 14, 17, 20],
+        ),
+        dict(
+            col_mean="avg_position_error",
+            col_var="var_position_error",
+            ylabel=f"Avg Position Error ± {STD_RATIO:.1f}Std  (m)",
+            title="Position Error  (mean ± std)",
+            out=f"position_error_combined{suffix}.png",
+            break_y=0.020,
+            compress=25.0,
+            top_max=0.50,
+            yticks=[0, 0.004, 0.008, 0.012, 0.016, 0.020, 0.10, 0.20, 0.35, 0.50],
+        ),
+    ]
 
 DT = 0.001                          # simulation timestep (ControllerConfig.dt)
 FORCE_SKIP_SAMPLES = int(1.0 / DT)  # skip first 1 s for force metrics (= 1000 samples)
@@ -409,6 +412,7 @@ def main():
 
     methods = build_methods(slope_angle)
     metrics = build_metrics(slope_angle)
+    combined_metrics = build_combined_metrics(slope_angle)
 
     datasets = []
     for name, data_dir, color, marker in methods:
@@ -424,7 +428,7 @@ def main():
     # for cfg in metrics:
     #     make_plot(cfg, datasets, surface_label)
 
-    for cfg in COMBINED_METRICS:
+    for cfg in combined_metrics:
         make_combined_plot(cfg, datasets)
 
 
