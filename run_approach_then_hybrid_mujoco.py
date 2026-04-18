@@ -39,8 +39,8 @@ def main() -> None:
         "--robot",
         type=str,
         default="fr3",
-        choices=["fr3", "kuka", "panda", "fr3_friction"],
-        help="Robot type: fr3, kuka, or panda (default: fr3)"
+        choices=["fr3", "kuka", "panda", "fr3_friction", "fr3_jointf", "fr3_jointf_surff"],
+        help="Robot type: fr3, kuka, panda, fr3_friction, fr3_jointf, or fr3_jointf_surff (default: fr3)"
     )
     parser.add_argument(
         "--approach-duration",
