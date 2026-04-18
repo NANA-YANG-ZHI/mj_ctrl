@@ -91,7 +91,7 @@ def make_bar_chart(cfg, base_dir, baseline_dir, out_dir):
                             (n_method - 1) * width / 2,
                             n_method)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10, 3.5))
     x = np.arange(n_cond)
 
     # Vertical separator between flat and slope groups

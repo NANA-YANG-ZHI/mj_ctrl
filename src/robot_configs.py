@@ -56,7 +56,7 @@ FR3_FRICTION_CONFIG = RobotConfig(
 FR3_JOINTF_CONFIG = RobotConfig(
     name="fr3_jointf",
     pinocchio_xml_path="franka_fr3/fr3_jointf_no_surff.xml",
-    mujoco_scene_xml_path="franka_fr3/scene.xml",
+    mujoco_scene_xml_path="franka_fr3/scene_jointf.xml",
     joint_names=[
         'fr3_joint1', 'fr3_joint2', 'fr3_joint3', 'fr3_joint4',
         'fr3_joint5', 'fr3_joint6', 'fr3_joint7'
@@ -72,7 +72,7 @@ FR3_JOINTF_CONFIG = RobotConfig(
 FR3_JOINTF_SURFF_CONFIG = RobotConfig(
     name="fr3_jointf_surff",
     pinocchio_xml_path="franka_fr3/fr3.xml",
-    mujoco_scene_xml_path="franka_fr3/scene_friction.xml",
+    mujoco_scene_xml_path="franka_fr3/scene_jointf_friction.xml",
     joint_names=[
         'fr3_joint1', 'fr3_joint2', 'fr3_joint3', 'fr3_joint4',
         'fr3_joint5', 'fr3_joint6', 'fr3_joint7'
