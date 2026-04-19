@@ -38,17 +38,22 @@ plt.rcParams.update({
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+DT = 0.001   # simulation timestep (s)
+SKIP_S = 1.0  # seconds to skip (exclude approach transient)
+
 # Each entry: (source, method_subdir, cond_subdir, x_label)
 # source: "baseline" → read from baseline_dir; "new" → read from base_dir
 CONDITIONS = [
     # flat group
-    ("baseline", "flat_frictionless",        "Flat\nno joint friction\nno surf. friction"),
-    ("new",      "flat_jointf_no_surff",      "Flat\njoint friction\nno surf. friction"),
-    ("new",      "flat_jointf_surff_0.7",     "Flat\njoint friction\n+ surf. friction μ=0.7"),
+    ("baseline", "flat_frictionless",        "Flat\nno joint\nno surf."),
+    ("baseline", "flat_friction_0.7",        "Flat\nno joint\nsurf. μ=0.7"),
+    ("new",      "flat_jointf_no_surff",     "Flat\njoint\nno surf."),
+    ("new",      "flat_jointf_surff_0.7",    "Flat\njoint\n+ surf. μ=0.7"),
     # slope group
-    ("baseline", "slope30_frictionless",     "Slope 30°\nno joint friction\nno surf. friction"),
-    ("new",      "slope30_jointf_no_surff",  "Slope 30°\njoint friction\nno surf. friction"),
-    ("new",      "slope30_jointf_surff_0.7", "Slope 30°\njoint friction\n+ surf. friction μ=0.7"),
+    ("baseline", "slope30_frictionless",      "Slope 30°\nno joint\nno surf."),
+    ("baseline", "slope30_friction_0.7",      "Slope 30°\nno joint\nsurf. μ=0.7"),
+    ("new",      "slope30_jointf_no_surff",   "Slope 30°\njoint\nno surf."),
+    ("new",      "slope30_jointf_surff_0.7",  "Slope 30°\njoint\n+ surf. μ=0.7"),
 ]
 
 METHODS = [
@@ -65,15 +70,16 @@ METRICS = [
 
 
 def load_npz_mean_std(data_dir: str, npz_key: str):
-    """Load all .npz in data_dir, concatenate npz_key arrays, return (mean, std)."""
+    """Load all .npz in data_dir, skip first SKIP_S seconds, return (mean, std)."""
     files = sorted(glob.glob(os.path.join(data_dir, "*.npz")))
     if not files:
         return float("nan"), float("nan")
+    skip = int(SKIP_S / DT)
     arrays = []
     for fp in files:
         data = np.load(fp)
         if npz_key in data:
-            arr = np.abs(data[npz_key])
+            arr = np.abs(data[npz_key][skip:])
             arr = arr[~np.isnan(arr)]
             if arr.size:
                 arrays.append(arr)
@@ -91,11 +97,11 @@ def make_bar_chart(cfg, base_dir, baseline_dir, out_dir):
                             (n_method - 1) * width / 2,
                             n_method)
 
-    fig, ax = plt.subplots(figsize=(10, 3.5))
+    fig, ax = plt.subplots(figsize=(6.5, 2.25))
     x = np.arange(n_cond)
 
     # Vertical separator between flat and slope groups
-    ax.axvline(x=2.5, color="gray", linewidth=0.6, linestyle="--", alpha=0.5)
+    ax.axvline(x=3.5, color="gray", linewidth=0.6, linestyle="--", alpha=0.5)
 
     for m_idx, (method_key, method_label, color) in enumerate(METHODS):
         means, stds = [], []
@@ -131,8 +137,8 @@ def make_bar_chart(cfg, base_dir, baseline_dir, out_dir):
             )
 
     # Group labels
-    flat_center  = np.mean([0, 1, 2])
-    slope_center = np.mean([3, 4, 5])
+    flat_center  = np.mean([0, 1, 2, 3])
+    slope_center = np.mean([4, 5, 6, 7])
     y_group = ax.get_ylim()[1] * 1.02
     for cx, lbl in [(flat_center, "Flat"), (slope_center, "Slope 30°")]:
         ax.text(cx, y_group, lbl, ha="center", va="bottom",

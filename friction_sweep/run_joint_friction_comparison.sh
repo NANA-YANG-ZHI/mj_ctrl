@@ -128,5 +128,8 @@ python3 "${PLOT_SCRIPT}" \
     --base-dir "${BASE_DIR}" \
     --baseline-dir "${BASELINE_DIR}"
 
+python3 "${SCRIPT_DIR}/plot_joint_friction_timeseries.py" \
+    --base-dir "${BASE_DIR}"
+
 echo ""
 echo "Done. Plots saved to: ${BASE_DIR}/"
