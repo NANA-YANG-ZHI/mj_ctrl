@@ -386,15 +386,24 @@ class HybridController:
         #     5.0) 
 
         if elapsed < self.common_config.circle_duration:
+            # self.target_pos, self.x_dot_desired, self.x_ddot_desired = \
+            #     generate_circle_trajectory(
+            #         elapsed,
+            #         self.common_config.circle_center,
+            #         self.common_config.circle_radius,
+            #         self.common_config.angular_speed,
+            #         self.R_slope,
+            #         self.common_config.size_z
+            #     )
             self.target_pos, self.x_dot_desired, self.x_ddot_desired = \
-                generate_circle_trajectory(
-                    elapsed,
-                    self.common_config.circle_center,
-                    self.common_config.circle_radius,
-                    self.common_config.angular_speed,
-                    self.R_slope,
-                    self.common_config.size_z
-                )
+                generate_sinusoidal_trajectory(
+                elapsed,
+                start_pos=self.common_config.circle_center,
+                amplitude=0.04,
+                frequency=2,
+                R_slope=self.R_slope,
+                size_z=0.0
+            )
         else:
             # Stop after duration
             self.x_dot_desired[:] = 0.0

@@ -43,7 +43,7 @@ class ControllerConfig:
         """Set default values for array parameters."""
         if self.circle_center is None:
             # self.circle_center = np.array([0.4871, 0.0, 0.044])
-            # self.circle_center = np.array([0.5038, 0.0108, 0.0857])
-            self.circle_center = np.array([0.5, 0.0, 0.45])
+            self.circle_center = np.array([0.5038, 0.0108, 0.0857])
+            # self.circle_center = np.array([0.5, 0.0, 0.45])
         if self.euler is None:
-            self.euler = np.array([np.deg2rad(30), 0, 0])
+            self.euler = np.array([np.deg2rad(0), 0, 0])
