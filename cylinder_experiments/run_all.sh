@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run all cylinder surface experiments.
-# Usage: bash experiments/cylinder/run_all.sh
+# Usage: bash cylinder_experiments/run_all.sh
 #        (must be executed from the workspace root)
 set -euo pipefail
 
@@ -22,7 +22,7 @@ METHODS_CFG=(
     "paper_pi:paper:1"
 )
 
-EXP_DIR="experiments/cylinder"
+EXP_DIR="cylinder_experiments"
 DATA_BASE="$EXP_DIR/data"
 PLOTS_BASE="$EXP_DIR/plots_individual"
 

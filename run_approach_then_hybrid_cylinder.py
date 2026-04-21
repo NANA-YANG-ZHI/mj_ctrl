@@ -280,7 +280,7 @@ def main() -> None:
                         default="plots/run_approach_then_hybrid_cylinder")
     parser.add_argument("--save-data",        action="store_true")
     parser.add_argument("--data-dir",         type=str,
-                        default="experiments/cylinder/data/run")
+                        default="cylinder_experiments/data/run")
     args = parser.parse_args()
 
     if args.trajectory == 1:

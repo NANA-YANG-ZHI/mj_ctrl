@@ -6,7 +6,7 @@ For each (robot, angular_speed) pair, produces two figures:
   - position_error.png : position error (mm) over time for all methods
 
 Run from the workspace root:
-    python experiments/cylinder/plot_comparison.py
+    python cylinder_experiments/plot_comparison.py
 """
 import os
 import sys
@@ -42,8 +42,8 @@ METHOD_LS = {
     "paper_pi": "--",
 }
 
-DATA_BASE = "experiments/cylinder/data"
-PLOT_OUT  = "experiments/cylinder/plots_comparison"
+DATA_BASE = "cylinder_experiments/data"
+PLOT_OUT  = "cylinder_experiments/plots_comparison"
 
 
 def load(data_dir: str) -> dict | None:
