@@ -13,6 +13,7 @@ from src.hybrid_controller import (
     HybridControllerConfig,
     generate_circle_trajectory
 )
+from src.trajectory import TrajectoryBase, CylinderTrajectory
 from src.robot_configs import (
     RobotConfig,
     FR3_CONFIG,
@@ -24,6 +25,9 @@ from src.robot_configs import (
 )
 
 __all__ = [
+    # Trajectory objects
+    "TrajectoryBase",
+    "CylinderTrajectory",
     # General config
     "ControllerConfig",
     "ControlPhase",

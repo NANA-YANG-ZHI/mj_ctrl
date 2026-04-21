@@ -24,6 +24,7 @@ from utils_libfranka import (
     PI_term,
 )
 from src.controller_config import ControllerConfig
+from src.trajectory import TrajectoryBase
 
 
 def generate_circle_trajectory(
@@ -225,7 +226,8 @@ class HybridController:
         config: HybridControllerConfig,
         common_config: ControllerConfig,
         n_joints: int = 7,
-        ee_frame_name: str = "attachment"
+        ee_frame_name: str = "attachment",
+        trajectory: Optional[TrajectoryBase] = None,
     ):
         """
         Initialize hybrid controller.
@@ -240,6 +242,7 @@ class HybridController:
         self.common_config = common_config
         self.n_joints = n_joints
         self.ee_frame_name = ee_frame_name
+        self.trajectory = trajectory
 
         # Validate force control method
         valid_methods = ("paper", "pd", "feedforward")
@@ -295,6 +298,7 @@ class HybridController:
         self.desired_forces: list = []
         self.ee_positions: list = []
         self.target_positions: list = []
+        self.normals: list = []  # populated when trajectory has last_normal
         self.control_force_compensation_arr: list = []
         self.contact_force_compensation_arr: list = []
         self.velocity_term_arr: list = []
@@ -342,6 +346,7 @@ class HybridController:
         self.desired_forces = []
         self.ee_positions = []
         self.target_positions = []
+        self.normals = []
         self.control_force_compensation_arr = []
         self.contact_force_compensation_arr = []
         self.velocity_term_arr = []
@@ -375,99 +380,76 @@ class HybridController:
             Control torques
         """
         # ============================================================
-        # 1. Update Trajectory
+        # 1. Robot state (needed by trajectory objects that use current_pos)
         # ============================================================
         elapsed = current_time - self.start_time
 
-        # self.target_pos, self.x_dot_desired, self.x_ddot_desired  = generate_line_trajectory_delta(
-        #     elapsed, 
-        #     self.start_pos, 
-        #     self.end_pos, 
-        #     5.0) 
-
-        if elapsed < self.common_config.circle_duration:
-            self.target_pos, self.x_dot_desired, self.x_ddot_desired = \
-                generate_circle_trajectory(
-                    elapsed,
-                    self.common_config.circle_center,
-                    self.common_config.circle_radius,
-                    self.common_config.angular_speed,
-                    self.R_slope,
-                    self.common_config.size_z
-                )
-        else:
-            # Stop after duration
-            self.x_dot_desired[:] = 0.0
-            self.x_ddot_desired[:] = 0.0
-            self.is_drawing = False
-
-        ### ---- fix point ---- ###
-        # if elapsed < self.common_config.circle_duration:
-        #     self.target_pos = self.common_config.circle_center
-        #     self.x_dot_desired[:] = 0.0
-        #     self.x_ddot_desired[:] = 0.0
-
-        # else:
-        #     # Stop after duration
-        #     self.x_dot_desired[:] = 0.0
-        #     self.x_ddot_desired[:] = 0.0
-        #     self.is_drawing = False
-
-        # ### ---- draw sin line ---- ###
-        # amplitude = 0.04  # 4cm amplitude → 8cm total range (±4cm)
-        # frequency = 2 # 0.2
-
-        # if elapsed < self.common_config.circle_duration:
-        #     self.target_pos, self.x_dot_desired, self.x_ddot_desired = generate_sinusoidal_trajectory(
-        #         elapsed_time=elapsed,
-        #         start_pos=self.common_config.circle_center,
-        #         amplitude=amplitude,
-        #         frequency=frequency,
-        #         R_slope=self.R_slope,
-        #         size_z=0.0
-        #     )
-        # else:
-        #     # Stop after duration
-        #     self.x_dot_desired[:] = 0.0
-        #     self.x_ddot_desired[:] = 0.0
-        #     self.is_drawing = False
-
-        # Get current state
         q = np.array(robot_state.q)
         dq = np.array(robot_state.dq)
-
-        # Get end-effector pose
         O_T_EE = np.array(robot_state.O_T_EE).reshape(4, 4).T
         current_pos = O_T_EE[:3, 3]
         current_mat = O_T_EE[:3, :3]
 
         # ============================================================
-        # 2. Compute Jacobian and Dynamics
+        # 2. Trajectory & selection matrices
+        # ============================================================
+        if self.trajectory is not None:
+            self.target_pos, self.x_dot_desired, self.x_ddot_desired, \
+                S_f, S_v, target_rot, traj_done = \
+                self.trajectory.step(elapsed, current_pos, current_mat)
+            if traj_done:
+                self.x_dot_desired[:] = 0.0
+                self.x_ddot_desired[:] = 0.0
+                self.is_drawing = False
+                return pino.computeGeneralizedGravity(self.pino_model, self.pino_data, q)
+            self.normals.append(S_f[:3, 0].copy())  # force-direction normal for logging
+        else:
+            S_f = self.S_f
+            S_v = self.S_v
+            target_rot = self.target_rot
+            if elapsed < self.common_config.circle_duration:
+                self.target_pos, self.x_dot_desired, self.x_ddot_desired = \
+                    generate_circle_trajectory(
+                        elapsed,
+                        self.common_config.circle_center,
+                        self.common_config.circle_radius,
+                        self.common_config.angular_speed,
+                        self.R_slope,
+                        self.common_config.size_z
+                    )
+            else:
+                self.x_dot_desired[:] = 0.0
+                self.x_ddot_desired[:] = 0.0
+                self.is_drawing = False
+
+        # ============================================================
+        # 3. Compute Jacobian and Dynamics
         # ============================================================
         pino.forwardKinematics(self.pino_model, self.pino_data, q, dq)
         pino.computeJointJacobians(self.pino_model, self.pino_data)
         pino.updateFramePlacements(self.pino_model, self.pino_data)
         jac = pino.getFrameJacobian(self.pino_model, self.pino_data, self.pino_frame_id, pino.LOCAL_WORLD_ALIGNED)
-        # M = pino.crba(self.pino_model, self.pino_data, q)
         M_inv = pino.computeMinverse(self.pino_model, self.pino_data, q)
-
-        J_phi = self.S_f.T @ jac
-        J_motion = self.S_v.T @ jac
+        J_phi = S_f.T @ jac
+        J_motion = S_v.T @ jac
         jac_1 = np.vstack([J_phi, J_motion])
 
         Mx_constraint = task_space_inertiaM(M_inv, J_phi)
         Mx_motion = task_space_inertiaM(M_inv, J_motion)
 
         # ============================================================
-        # 3. Get Contact Information
+        # 4. Get Contact Information
         # ============================================================
         current_force_local = np.array(robot_state.O_F_ext_hat_K)
-        F_ext_phi = current_force_local @ self.S_fc
-        F_ext_x = current_force_local @ self.S_vc
-        # F_ext_v = None
+        if self.trajectory is not None:    
+            F_ext_phi = current_force_local @ S_f
+            F_ext_x = current_force_local @ S_v
+        else:
+            F_ext_phi = current_force_local @ self.S_fc
+            F_ext_x = current_force_local @ self.S_vc
 
         # ============================================================
-        # 4. Null Space torque
+        # 5. Null Space torque
         # ============================================================
         jac_1_inv = dynamically_consistent_inv(jac_1, M_inv)
         N2 = np.eye(self.n_joints) - jac_1.T @ jac_1_inv.T
@@ -475,31 +457,31 @@ class HybridController:
         tau_ctrl_v = N2 @ tau_ctrl_v
 
         # ============================================================
-        # 5. Motion Space Control
+        # 6. Motion Space Control
         # ============================================================
         twist = compute_ee_pose_error(
             self.target_pos,
             current_pos,
-            self.target_rot,
+            target_rot,
             current_mat.flatten()
         )
 
-        x_ddot_desired_sel = np.concatenate([self.x_ddot_desired, [0, 0, 0]]) @ self.S_v
-        x_tilde = twist @ self.S_v
+        x_ddot_desired_sel = np.concatenate([self.x_ddot_desired, [0, 0, 0]]) @ S_v
+        x_tilde = twist @ S_v
         site_vel = jac @ dq  # [vx, vy, vz, wx, wy, wz]
-        x_dot_tilde = (np.concatenate([self.x_dot_desired, [0, 0, 0]]) - site_vel) @ self.S_v
+        x_dot_tilde = (np.concatenate([self.x_dot_desired, [0, 0, 0]]) - site_vel) @ S_v
         a_motion = feedforward_PD(
             x_acc_desired=x_ddot_desired_sel,
             x_delta=x_tilde,
             x_dot_delta=x_dot_tilde,
-            Kp=self.config.Kp @ self.S_v,
-            Kd=self.config.Kd @ self.S_v
+            Kp=self.config.Kp @ S_v,
+            Kd=self.config.Kd @ S_v
         )
         F_ctrl_x = Mx_motion @ a_motion
         tau_ctrl_x = J_motion.T @ F_ctrl_x
 
         # ============================================================
-        # 6. Constraint Space (Force Control)
+        # 7. Constraint Space (Force Control)
         # ============================================================
         method = self.common_config.force_control_method
 
@@ -508,7 +490,7 @@ class HybridController:
             J_dot = pino.getFrameJacobianTimeVariation(
                 self.pino_model, self.pino_data, self.pino_frame_id, pino.LOCAL_WORLD_ALIGNED
             )
-            J_phi_dot = self.S_f.T @ J_dot
+            J_phi_dot = S_f.T @ J_dot
 
             F_ext_x_new = F_ext_x.copy()
             F_ext_x_new[-3:] = 0
@@ -529,7 +511,7 @@ class HybridController:
             F_ctrl_constraint = force_ctrl_pd(
                 F_desired=self.config.F_desired_contact,
                 F_ext_phi=F_ext_phi,
-                S_f=self.S_f,
+                S_f=S_f,
                 jac=jac,
                 dq=dq,
                 k_normal=5000.0,

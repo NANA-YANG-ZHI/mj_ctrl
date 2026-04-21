@@ -24,6 +24,14 @@ from src import (
     HybridControllerConfig,
     get_robot_config
 )
+from src.cylinder_helper import (
+    CYLINDER_CENTER, CYLINDER_AXIS, CYLINDER_RADIUS,
+    CYLINDER_CONFIG_MAP,
+    get_cylinder_approach_target,
+    plot_cylinder_position_tracking,
+    plot_cylinder_contact_force,
+)
+from src.trajectory import CylinderTrajectory
 from utils_plot import plot_ee_positions, plot_joint_torques, plot_control_torques, plot_hybrid_results, plot_force_error_z
 from utils_libfranka import euler_to_rot_matrix, generate_start_position
 from mujoco_robot_interface import MujocoRobotInterface, Torques
@@ -164,12 +172,39 @@ def main() -> None:
         default=30.0,
         help="Slope angle in degrees around the X axis (default: 30.0)"
     )
+    parser.add_argument(
+        "--cylinder",
+        action="store_true",
+        help="Use cylinder surface instead of flat slope"
+    )
+    parser.add_argument(
+        "--trajectory",
+        type=int,
+        default=1,
+        choices=[1, 2],
+        help="Cylinder sweep: 1 → θ 0°→75°, 2 → θ −75°→75° (only with --cylinder)"
+    )
+    parser.add_argument(
+        "--force-desired",
+        type=float,
+        default=-10.0,
+        dest="force_desired",
+        help="Desired contact force in N, negative = pressing in (only with --cylinder)"
+    )
     args = parser.parse_args()
 
     # ============================================================
     # 1. Get Robot Configuration
     # ============================================================
-    robot_cfg = get_robot_config(args.robot)
+    if args.cylinder:
+        robot_cfg = get_robot_config(CYLINDER_CONFIG_MAP[args.robot])
+        theta_start = 0.0 if args.trajectory == 1 else np.radians(-75.0)
+        theta_end   = np.radians(75.0)
+        sweep_duration = (theta_end - theta_start) / args.angular_speed
+        print(f"[CONFIG] Cylinder sweep: θ {np.degrees(theta_start):.1f}° → "
+              f"{np.degrees(theta_end):.1f}°  ({sweep_duration:.2f} s)")
+    else:
+        robot_cfg = get_robot_config(args.robot)
 
     # If --surface-friction is given, generate a temp MuJoCo XML with the overridden value.
     # Pinocchio only needs kinematics, so its XML stays unchanged.
@@ -234,6 +269,11 @@ def main() -> None:
     common_config.force_control_method = args.force_control_method
     common_config.use_pi = args.use_pi
     common_config.euler = np.array([np.deg2rad(args.slope_angle), 0.0, 0.0])
+    if args.cylinder:
+        common_config.circle_center = CYLINDER_CENTER
+        common_config.circle_radius = CYLINDER_RADIUS
+        common_config.size_z        = 0.002
+        common_config.circle_duration = sweep_duration
 
     approach_config = CartesianSpacePDControlConfig()
     hybrid_config = HybridControllerConfig()
@@ -246,9 +286,11 @@ def main() -> None:
     hybrid_config.use_control_force_compensation = args.use_control_force_compensation
     hybrid_config.use_contact_force_compensation = args.use_contact_force_compensation
     hybrid_config.use_velocity_term = args.use_velocity_term
+    if args.cylinder:
+        hybrid_config.F_desired_contact = np.array([args.force_desired])
 
     # Initial joint configuration (before approach)
-    q0 = np.array([0.0225, 0.7064, -0.0243, -2.3135, -0.0095, 3.0422, -0.2441])
+    q0 = robot_cfg.q0.copy() if args.cylinder else np.array([0.0225, 0.7064, -0.0243, -2.3135, -0.0095, 3.0422, -0.2441])
 
     # ============================================================
     # 3. Load Pinocchio Model
@@ -285,30 +327,47 @@ def main() -> None:
             hybrid_config,
             common_config,
             n_joints=robot_cfg.n_joints,
-            ee_frame_name=robot_cfg.ee_frame_name
+            ee_frame_name=robot_cfg.ee_frame_name,
+            trajectory=CylinderTrajectory(theta_start, theta_end, args.angular_speed) if args.cylinder else None,
         )
 
         # ============================================================
         # 5. Setup Approach Target
         # The approach goal position is also the hybrid control start point.
         # ============================================================
-        R_slope = euler_to_rot_matrix(common_config.euler)
-        target_pos = generate_start_position(
-            common_config.circle_radius,
-            common_config.circle_center,
-            common_config.size_z,
-            R_slope
-        )
+        if args.cylinder:
+            target_pos, _cylinder_approach_rot = get_cylinder_approach_target(
+                theta_start, common_config.size_z
+            )
+        else:
+            R_slope = euler_to_rot_matrix(common_config.euler)
+            target_pos = generate_start_position(
+                common_config.circle_radius,
+                common_config.circle_center,
+                common_config.size_z,
+                R_slope
+            )
 
         # ============================================================
         # 6. Create MuJoCo Interface
         # ============================================================
         print("\nStarting torque control...")
-        mujoco_interface = MujocoRobotInterface(
-            common_config,
-            joint_names=robot_cfg.joint_names,
-            xml_path=robot_cfg.mujoco_scene_xml_path
-        )
+        if args.cylinder:
+            mujoco_interface = MujocoRobotInterface(
+                common_config,
+                joint_names=robot_cfg.joint_names,
+                xml_path=robot_cfg.mujoco_scene_xml_path,
+                add_surface=False,
+                contact_geom_name="cylinder_geom",
+                cylinder_center=CYLINDER_CENTER,
+                cylinder_axis=CYLINDER_AXIS,
+            )
+        else:
+            mujoco_interface = MujocoRobotInterface(
+                common_config,
+                joint_names=robot_cfg.joint_names,
+                xml_path=robot_cfg.mujoco_scene_xml_path
+            )
 
         # ============================================================
         # 7. Run Combined Control Loop
@@ -328,10 +387,13 @@ def main() -> None:
             O_T_EE = np.array(robot_state.O_T_EE).reshape(4, 4).T
             start_pos = O_T_EE[:3, 3]
 
-            # Compute slope-aware target orientation: slope rotation * default EE orientation
-            rot_slope = Rotation.from_euler('xyz', common_config.euler)
-            rot_default = Rotation.from_quat(np.roll(robot_cfg.target_quat, -1))
-            target_rot = (rot_slope * rot_default).as_matrix()
+            # Compute approach target orientation
+            if args.cylinder:
+                target_rot = _cylinder_approach_rot
+            else:
+                rot_slope = Rotation.from_euler('xyz', common_config.euler)
+                rot_default = Rotation.from_quat(np.roll(robot_cfg.target_quat, -1))
+                target_rot = (rot_slope * rot_default).as_matrix()
 
             # Initialize approach controller
             control_phase = ControlPhase.APPROACHING
@@ -430,7 +492,12 @@ def main() -> None:
             cf_ss = contact_forces[skip_samples:]
             df_ss = desired_forces[skip_samples:]
             if cf_ss.shape[0] > 0 and df_ss.shape[0] > 0:
-                error_z = cf_ss[:, 2] - df_ss[:, 0]
+                if args.cylinder:
+                    normals_arr = np.array(hybrid_controller.normals)
+                    nor_ss = normals_arr[skip_samples:]
+                    error_z = np.einsum('ij,ij->i', cf_ss, nor_ss) - df_ss[:, 0]
+                else:
+                    error_z = cf_ss[:, 2] - df_ss[:, 0]
                 avg_abs_force_error = np.mean(np.abs(error_z))
                 var_force_error = np.var(error_z)
             else:
@@ -480,7 +547,11 @@ def main() -> None:
 
             # Force error time series (full, not skip-trimmed)
             if contact_forces.size > 0 and desired_forces.size > 0:
-                force_error = contact_forces[:, 2] - desired_forces[:, 0]
+                if args.cylinder:
+                    normals_all = np.array(hybrid_controller.normals)
+                    force_error = np.einsum('ij,ij->i', contact_forces, normals_all) - desired_forces[:, 0]
+                else:
+                    force_error = contact_forces[:, 2] - desired_forces[:, 0]
             else:
                 force_error = np.empty(0)
 
@@ -521,14 +592,30 @@ def main() -> None:
         if args.save_plots:
             print("\n[MAIN] Simulation complete. Generating plots...")
             plot_dir = args.plot_dir
-            # plot_joint_torques(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
-            # plot_ee_positions(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
-            plot_joint_torques(hybrid_controller, "joint_torques", common_config.dt, plot_dir=plot_dir)
-            plot_joint_torques(hybrid_controller, "joint_g_torques", common_config.dt, plot_dir=plot_dir)
-            plot_ee_positions(hybrid_controller, common_config.dt, plot_dir=plot_dir)
-            plot_control_torques(hybrid_controller, common_config.dt, plot_dir=plot_dir)
-            plot_hybrid_results(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir)
-            plot_force_error_z(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir)
+            if args.cylinder:
+                import matplotlib.pyplot as plt
+                cf  = contact_forces
+                df  = desired_forces
+                ep  = np.array(hybrid_controller.ee_positions)  if hybrid_controller.ee_positions  else np.empty((0, 3))
+                tp  = np.array(hybrid_controller.target_positions) if hybrid_controller.target_positions else np.empty((0, 3))
+                nor = np.array(hybrid_controller.normals)
+                t   = np.arange(len(cf)) * common_config.dt
+                f_proj    = np.einsum('ij,ij->i', cf, nor)
+                pos_err   = np.linalg.norm(ep - tp, axis=1)
+                force_err = f_proj - df[:, 0]
+                plot_cylinder_position_tracking(t, ep, tp, pos_err, save_dir=plot_dir)
+                plot_cylinder_contact_force(t, cf, nor, f_proj, df[:, 0], force_err, save_dir=plot_dir)
+                if not args.headless:
+                    plt.show()
+            else:
+                # plot_joint_torques(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
+                # plot_ee_positions(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
+                plot_joint_torques(hybrid_controller, "joint_torques", common_config.dt, plot_dir=plot_dir)
+                plot_joint_torques(hybrid_controller, "joint_g_torques", common_config.dt, plot_dir=plot_dir)
+                plot_ee_positions(hybrid_controller, common_config.dt, plot_dir=plot_dir)
+                plot_control_torques(hybrid_controller, common_config.dt, plot_dir=plot_dir)
+                plot_hybrid_results(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir)
+                plot_force_error_z(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir)
 
         print("\n[MAIN] Combined control finished")
         print(f"Approach time: {approach_controller.time_elapsed:.2f}s")
