@@ -94,8 +94,8 @@ FR3_CYLINDER_CONFIG = RobotConfig(
         'fr3_joint5', 'fr3_joint6', 'fr3_joint7'
     ],
     n_joints=7,
-    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853]),
-    target_quat=np.array([0., 0.7071, 0.7071, 0.]),
+    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, 0]),
+    target_quat=np.array([0., 1., 1., 0.]),
     ee_frame_name="attachment_site"
 )
 
@@ -110,8 +110,8 @@ FR3_FRICTION_CYLINDER_CONFIG = RobotConfig(
         'fr3_joint5', 'fr3_joint6', 'fr3_joint7'
     ],
     n_joints=7,
-    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853]),
-    target_quat=np.array([0., 0.7071, 0.7071, 0.]),
+    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, 0]),
+    target_quat=np.array([0., 1., 1., 0.]),
     ee_frame_name="attachment_site"
 )
 
@@ -126,8 +126,8 @@ FR3_JOINTF_CYLINDER_CONFIG = RobotConfig(
         'fr3_joint5', 'fr3_joint6', 'fr3_joint7'
     ],
     n_joints=7,
-    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853]),
-    target_quat=np.array([0., 0.7071, 0.7071, 0.]),
+    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, 0]),
+    target_quat=np.array([0., 1., 1., 0.]),
     ee_frame_name="attachment_site"
 )
 
@@ -142,8 +142,8 @@ FR3_JOINTF_SURFF_CYLINDER_CONFIG = RobotConfig(
         'fr3_joint5', 'fr3_joint6', 'fr3_joint7'
     ],
     n_joints=7,
-    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853]),
-    target_quat=np.array([0., 0.7071, 0.7071, 0.]),
+    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, 0]),
+    target_quat=np.array([0., 1., 1., 0.]),
     ee_frame_name="attachment_site"
 )
 

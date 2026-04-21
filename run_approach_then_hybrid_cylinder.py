@@ -285,10 +285,10 @@ def main() -> None:
 
     if args.trajectory == 1:
         theta_start    = 0.0
-        theta_end      = np.radians(55.0)
+        theta_end      = np.radians(75.0)
     else:
-        theta_start    = np.radians(-55.0)
-        theta_end      = np.radians(55.0)
+        theta_start    = np.radians(-75.0)
+        theta_end      = np.radians(75.0)
     sweep_duration = (theta_end - theta_start) / args.angular_speed
 
     print(f"[CONFIG] Trajectory {args.trajectory}: θ {np.degrees(theta_start):.1f}° → {np.degrees(theta_end):.1f}°  ({sweep_duration:.2f}s at ω={args.angular_speed:.4f} rad/s)")

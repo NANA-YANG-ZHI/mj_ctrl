@@ -177,9 +177,9 @@ class HybridControllerConfig:
     impedance_ori: np.ndarray = None
 
     # Force control gains
-    Kp_force: float = 0.8
-    Kd_force: float = 0.002
-    Ki_force: float = 0.8
+    Kp_force: float = 2.0
+    Kd_force: float = 0.5
+    Ki_force: float = 5.0
     F_desired_contact: np.ndarray = None
 
     # Torque rate limiting (max Nm change per timestep)
@@ -448,7 +448,7 @@ class HybridController:
         pino.computeJointJacobians(self.pino_model, self.pino_data)
         pino.updateFramePlacements(self.pino_model, self.pino_data)
         jac = pino.getFrameJacobian(self.pino_model, self.pino_data, self.pino_frame_id, pino.LOCAL_WORLD_ALIGNED)
-        M = pino.crba(self.pino_model, self.pino_data, q)
+        # M = pino.crba(self.pino_model, self.pino_data, q)
         M_inv = pino.computeMinverse(self.pino_model, self.pino_data, q)
 
         J_phi = self.S_f.T @ jac
@@ -461,11 +461,10 @@ class HybridController:
         # ============================================================
         # 3. Get Contact Information
         # ============================================================
-        F_ext_world = np.array(robot_state.O_F_ext_hat_K)
-        current_force_local = F_ext_world
+        current_force_local = np.array(robot_state.O_F_ext_hat_K)
         F_ext_phi = current_force_local @ self.S_fc
         F_ext_x = current_force_local @ self.S_vc
-        F_ext_v = None
+        # F_ext_v = None
 
         # ============================================================
         # 4. Null Space torque
