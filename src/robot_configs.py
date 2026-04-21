@@ -100,6 +100,19 @@ KUKA_CONFIG = RobotConfig(
 )
 
 
+# KUKA iiwa14 with cylinder surface
+KUKA_CYLINDER_CONFIG = RobotConfig(
+    name="kuka_cylinder",
+    pinocchio_xml_path="kuka_iiwa_14/iiwa14.xml",
+    mujoco_scene_xml_path="kuka_iiwa_14/table_cylinder.xml",
+    joint_names=["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7"],
+    n_joints=7,
+    q0=np.array([0, 0, 0, -1.5708, 0, 1.5708, 0]),
+    target_quat=np.array([0., 1., 0., 0.]),  # 180 deg around X → EE z pointing down
+    ee_frame_name="attachment_site"
+)
+
+
 # Franka Emika Panda Robot Configuration
 PANDA_CONFIG = RobotConfig(
     name="panda",
@@ -123,6 +136,7 @@ ROBOT_CONFIGS = {
     "fr3_jointf": FR3_JOINTF_CONFIG,
     "fr3_jointf_surff": FR3_JOINTF_SURFF_CONFIG,
     "kuka": KUKA_CONFIG,
+    "kuka_cylinder": KUKA_CYLINDER_CONFIG,
     "panda": PANDA_CONFIG,
 }
 

@@ -17,6 +17,7 @@ from src.robot_configs import (
     RobotConfig,
     FR3_CONFIG,
     KUKA_CONFIG,
+    KUKA_CYLINDER_CONFIG,
     PANDA_CONFIG,
     ROBOT_CONFIGS,
     get_robot_config
@@ -37,6 +38,7 @@ __all__ = [
     "RobotConfig",
     "FR3_CONFIG",
     "KUKA_CONFIG",
+    "KUKA_CYLINDER_CONFIG",
     "PANDA_CONFIG",
     "ROBOT_CONFIGS",
     "get_robot_config",
