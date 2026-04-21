@@ -4,6 +4,9 @@
 #        (must be executed from the workspace root)
 set -euo pipefail
 
+# Set locale to C to ensure printf uses '.' as decimal separator
+export LC_NUMERIC=C
+
 # ── Resolve workspace root regardless of invocation path ─────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
