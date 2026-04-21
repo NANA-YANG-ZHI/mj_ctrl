@@ -2,6 +2,23 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "run_approach_then_hybrid_cylinder",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_approach_then_hybrid_cylinder.py",
+      "args": [
+        "--trajectory", "2",
+        "--angular-speed", "0.624",
+        "--force-control-method", "feedforward",
+      ],
+      "console": "integratedTerminal",
+      "python": "C:\\Users\\11452\\miniconda3\\envs\\hybrid_ctrl\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    {
       "name": "run_approach_then_hybrid_mujoco",
       "type": "debugpy",
       "request": "launch",

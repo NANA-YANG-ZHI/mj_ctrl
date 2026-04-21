@@ -36,6 +36,8 @@ from utils_libfranka import (
     dynamically_consistent_inv,
     feedforward_PD,
     PI_term,
+    force_ctrl_pd,
+    force_ctrl_feedforward,
 )
 from mujoco_robot_interface import MujocoRobotInterface, Torques
 
@@ -267,18 +269,26 @@ def main() -> None:
                         help="Angular speed in rad/s (default pi/4 ≈ 45 deg/s)")
     parser.add_argument("--force-desired",    type=float, default=-10.0,
                         help="Desired contact force (negative = pressing in)")
+    parser.add_argument("--force-control-method", type=str, default="paper",
+                        choices=["paper", "pd", "feedforward"],
+                        help="Force control method: paper (default), pd, or feedforward")
+    parser.add_argument("--use-pi",           action="store_true",
+                        help="Add PI force correction on top of the selected force control method")
     parser.add_argument("--headless",         action="store_true")
     parser.add_argument("--save-plots",       action="store_true")
     parser.add_argument("--plot-dir",         type=str,
                         default="plots/run_approach_then_hybrid_cylinder")
+    parser.add_argument("--save-data",        action="store_true")
+    parser.add_argument("--data-dir",         type=str,
+                        default="experiments/cylinder/data/run")
     args = parser.parse_args()
 
     if args.trajectory == 1:
         theta_start    = 0.0
-        theta_end      = np.radians(60.0)
+        theta_end      = np.radians(55.0)
     else:
-        theta_start    = np.radians(-60.0)
-        theta_end      = np.radians(60.0)
+        theta_start    = np.radians(-55.0)
+        theta_end      = np.radians(55.0)
     sweep_duration = (theta_end - theta_start) / args.angular_speed
 
     print(f"[CONFIG] Trajectory {args.trajectory}: θ {np.degrees(theta_start):.1f}° → {np.degrees(theta_end):.1f}°  ({sweep_duration:.2f}s at ω={args.angular_speed:.4f} rad/s)")
@@ -304,8 +314,8 @@ def main() -> None:
     common_config.circle_radius      = CYLINDER_RADIUS
     common_config.size_z             = 0.002  # radial standoff above surface for approach
     common_config.euler              = np.array([0.0, 0.0, 0.0])  # not used for cylinder
-    common_config.force_control_method = "paper"
-    common_config.use_pi             = True
+    common_config.force_control_method = args.force_control_method
+    common_config.use_pi             = args.use_pi
     common_config.circle_duration    = sweep_duration
     common_config.angular_speed      = args.angular_speed
 
@@ -487,37 +497,47 @@ def main() -> None:
                 )
                 tau_ctrl_x   = J_motion.T @ (Mx_motion @ a_motion)
 
-                # ── Constraint-space (force) control — Bruno paper method ─────
-                C       = pino.computeCoriolisMatrix(pino_model, pino_data, q, dq)
-                J_dot   = pino.getFrameJacobianTimeVariation(
-                    pino_model, pino_data, pino_frame_id, pino.LOCAL_WORLD_ALIGNED
-                )
-                J_phi_dot = S_f.T @ J_dot
+                # ── Constraint-space (force) control ─────────────────────────
+                method = common_config.force_control_method
 
-                F_ext_x_trans = F_ext_x.copy()
-                F_ext_x_trans[-3:] = 0          # ignore torque components
+                if method == "paper":
+                    C         = pino.computeCoriolisMatrix(pino_model, pino_data, q, dq)
+                    J_dot     = pino.getFrameJacobianTimeVariation(
+                        pino_model, pino_data, pino_frame_id, pino.LOCAL_WORLD_ALIGNED
+                    )
+                    J_phi_dot = S_f.T @ J_dot
+                    F_ext_x_trans        = F_ext_x.copy()
+                    F_ext_x_trans[-3:]   = 0
+                    ctrl_comp    = -Mx_constraint @ J_phi @ M_inv @ (tau_ctrl_x + tau_ctrl_v)
+                    contact_comp =  Mx_constraint @ J_phi @ M_inv @ (J_motion.T @ F_ext_x_trans)
+                    vel_term     =  Mx_constraint @ (J_phi @ M_inv @ C - J_phi_dot) @ dq
+                    F_ctrl = (
+                        hybrid_config.F_desired_contact
+                        + ctrl_comp
+                        + contact_comp
+                        + vel_term
+                    )
+                elif method == "pd":
+                    F_ctrl = force_ctrl_pd(
+                        F_desired=hybrid_config.F_desired_contact,
+                        F_ext_phi=F_ext_phi,
+                        S_f=S_f,
+                        jac=jac,
+                        dq=dq,
+                    )
+                else:  # feedforward
+                    F_ctrl = force_ctrl_feedforward(hybrid_config.F_desired_contact)
 
-                ctrl_comp    = -Mx_constraint @ J_phi @ M_inv @ (tau_ctrl_x + tau_ctrl_v)
-                contact_comp =  Mx_constraint @ J_phi @ M_inv @ (J_motion.T @ F_ext_x_trans)
-                vel_term     =  Mx_constraint @ (J_phi @ M_inv @ C - J_phi_dot) @ dq
-
-                F_ctrl = (
-                    hybrid_config.F_desired_contact
-                    + ctrl_comp
-                    + contact_comp
-                    + vel_term
-                )
-
-                # PI correction on top
-                pi, integral_force_error = PI_term(
-                    F_ext_phi,
-                    hybrid_config.F_desired_contact,
-                    common_config.dt,
-                    integral_force_error,
-                    kp=hybrid_config.Kp_force,
-                    ki=hybrid_config.Ki_force,
-                )
-                F_ctrl = F_ctrl + pi
+                if common_config.use_pi:
+                    pi, integral_force_error = PI_term(
+                        F_ext_phi,
+                        hybrid_config.F_desired_contact,
+                        common_config.dt,
+                        integral_force_error,
+                        kp=hybrid_config.Kp_force,
+                        ki=hybrid_config.Ki_force,
+                    )
+                    F_ctrl = F_ctrl + pi
 
                 tau_ctrl_phi = J_phi.T @ F_ctrl
                 tau = tau_ctrl_phi + tau_ctrl_x + tau_ctrl_v
@@ -602,13 +622,25 @@ def main() -> None:
     print(f"AVG_POSITION_ERROR: {np.mean(pos_err):.6f} m")
     print(f"VAR_POSITION_ERROR: {np.var(pos_err):.6f}")
 
+    if args.save_data:
+        import os
+        os.makedirs(args.data_dir, exist_ok=True)
+        np.savez(
+            os.path.join(args.data_dir, "data.npz"),
+            t=t, pos_err=pos_err, force_err=force_err,
+            f_normal_proj=f_normal_proj, f_desired=f_desired_scalar,
+            ee_pos=ep, target_pos=tp,
+        )
+        print(f"[DATA] Saved → {args.data_dir}/data.npz")
+
     _plot_position_tracking(t, ep, tp, pos_err,
                             args.plot_dir if args.save_plots else None)
     _plot_contact_force(t, cf, nor, f_normal_proj, f_desired_scalar, force_err,
                         args.plot_dir if args.save_plots else None)
 
     import matplotlib.pyplot as plt
-    plt.show()
+    if not args.headless:
+        plt.show()
 
     print("\n[DONE] Cylinder hybrid control finished.")
 
