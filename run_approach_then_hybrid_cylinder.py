@@ -262,7 +262,7 @@ def main() -> None:
                         help="Robot to use (default: kuka)")
     parser.add_argument("--approach-duration", type=float, default=20.0)
     parser.add_argument("--trajectory",       type=int,   default=1, choices=[1, 2],
-                        help="1: θ 0→3π/4  |  2: θ −3π/4→3π/4")
+                        help="1: θ 0°→75°  |  2: θ −75°→75°")
     parser.add_argument("--angular-speed",    type=float, default=np.pi / 4,
                         help="Angular speed in rad/s (default pi/4 ≈ 45 deg/s)")
     parser.add_argument("--force-desired",    type=float, default=-10.0,
@@ -275,10 +275,10 @@ def main() -> None:
 
     if args.trajectory == 1:
         theta_start    = 0.0
-        theta_end      = 3 * np.pi / 4
+        theta_end      = np.radians(60.0)
     else:
-        theta_start    = -3 * np.pi / 4
-        theta_end      =  3 * np.pi / 4
+        theta_start    = np.radians(-60.0)
+        theta_end      = np.radians(60.0)
     sweep_duration = (theta_end - theta_start) / args.angular_speed
 
     print(f"[CONFIG] Trajectory {args.trajectory}: θ {np.degrees(theta_start):.1f}° → {np.degrees(theta_end):.1f}°  ({sweep_duration:.2f}s at ω={args.angular_speed:.4f} rad/s)")
