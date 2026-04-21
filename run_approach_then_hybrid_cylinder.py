@@ -94,40 +94,29 @@ def cylinder_selection_matrices(normal: np.ndarray):
     return S_f, S_v
 
 
-def cylinder_trajectory(
-    elapsed: float,
-    omega: float,
-    theta_start: float = -3 * np.pi / 4,
-    theta_min:   float = -3 * np.pi / 4,
-    theta_max:   float =  3 * np.pi / 4,
-):
+def cylinder_trajectory(elapsed: float, omega: float, theta_start: float = 0.0):
     """
-    Arc trajectory on the cylinder surface, clamped to [theta_min, theta_max].
+    Arc trajectory on the cylinder surface.
 
-    The EE sweeps from *theta_start* at angular speed *omega* (rad/s).
-    When the angle hits a limit the velocity and acceleration are zeroed so
-    the controller holds position rather than fighting the clamp.
+    The EE sweeps around the cylinder in the Y-Z plane (perpendicular to the
+    cylinder axis) at constant angular speed *omega*.
 
     Returns
     -------
     target_pos : (3,)
-    x_dot      : (3,)  desired linear velocity in world frame (zero at limits)
-    x_ddot     : (3,)  desired linear acceleration in world frame (zero at limits)
-    theta      : float  clamped angle (radians)
+    x_dot      : (3,)  desired linear velocity in world frame
+    x_ddot     : (3,)  desired linear acceleration in world frame
+    theta      : float  current angle (radians)
     """
-    theta_raw = theta_start + omega * elapsed
-    theta     = float(np.clip(theta_raw, theta_min, theta_max))
-
-    # Zero velocity/acceleration at the limits so the controller holds position.
-    at_limit = (theta_raw <= theta_min) or (theta_raw >= theta_max)
-
+    theta = theta_start + omega * elapsed
     sin_t, cos_t = np.sin(theta), np.cos(theta)
+
     normal  = np.array([0.0,  sin_t,  cos_t])
     tangent = np.array([0.0,  cos_t, -sin_t])  # d(normal)/dtheta
 
     target_pos = CYLINDER_CENTER + CYLINDER_RADIUS * normal
-    x_dot      = np.zeros(3) if at_limit else CYLINDER_RADIUS * omega * tangent
-    x_ddot     = np.zeros(3) if at_limit else -CYLINDER_RADIUS * omega**2 * normal
+    x_dot      = CYLINDER_RADIUS * omega * tangent
+    x_ddot     = -CYLINDER_RADIUS * omega**2 * normal   # centripetal
 
     return target_pos, x_dot, x_ddot, theta
 
@@ -273,12 +262,8 @@ def main() -> None:
                         help="Duration of the arc-sweep in seconds")
     parser.add_argument("--angular-speed",    type=float, default=np.pi / 4,
                         help="Angular speed in rad/s (default pi/4 ≈ 45 deg/s)")
-    parser.add_argument("--theta-start",      type=float, default=-3 * np.pi / 4,
-                        help="Starting angle in radians (default -3pi/4)")
-    parser.add_argument("--theta-min",        type=float, default=-3 * np.pi / 4,
-                        help="Lower arc limit in radians (default -3pi/4)")
-    parser.add_argument("--theta-max",        type=float, default= 3 * np.pi / 4,
-                        help="Upper arc limit in radians (default  3pi/4)")
+    parser.add_argument("--theta-start",      type=float, default=0.0,
+                        help="Starting angle on cylinder in radians (0 = top)")
     parser.add_argument("--force-desired",    type=float, default=-10.0,
                         help="Desired contact force (negative = pressing in)")
     parser.add_argument("--headless",         action="store_true")
@@ -429,10 +414,7 @@ def main() -> None:
 
                 # ── Trajectory ───────────────────────────────────────────────
                 target_pos, x_dot_des, x_ddot_des, theta = cylinder_trajectory(
-                    elapsed, args.angular_speed,
-                    theta_start=args.theta_start,
-                    theta_min=args.theta_min,
-                    theta_max=args.theta_max,
+                    elapsed, args.angular_speed, args.theta_start
                 )
 
                 # ── Dynamic surface geometry ─────────────────────────────────
