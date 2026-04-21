@@ -257,13 +257,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Approach + Hybrid Force Control on Cylinder Surface"
     )
+    parser.add_argument("--robot", type=str, default="fr3",
+                        choices=["fr3", "kuka", "fr3_friction", "fr3_jointf", "fr3_jointf_surff"],
+                        help="Robot to use (default: kuka)")
     parser.add_argument("--approach-duration", type=float, default=20.0)
-    parser.add_argument("--sweep-duration",   type=float, default=10.0,
-                        help="Duration of the arc-sweep in seconds")
+    parser.add_argument("--trajectory",       type=int,   default=1, choices=[1, 2],
+                        help="1: θ 0→3π/4  |  2: θ −3π/4→3π/4")
     parser.add_argument("--angular-speed",    type=float, default=np.pi / 4,
                         help="Angular speed in rad/s (default pi/4 ≈ 45 deg/s)")
-    parser.add_argument("--theta-start",      type=float, default=0.0,
-                        help="Starting angle on cylinder in radians (0 = top)")
     parser.add_argument("--force-desired",    type=float, default=-10.0,
                         help="Desired contact force (negative = pressing in)")
     parser.add_argument("--headless",         action="store_true")
@@ -272,7 +273,24 @@ def main() -> None:
                         default="plots/run_approach_then_hybrid_cylinder")
     args = parser.parse_args()
 
-    robot_cfg = get_robot_config("kuka_cylinder")
+    if args.trajectory == 1:
+        theta_start    = 0.0
+        theta_end      = 3 * np.pi / 4
+    else:
+        theta_start    = -3 * np.pi / 4
+        theta_end      =  3 * np.pi / 4
+    sweep_duration = (theta_end - theta_start) / args.angular_speed
+
+    print(f"[CONFIG] Trajectory {args.trajectory}: θ {np.degrees(theta_start):.1f}° → {np.degrees(theta_end):.1f}°  ({sweep_duration:.2f}s at ω={args.angular_speed:.4f} rad/s)")
+
+    _cylinder_config_map = {
+        "fr3":              "fr3_cylinder",
+        "kuka":             "kuka_cylinder",
+        "fr3_friction":     "fr3_friction_cylinder",
+        "fr3_jointf":       "fr3_jointf_cylinder",
+        "fr3_jointf_surff": "fr3_jointf_surff_cylinder",
+    }
+    robot_cfg = get_robot_config(_cylinder_config_map[args.robot])
 
     print(f"\n[CONFIG] Robot  : {robot_cfg.name}")
     print(f"[CONFIG] Scene  : {robot_cfg.mujoco_scene_xml_path}")
@@ -284,11 +302,11 @@ def main() -> None:
     common_config.gravity_compensation = True
     common_config.circle_center      = CYLINDER_CENTER
     common_config.circle_radius      = CYLINDER_RADIUS
-    common_config.size_z             = 0.01  # radial standoff above surface for approach
+    common_config.size_z             = 0.002  # radial standoff above surface for approach
     common_config.euler              = np.array([0.0, 0.0, 0.0])  # not used for cylinder
     common_config.force_control_method = "paper"
     common_config.use_pi             = True
-    common_config.circle_duration    = args.sweep_duration
+    common_config.circle_duration    = sweep_duration
     common_config.angular_speed      = args.angular_speed
 
     approach_config = CartesianSpacePDControlConfig()
@@ -306,7 +324,7 @@ def main() -> None:
     # ── Approach target: slightly above cylinder surface at theta_start ────────
     # The approach controller targets a point 1 cm radially outward from the
     # cylinder surface.  The hybrid force controller then presses inward.
-    theta0     = args.theta_start
+    theta0     = theta_start
     approach_normal     = np.array([0.0, np.sin(theta0), np.cos(theta0)])
     approach_target_pos = (
         CYLINDER_CENTER
@@ -407,15 +425,15 @@ def main() -> None:
             elif control_phase == ControlPhase.CIRCLE_DRAWING:
                 elapsed = hybrid_sim_time
 
-                if elapsed >= args.sweep_duration:
-                    print(f"\nSweep finished at t={elapsed:.2f}s")
-                    control_phase = ControlPhase.STOPPED
-                    continue
-
                 # ── Trajectory ───────────────────────────────────────────────
                 target_pos, x_dot_des, x_ddot_des, theta = cylinder_trajectory(
-                    elapsed, args.angular_speed, args.theta_start
+                    elapsed, args.angular_speed, theta_start
                 )
+
+                if theta >= theta_end:
+                    print(f"\nSweep finished: θ={np.degrees(theta):.1f}° at t={elapsed:.2f}s")
+                    control_phase = ControlPhase.STOPPED
+                    continue
 
                 # ── Dynamic surface geometry ─────────────────────────────────
                 normal  = cylinder_surface_normal(current_pos)

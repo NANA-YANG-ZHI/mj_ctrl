@@ -84,6 +84,70 @@ FR3_JOINTF_SURFF_CONFIG = RobotConfig(
 )
 
 
+# FR3 with cylinder surface (no frictions)
+FR3_CYLINDER_CONFIG = RobotConfig(
+    name="fr3_cylinder",
+    pinocchio_xml_path="franka_fr3/fr3_no_jointf_no_surff.xml",
+    mujoco_scene_xml_path="franka_fr3/scene_cylinder.xml",
+    joint_names=[
+        'fr3_joint1', 'fr3_joint2', 'fr3_joint3', 'fr3_joint4',
+        'fr3_joint5', 'fr3_joint6', 'fr3_joint7'
+    ],
+    n_joints=7,
+    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853]),
+    target_quat=np.array([0., 0.7071, 0.7071, 0.]),
+    ee_frame_name="attachment_site"
+)
+
+
+# FR3 with cylinder surface and surface friction (condim=6)
+FR3_FRICTION_CYLINDER_CONFIG = RobotConfig(
+    name="fr3_friction_cylinder",
+    pinocchio_xml_path="franka_fr3/fr3_no_joint_friction.xml",
+    mujoco_scene_xml_path="franka_fr3/scene_friction_cylinder.xml",
+    joint_names=[
+        'fr3_joint1', 'fr3_joint2', 'fr3_joint3', 'fr3_joint4',
+        'fr3_joint5', 'fr3_joint6', 'fr3_joint7'
+    ],
+    n_joints=7,
+    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853]),
+    target_quat=np.array([0., 0.7071, 0.7071, 0.]),
+    ee_frame_name="attachment_site"
+)
+
+
+# FR3 with cylinder surface and joint friction (condim=1)
+FR3_JOINTF_CYLINDER_CONFIG = RobotConfig(
+    name="fr3_jointf_cylinder",
+    pinocchio_xml_path="franka_fr3/fr3_jointf_no_surff.xml",
+    mujoco_scene_xml_path="franka_fr3/scene_jointf_cylinder.xml",
+    joint_names=[
+        'fr3_joint1', 'fr3_joint2', 'fr3_joint3', 'fr3_joint4',
+        'fr3_joint5', 'fr3_joint6', 'fr3_joint7'
+    ],
+    n_joints=7,
+    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853]),
+    target_quat=np.array([0., 0.7071, 0.7071, 0.]),
+    ee_frame_name="attachment_site"
+)
+
+
+# FR3 with cylinder surface, joint friction and surface friction (condim=6)
+FR3_JOINTF_SURFF_CYLINDER_CONFIG = RobotConfig(
+    name="fr3_jointf_surff_cylinder",
+    pinocchio_xml_path="franka_fr3/fr3.xml",
+    mujoco_scene_xml_path="franka_fr3/scene_jointf_friction_cylinder.xml",
+    joint_names=[
+        'fr3_joint1', 'fr3_joint2', 'fr3_joint3', 'fr3_joint4',
+        'fr3_joint5', 'fr3_joint6', 'fr3_joint7'
+    ],
+    n_joints=7,
+    q0=np.array([0, 0, 0, -1.57079, 0, 1.57079, -0.7853]),
+    target_quat=np.array([0., 0.7071, 0.7071, 0.]),
+    ee_frame_name="attachment_site"
+)
+
+
 # KUKA iiwa14 Robot Configuration
 KUKA_CONFIG = RobotConfig(
     name="kuka",
@@ -135,6 +199,10 @@ ROBOT_CONFIGS = {
     "fr3_friction": FR3_FRICTION_CONFIG,
     "fr3_jointf": FR3_JOINTF_CONFIG,
     "fr3_jointf_surff": FR3_JOINTF_SURFF_CONFIG,
+    "fr3_cylinder": FR3_CYLINDER_CONFIG,
+    "fr3_friction_cylinder": FR3_FRICTION_CYLINDER_CONFIG,
+    "fr3_jointf_cylinder": FR3_JOINTF_CYLINDER_CONFIG,
+    "fr3_jointf_surff_cylinder": FR3_JOINTF_SURFF_CYLINDER_CONFIG,
     "kuka": KUKA_CONFIG,
     "kuka_cylinder": KUKA_CYLINDER_CONFIG,
     "panda": PANDA_CONFIG,
