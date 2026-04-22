@@ -605,8 +605,12 @@ def main() -> None:
                 force_err = f_proj - df[:, 0]
                 plot_cylinder_position_tracking(t, ep, tp, pos_err, save_dir=plot_dir)
                 plot_cylinder_contact_force(t, cf, nor, f_proj, df[:, 0], force_err, save_dir=plot_dir)
-                if not args.headless:
-                    plt.show()
+                # plot_joint_torques(hybrid_controller, "joint_torques", common_config.dt, plot_dir=plot_dir)
+                # plot_joint_torques(hybrid_controller, "joint_g_torques", common_config.dt, plot_dir=plot_dir)
+                plot_ee_positions(hybrid_controller, common_config.dt, plot_dir=plot_dir)
+                # plot_control_torques(hybrid_controller, common_config.dt, plot_dir=plot_dir)
+                plot_hybrid_results(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir)
+                plot_force_error_z(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir)
             else:
                 # plot_joint_torques(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
                 # plot_ee_positions(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
