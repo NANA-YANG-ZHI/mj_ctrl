@@ -7,7 +7,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/run_approach_then_hybrid_cylinder.py",
       "args": [
-        "--trajectory", "2",
+        "--trajectory", "1",
         "--angular-speed", "0.8",
         "--force-control-method", "paper",
         "--robot", "fr3_friction"
