@@ -1,0 +1,55 @@
+[CONFIG] Cylinder sweep: θ 0.0° → 75.0°  (1.45 s)
+
+[CONFIG] Using robot: fr3_jointf_cylinder
+[CONFIG] Pinocchio XML: franka_fr3/fr3_jointf_no_surff.xml
+[CONFIG] MuJoCo XML: franka_fr3/scene_jointf_cylinder.xml
+
+============================================================
+APPROACH + HYBRID FORCE-IMPEDANCE CONTROL
+============================================================
+Robot: FR3_JOINTF_CYLINDER
+Force control method: feedforward
+This will:
+  1. Approach the target surface position
+  2. Perform circle drawing with hybrid force control
+
+Make sure:
+  1. The workspace is clear
+  2. Emergency stop is accessible
+============================================================
+
+Starting torque control...
+[APPROACH START] Start position: [ 5.54499478e-01 -6.59438413e-34  6.24502429e-01]
+[APPROACH START] Target position: [0.5   0.    0.552]
+[APPROACH START] Target quaternion: [[ 1.  0. -0.]
+ [ 0. -1. -0.]
+ [ 0.  0. -1.]]
+
+============================================================
+PHASE 1: APPROACHING TARGET POSITION
+============================================================
+
+============================================================
+TARGET REACHED at t=1.03s!
+PHASE 2: HYBRID FORCE-IMPEDANCE CONTROL
+============================================================
+
+[HYBRID START] Surface motion started at t=0.00s
+[HYBRID START] Center: [0.5  0.   0.45]
+[HYBRID START] Radius: 0.1
+[HYBRID START] Force control: F_desired=[-10.]
+[HYBRID START] start pos: [0.5  0.   0.45]
+[HYBRID START] end pos: [0.6  0.   0.45]
+
+============================================================
+HYBRID CONTROL FINISHED at t=1.46s!
+============================================================
+AVG_FORCE_Z_ERROR: 1.683662
+VAR_FORCE_Z_ERROR: 3.057091
+AVG_POSITION_ERROR: 0.052244
+VAR_POSITION_ERROR: 0.000030
+DATA_SAVED: /home/nana/wkspace/fork_mj_ctrl/cylinder_experiments/method_comparison/sweep_method_results/data/fr3_jointf/ff_pi/data_0.9_all.npz
+
+[MAIN] Combined control finished
+Approach time: 1.03s
+Hybrid time:   1.46s

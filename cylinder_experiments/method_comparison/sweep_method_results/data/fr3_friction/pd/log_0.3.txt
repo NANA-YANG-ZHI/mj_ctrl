@@ -1,0 +1,55 @@
+[CONFIG] Cylinder sweep: θ 0.0° → 75.0°  (4.36 s)
+
+[CONFIG] Using robot: fr3_friction_cylinder
+[CONFIG] Pinocchio XML: franka_fr3/fr3_no_joint_friction.xml
+[CONFIG] MuJoCo XML: franka_fr3/scene_friction_cylinder.xml
+
+============================================================
+APPROACH + HYBRID FORCE-IMPEDANCE CONTROL
+============================================================
+Robot: FR3_FRICTION_CYLINDER
+Force control method: pd
+This will:
+  1. Approach the target surface position
+  2. Perform circle drawing with hybrid force control
+
+Make sure:
+  1. The workspace is clear
+  2. Emergency stop is accessible
+============================================================
+
+Starting torque control...
+[APPROACH START] Start position: [ 5.54499478e-01 -6.59438413e-34  6.24502429e-01]
+[APPROACH START] Target position: [0.5   0.    0.552]
+[APPROACH START] Target quaternion: [[ 1.  0. -0.]
+ [ 0. -1. -0.]
+ [ 0.  0. -1.]]
+
+============================================================
+PHASE 1: APPROACHING TARGET POSITION
+============================================================
+
+============================================================
+TARGET REACHED at t=1.00s!
+PHASE 2: HYBRID FORCE-IMPEDANCE CONTROL
+============================================================
+
+[HYBRID START] Surface motion started at t=0.00s
+[HYBRID START] Center: [0.5  0.   0.45]
+[HYBRID START] Radius: 0.1
+[HYBRID START] Force control: F_desired=[-10.]
+[HYBRID START] start pos: [0.5  0.   0.45]
+[HYBRID START] end pos: [0.6  0.   0.45]
+
+============================================================
+HYBRID CONTROL FINISHED at t=4.36s!
+============================================================
+AVG_FORCE_Z_ERROR: 3.327222
+VAR_FORCE_Z_ERROR: 0.000003
+AVG_POSITION_ERROR: 0.021224
+VAR_POSITION_ERROR: 0.000174
+DATA_SAVED: /home/nana/wkspace/fork_mj_ctrl/cylinder_experiments/method_comparison/sweep_method_results/data/fr3_friction/pd/data_0.3_all.npz
+
+[MAIN] Combined control finished
+Approach time: 1.00s
+Hybrid time:   4.36s
