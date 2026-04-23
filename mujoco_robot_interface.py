@@ -171,18 +171,25 @@ class MujocoRobotInterface:
             return current_force_local
 
         if self.cylinder_center is not None and self.cylinder_axis is not None:
-            # Compute outward normal from EE position relative to cylinder axis.
-            # Returns -normal * F_normal so that pressing gives a negative value
-            # when projected onto S_f = [outward_normal, 0, 0, 0]^T.
-            ee_pos = self.data.site(self.site_id).xpos.copy()
-            radial = ee_pos - self.cylinder_center
-            radial -= np.dot(radial, self.cylinder_axis) * self.cylinder_axis
-            norm = np.linalg.norm(radial)
-            if norm < 1e-6:
-                return current_force_local
-            outward_normal = radial / norm
-            f_normal = contact_force_local[0]  # repulsive (>= 0)
-            current_force_local[:3] = -outward_normal * f_normal
+            # # Compute outward normal from EE position relative to cylinder axis.
+            # # Returns -normal * F_normal so that pressing gives a negative value
+            # # when projected onto S_f = [outward_normal, 0, 0, 0]^T.
+            # ee_pos = self.data.site(self.site_id).xpos.copy()
+            # radial = ee_pos - self.cylinder_center
+            # radial -= np.dot(radial, self.cylinder_axis) * self.cylinder_axis
+            # norm = np.linalg.norm(radial)
+            # if norm < 1e-6:
+            #     return current_force_local
+            # outward_normal = radial / norm
+            # f_normal = contact_force_local[0]  # repulsive (>= 0)
+            # current_force_local[:3] = -outward_normal * f_normal
+            
+            # contact.frame rows are [n̂, t̂₁, t̂₂] in world frame;
+            # R.T maps contact-frame scalars → world-frame vector.
+            # Negation preserves the convention: pressing → negative F_ext_phi.
+            R = contact.frame.reshape(3, 3)
+            current_force_local[:3] = (R.T @ contact_force_local[:3])
+            current_force_local[3:] = contact_force_local[3:]
         else:
             # Original slope convention: contact x (normal) maps to -local_z.
             contact_rot = np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])

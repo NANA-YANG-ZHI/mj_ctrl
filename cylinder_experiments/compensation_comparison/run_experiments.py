@@ -1,0 +1,85 @@
+"""
+Compensation Term Ablation — Cylinder Surface Data Collection
+=============================================================
+Runs run_approach_then_hybrid_mujoco.py four times (each time with one
+compensation term disabled) for the cylinder surface case.
+
+Usage:
+    python cylinder_experiments/compensation_comparison/run_experiments.py \\
+        --headless \\
+        --data-dir cylinder_experiments/compensation_comparison/data/fr3_friction_cylinder
+"""
+import argparse
+import os
+import subprocess
+import sys
+
+CONFIGS = [
+    {"label": "No contact force compensation", "flags": ["--no-contact-force-compensation"]},
+    {"label": "No velocity term",              "flags": ["--no-velocity-term"]},
+    {"label": "No control force compensation", "flags": ["--no-control-force-compensation"]},
+    {"label": "All compensations ON",          "flags": []},
+]
+
+RUNNER = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "run_approach_then_hybrid_mujoco.py"
+)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run 4 compensation ablation configs on cylinder surface and save .npz data"
+    )
+    parser.add_argument("--robot", default="fr3_friction",
+                        choices=["fr3", "kuka", "panda", "fr3_friction",
+                                 "fr3_jointf", "fr3_jointf_surff"])
+    parser.add_argument("--approach-duration", type=float, default=20.0)
+    parser.add_argument("--circle-duration",   type=float, default=10.0)
+    parser.add_argument("--angular-speed",     type=float, default=3.2)
+    parser.add_argument("--trajectory",        type=int,   default=1, choices=[1, 2])
+    parser.add_argument("--force-control-method", default="paper",
+                        choices=["paper", "pd", "feedforward"])
+    parser.add_argument("--skip-seconds", type=float, default=1.0)
+    parser.add_argument("--headless", action="store_true")
+    parser.add_argument("--data-dir", required=True,
+                        help="Directory to save .npz data files")
+    return parser.parse_args()
+
+
+def build_cmd(args, extra_flags):
+    cmd = [
+        sys.executable, RUNNER,
+        "--robot",                args.robot,
+        "--approach-duration",    str(args.approach_duration),
+        "--circle-duration",      str(args.circle_duration),
+        "--angular-speed",        str(args.angular_speed),
+        "--trajectory",           str(args.trajectory),
+        "--force-control-method", args.force_control_method,
+        "--skip-seconds",         str(args.skip_seconds),
+        "--save-data",
+        "--data-dir",             os.path.abspath(args.data_dir),
+        "--multiplier",           "0.0",
+        "--cylinder",
+    ]
+    if args.headless:
+        cmd.append("--headless")
+    cmd.extend(extra_flags)
+    return cmd
+
+
+def main():
+    args = parse_args()
+    os.makedirs(args.data_dir, exist_ok=True)
+
+    for cfg in CONFIGS:
+        print(f"\n{'='*60}")
+        print(f"Running: {cfg['label']}")
+        print(f"{'='*60}")
+        subprocess.run(build_cmd(args, cfg["flags"]), check=True)
+        print(f"[DONE] {cfg['label']}")
+
+    print(f"\n[INFO] All data saved to: {os.path.abspath(args.data_dir)}")
+
+
+if __name__ == "__main__":
+    main()

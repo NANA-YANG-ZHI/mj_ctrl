@@ -610,7 +610,7 @@ def main() -> None:
                 plot_ee_positions(hybrid_controller, common_config.dt, plot_dir=plot_dir)
                 # plot_control_torques(hybrid_controller, common_config.dt, plot_dir=plot_dir)
                 plot_hybrid_results(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir)
-                plot_force_error_z(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir)
+                # plot_force_error_z(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir) # only works for flat surface with Z normal
             else:
                 # plot_joint_torques(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
                 # plot_ee_positions(approach_controller, common_config.dt, plot_dir="mj_ctrl/plots/sim/approach")
