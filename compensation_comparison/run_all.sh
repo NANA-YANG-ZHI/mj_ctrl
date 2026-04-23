@@ -5,28 +5,30 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── [COMMENTED OUT] Run 1: Flat surface, frictionless ────────────────────────
-# echo "=========================================================="
-# echo " Run 1: Frictionless (flat surface)"
-# echo "=========================================================="
-# python "$SCRIPT_DIR/run_experiments.py" \
-#     --robot fr3 \
-#     --headless \
-#     --circle-duration 10.0 \
-#     --slope-angle 0.0 \
-#     --data-dir "$SCRIPT_DIR/data/frictionless"
+echo "=========================================================="
+echo " Run 1: Frictionless (flat surface)"
+echo "=========================================================="
+python "$SCRIPT_DIR/run_experiments.py" \
+    --robot fr3 \
+    --headless \
+    --circle-duration 10.0 \
+    --slope-angle 0.0 \
+    --angular-speed 3.2 \
+    --data-dir "$SCRIPT_DIR/data/frictionless_angularv3.2"
 
 # ── [COMMENTED OUT] Run 2: Flat surface, friction μ=0.7 ──────────────────────
-# echo ""
-# echo "=========================================================="
-# echo " Run 2: Surface friction μ=0.7 (flat surface)"
-# echo "=========================================================="
-# python "$SCRIPT_DIR/run_experiments.py" \
-#     --robot fr3_friction \
-#     --headless \
-#     --circle-duration 10.0 \
-#     --slope-angle 0.0 \
-#     --surface-friction 0.7 \
-#     --data-dir "$SCRIPT_DIR/data/friction_0.7"
+echo ""
+echo "=========================================================="
+echo " Run 2: Surface friction μ=0.7 (flat surface)"
+echo "=========================================================="
+python "$SCRIPT_DIR/run_experiments.py" \
+    --robot fr3_friction \
+    --headless \
+    --circle-duration 10.0 \
+    --slope-angle 0.0 \
+    --surface-friction 0.7 \
+    --angular-speed 3.2 \
+    --data-dir "$SCRIPT_DIR/data/friction_0.7_angularv3.2"
 
 # ── Run 3: Slope 30°, frictionless ───────────────────────────────────────────
 echo "=========================================================="
@@ -38,7 +40,8 @@ python "$SCRIPT_DIR/run_experiments.py" \
     --headless \
     --circle-duration 10.0 \
     --slope-angle 30.0 \
-    --data-dir "$SCRIPT_DIR/data/slope30_frictionless"
+    --angular-speed 3.2 \
+    --data-dir "$SCRIPT_DIR/data/slope30_frictionless_angularv3.2"
 
 echo ""
 
@@ -53,7 +56,8 @@ python "$SCRIPT_DIR/run_experiments.py" \
     --circle-duration 10.0 \
     --slope-angle 30.0 \
     --surface-friction 0.7 \
-    --data-dir "$SCRIPT_DIR/data/slope30_friction_0.7"
+    --angular-speed 3.2 \
+    --data-dir "$SCRIPT_DIR/data/slope30_friction_0.7_angularv3.2"
 
 echo ""
 echo "=========================================================="
