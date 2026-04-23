@@ -44,7 +44,7 @@ from mujoco_robot_interface import MujocoRobotInterface, Torques
 # ──────────────────────────────────────────────────────────────────────────────
 # Cylinder geometry constants
 # ──────────────────────────────────────────────────────────────────────────────
-CYLINDER_CENTER = np.array([0.5, 0.0, 0.0])
+CYLINDER_CENTER = np.array([0.5, 0.0, 0.45])
 CYLINDER_AXIS   = np.array([1.0, 0.0, 0.0])   # horizontal, along world X
 CYLINDER_RADIUS = 0.1                           # metres
 
