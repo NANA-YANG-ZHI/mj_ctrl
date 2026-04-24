@@ -30,6 +30,7 @@ from src.cylinder_helper import (
     get_cylinder_approach_target,
     plot_cylinder_position_tracking,
     plot_cylinder_contact_force,
+    plot_cylinder_yz,
 )
 from src.trajectory import CylinderTrajectory
 from utils_plot import plot_ee_positions, plot_joint_torques, plot_control_torques, plot_hybrid_results, plot_force_error_z
@@ -198,8 +199,8 @@ def main() -> None:
     # ============================================================
     if args.cylinder:
         robot_cfg = get_robot_config(CYLINDER_CONFIG_MAP[args.robot])
-        theta_start = 0.0 if args.trajectory == 1 else np.radians(-75.0)
-        theta_end   = np.radians(75.0)
+        theta_start = 0.0 if args.trajectory == 1 else np.radians(-60.0)
+        theta_end   = np.radians(60.0)
         sweep_duration = (theta_end - theta_start) / args.angular_speed
         print(f"[CONFIG] Cylinder sweep: θ {np.degrees(theta_start):.1f}° → "
               f"{np.degrees(theta_end):.1f}°  ({sweep_duration:.2f} s)")
@@ -607,7 +608,7 @@ def main() -> None:
                 plot_cylinder_contact_force(t, cf, nor, f_proj, df[:, 0], force_err, save_dir=plot_dir)
                 # plot_joint_torques(hybrid_controller, "joint_torques", common_config.dt, plot_dir=plot_dir)
                 # plot_joint_torques(hybrid_controller, "joint_g_torques", common_config.dt, plot_dir=plot_dir)
-                plot_ee_positions(hybrid_controller, common_config.dt, plot_dir=plot_dir)
+                plot_cylinder_yz(ep, tp, pos_err, save_dir=plot_dir)
                 # plot_control_torques(hybrid_controller, common_config.dt, plot_dir=plot_dir)
                 plot_hybrid_results(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir)
                 # plot_force_error_z(hybrid_controller, common_config.dt, robot_cfg.name, plot_dir=plot_dir) # only works for flat surface with Z normal

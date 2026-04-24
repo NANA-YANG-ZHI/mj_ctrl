@@ -193,9 +193,9 @@ class HybridControllerConfig:
 
     def __post_init__(self):
         if self.impedance_pos is None:
-            self.impedance_pos = np.asarray([100.0, 100.0, 100.0])
+            self.impedance_pos = np.asarray([100.0, 100.0, 100.0]) * 5
         if self.impedance_ori is None:
-            self.impedance_ori = np.asarray([50.0, 50.0, 50.0])
+            self.impedance_ori = np.asarray([50.0, 50.0, 50.0]) * 5
         if self.Kp is None:
             self.Kp = np.concatenate([self.impedance_pos, self.impedance_ori], axis=0)
         if self.Kd is None:

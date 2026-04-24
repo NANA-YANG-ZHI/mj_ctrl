@@ -89,6 +89,50 @@ def plot_cylinder_position_tracking(t, ee_pos, tgt_pos, pos_err, save_dir=None):
         print(f"[PLOT] Position tracking → {path}")
 
 
+def plot_cylinder_yz(ee_pos, tgt_pos, pos_err, save_dir=None):
+    """YZ-plane view of the cylinder cross-section with actual and desired trajectories."""
+    import matplotlib.pyplot as plt
+
+    theta_wire = np.linspace(0, 2 * np.pi, 200)
+    cyl_y = CYLINDER_CENTER[1] + CYLINDER_RADIUS * np.sin(theta_wire)
+    cyl_z = CYLINDER_CENTER[2] + CYLINDER_RADIUS * np.cos(theta_wire)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle("Cylinder YZ Plane — Position Tracking", fontsize=12, fontweight="bold")
+
+    # ── Left: YZ trajectory ────────────────────────────────────────────────────
+    ax = axes[0]
+    ax.plot(cyl_y, cyl_z, "k--", lw=0.8, alpha=0.4, label="Cylinder surface")
+    ax.plot(tgt_pos[:, 1], tgt_pos[:, 2], "r--", lw=1.5, label="Desired")
+    ax.plot(ee_pos[:, 1],  ee_pos[:, 2],  "b-",  lw=1.5, label="Actual")
+    ax.plot(tgt_pos[0,  1], tgt_pos[0,  2], "rs", ms=6)   # start
+    ax.plot(tgt_pos[-1, 1], tgt_pos[-1, 2], "r^", ms=6)   # end
+    ax.set_xlabel("Y (m)")
+    ax.set_ylabel("Z (m)")
+    ax.set_aspect("equal")
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8)
+    ax.set_title("YZ cross-section", fontsize=9)
+
+    # ── Right: position error vs sample index ─────────────────────────────────
+    ax2 = axes[1]
+    ax2.plot(pos_err * 1e3, "m-", lw=1.2)
+    ax2.set_xlabel("Sample")
+    ax2.set_ylabel("Position error (mm)")
+    ax2.grid(True, alpha=0.3)
+    ax2.set_title(f"Mean: {np.mean(pos_err)*1e3:.2f} mm   Max: {np.max(pos_err)*1e3:.2f} mm",
+                  fontsize=9)
+
+    fig.tight_layout()
+    if save_dir:
+        import os
+        os.makedirs(save_dir, exist_ok=True)
+        path = f"{save_dir}/cylinder_yz.png"
+        fig.savefig(path, dpi=150)
+        print(f"[PLOT] Cylinder YZ → {path}")
+    plt.close(fig)
+
+
 def plot_cylinder_contact_force(t, cf, normals, f_proj, f_desired, force_err, save_dir=None):
     import matplotlib.pyplot as plt
 
