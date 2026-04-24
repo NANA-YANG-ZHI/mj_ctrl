@@ -16,7 +16,7 @@
 # Environment overrides:
 #   NUM_WORKERS    parallel jobs                  (default: 10)
 #   SKIP_SECONDS   burn-in seconds for collect    (default: 1.0)
-#   TRAJECTORY     1 = 0°→75°, 2 = −75°→75°      (default: 1)
+#   TRAJECTORY     1 = 0°→60°, 2 = −60°→60°      (default: 1)
 #   FORCE_DESIRED  desired contact force N         (default: -10.0)
 
 set -euo pipefail
@@ -30,7 +30,7 @@ PLOT_SCRIPT="${SCRIPT_DIR}/plot_comparison.py"
 # ── Configuration ─────────────────────────────────────────────────────────────
 NUM_WORKERS="${NUM_WORKERS:-10}"
 SKIP_SECONDS="${SKIP_SECONDS:-1.0}"
-TRAJECTORY="${TRAJECTORY:-1}"
+TRAJECTORY="${TRAJECTORY:-2}"
 FORCE_DESIRED="${FORCE_DESIRED:--10.0}"
 
 ROBOTS=(fr3_friction fr3_jointf_surff)
