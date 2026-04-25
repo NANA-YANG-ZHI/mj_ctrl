@@ -31,6 +31,7 @@
         "--save-plots",
         "--use-pi",
         "--slope-angle", "0",
+        "--robot", "fr3_friction"
       ],
       "console": "integratedTerminal",
       "python": "C:\\Users\\11452\\miniconda3\\envs\\hybrid_ctrl\\python.exe",

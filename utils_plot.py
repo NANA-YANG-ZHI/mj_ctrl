@@ -204,7 +204,7 @@ def plot_hybrid_results(
             axes[i].plot(t, control_comp[:, i], label='Control Force Compensation', linewidth=2)
             axes[i].plot(t, contact_comp[:, i], label='Contact Force Compensation', linewidth=2)
             axes[i].plot(t, velocity_term[:, i], label='Velocity Term', linewidth=2)
-            # axes[i].plot(t, f_ctrl_constraint[:, i], label='F_ctrl Constraint', linewidth=2)
+            axes[i].plot(t, f_ctrl_constraint[:, i], label='F_ctrl Constraint', linewidth=2)
             axes[i].set_ylabel(f'Force Dim {i + 1} (N)')
             axes[i].legend(loc='best')
             axes[i].grid(True, alpha=0.3)
