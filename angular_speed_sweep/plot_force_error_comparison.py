@@ -60,11 +60,12 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLOTS_DIR = os.path.join(SCRIPT_DIR, "plots")
 
 METHOD_KEYS = [
+    ("Baseline",         "baseline",       "tab:gray",   "x"),
     ("Feedforward",      "feedforward",    "tab:blue",   "o"),
     ("Feedforward + PI", "feedforward_pi", "tab:purple", "s"),
     ("PD",               "pd",             "tab:green",  "^"),
-    ("HFDC",             "paper",          "tab:orange",    "D"),
-    ("HFDC + PI",        "paper_pi",       "tab:red", "P"),
+    ("HFDC",             "paper",          "tab:orange", "D"),
+    # ("HFDC + PI",        "paper_pi",       "tab:red",    "P"),
 ]
 
 STD_RATIO = 0.3   # width of ±1 std band relative to mean (for combined plots)
@@ -188,7 +189,10 @@ def load_all(data_dir):
     )}
     for fpath in npz_files:
         d = np.load(fpath)
-        rows["ee_linear_speed_m_s"].append(float(d["ee_linear_speed_m_s"]))
+        rows["ee_linear_speed_m_s"].append(
+            float(d["ee_linear_speed_m_s"]) if "ee_linear_speed_m_s" in d
+            else float(d["angular_speed_rad_s"]) * 0.1  # r=0.1 m fallback
+        )
 
         # Force: skip first second
         fe = d["force_error"]
