@@ -43,7 +43,7 @@ METHOD_KEYS = [
     ("Feedforward + PI",  "feedforward_pi", "tab:purple", "-",  "s"),
     ("PD",                "pd",             "tab:green",  "-",  "^"),
     ("HFDC",              "paper",          "tab:orange", "-",  "D"),
-    ("HFDC + PI",         "paper_pi",       "tab:red",    "-",  "P"),
+    # ("HFDC + PI",         "paper_pi",       "tab:red",    "-",  "P"),
 ]
 
 AXES_LABELS = ["X", "Y", "Z"]
