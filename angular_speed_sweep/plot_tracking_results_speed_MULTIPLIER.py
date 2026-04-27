@@ -38,6 +38,7 @@ DT          = 0.001          # simulation timestep (s)
 SKIP_S      = 1.0            # seconds to skip at the start for steady-state metrics
 
 METHOD_KEYS = [
+    ("Baseline",          "baseline",       "tab:gray",   "-",  "x"),
     ("Feedforward",       "feedforward",    "tab:blue",   "-",  "o"),
     ("Feedforward + PI",  "feedforward_pi", "tab:purple", "-",  "s"),
     ("PD",                "pd",             "tab:green",  "-",  "^"),
@@ -275,9 +276,11 @@ def main():
         try:
             d = load_npz(method_dir, multiplier, slope_angle)
             datasets.append((name, d, color, ls, marker))
+            ee_spd = float(d["ee_linear_speed_m_s"]) if "ee_linear_speed_m_s" in d \
+                     else float(d["angular_speed_rad_s"]) * 0.1
             print(f"[LOAD] {name:20s} — {d['actual_positions'].shape[0]} timesteps, "
                   f"angular_speed={float(d['angular_speed_rad_s']):.2f} rad/s, "
-                  f"ee_speed={float(d['ee_linear_speed_m_s']):.3f} m/s")
+                  f"ee_speed={ee_spd:.3f} m/s")
         except FileNotFoundError as e:
             print(f"[SKIP] {e}")
 
