@@ -11,7 +11,7 @@ Handles both:
 Usage:
     python collect_results.py <data_root>
         [--output results.csv]
-        [--skip-seconds 1.0]
+        [--skip-seconds 0.2]
         [--dt 0.001]
 """
 import argparse
