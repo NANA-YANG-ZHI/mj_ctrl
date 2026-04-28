@@ -2,10 +2,12 @@
 # Baseline Force-Impedance Control Script (Real Robot via libfranka)
 #
 # Baseline full-space control (BaselineController):
-#   tau = J^T*Mx*(x_ddot + Kp*dx + Kd*dxdot) + J^T*(force_mag*n) [+PI] + g
+#   tau = J^T*Mx*(x_ddot + Kp*dx + Kd*dxdot) + J^T*(force_mag*n) [+PI]
 #
 # Assumes the robot is already in contact with the surface before running.
-# Trajectory is a CircleTrajectory from src/trajectories.py.
+# Supports slope (flat/angled) and cylinder surface (--cylinder).
+# Real robot gravity is already compensated internally — pinocchio gravity is
+# zeroed out so the controller does not double-compensate.
 # ------------------------------------------------------------------------------
 import argparse
 from datetime import datetime
@@ -19,13 +21,20 @@ from src import (
     ControllerConfig,
     ControlPhase,
     get_robot_config,
-    CircleTrajectory,
-    BaselineController,
-    BaselineControllerConfig,
 )
-from src.experiment_manager import load_config, build_controller_config, build_trajectory
+from src.baseline_controller import BaselineController, BaselineControllerConfig
+from src.hybrid_controller import generate_circle_trajectory
+from src.trajectory import CylinderTrajectory
+from src.cylinder_helper import (
+    plot_cylinder_position_tracking,
+    plot_cylinder_contact_force,
+)
 from utils_plot import plot_ee_positions, plot_joint_torques, plot_force_error_z
 from utils_libfranka import euler_to_rot_matrix
+
+# Real-robot cylinder geometry (different from simulation constants)
+REAL_CYLINDER_CENTER = np.array([0.48, 0.0, 0.0])
+REAL_CYLINDER_RADIUS = 0.1
 
 
 def main() -> None:
@@ -35,11 +44,11 @@ def main() -> None:
     parser.add_argument("--ip", type=str, default="localhost", help="Robot IP address")
     parser.add_argument(
         "--circle-duration", type=float, default=10.0,
-        help="Duration of circle motion in seconds (default: 10.0)"
+        help="Duration of circle/sweep motion in seconds (default: 10.0)"
     )
     parser.add_argument(
         "--angular-speed", type=float, default=np.pi * 2,
-        help="Angular speed for circle in rad/s (default: pi*2)"
+        help="Angular speed for circle/sweep in rad/s (default: pi*2)"
     )
     parser.add_argument(
         "--force-desired", type=float, default=-8.0, dest="force_desired",
@@ -58,25 +67,27 @@ def main() -> None:
         help="Integral gain for PI force control (overrides config default)"
     )
     parser.add_argument(
-        "--slope-angle", type=float, default=0.0,
+        "--slope-angle", type=float, default=30.0,
         help="Slope angle in degrees around X axis (default: 30.0)"
+    )
+    parser.add_argument(
+        "--cylinder", action="store_true",
+        help="Use cylinder surface instead of flat slope"
+    )
+    parser.add_argument(
+        "--trajectory", type=int, default=1, choices=[1, 2],
+        help="Cylinder sweep: 1 → θ 0°→75°, 2 → θ −75°→75° (only with --cylinder)"
     )
     parser.add_argument(
         "--skip-seconds", type=float, default=1.0,
         help="Seconds to skip at start when computing metrics (default: 1.0)"
     )
     parser.add_argument(
-        "--config", type=str, default=None,
-        help="Path to a YAML config file (e.g. baseline_flat_real_robot_config.yaml). "
-             "When provided, trajectory and controller settings are read from the file "
-             "instead of individual CLI flags."
-    )
-    parser.add_argument(
         "--save-plots", action="store_true",
         help="Save plots after run"
     )
     parser.add_argument(
-        "--plot-dir", type=str, default="plots/run_baseline_franka",
+        "--plot-dir", type=str, default="plots/run_approach_baseline_franka",
         help="Directory to save plots"
     )
     parser.add_argument(
@@ -84,7 +95,7 @@ def main() -> None:
         help="Save time-series data to .npz file"
     )
     parser.add_argument(
-        "--data-dir", type=str, default="real_robot_data/run_baseline_franka",
+        "--data-dir", type=str, default="real_robot_data/run_approach_baseline_franka",
         help="Directory to save .npz data file (used with --save-data)"
     )
     parser.add_argument(
@@ -104,21 +115,26 @@ def main() -> None:
     # ============================================================
     # 2. Configurations
     # ============================================================
-    if args.config is not None:
-        raw = load_config(args.config)
-        common_config = build_controller_config(raw)
-        common_config.use_pi = args.use_pi
-    else:
-        common_config = ControllerConfig(motion_duration=args.circle_duration)
-        common_config.size_z               = 0.01
-        common_config.gravity_compensation = True
-        common_config.use_pi               = args.use_pi
-        common_config.euler                = np.array([np.deg2rad(args.slope_angle), 0.0, 0.0])
+    if args.cylinder:
+        theta_start    = 0.0 if args.trajectory == 1 else np.radians(-75.0)
+        theta_end      = np.radians(75.0)
+        sweep_duration = (theta_end - theta_start) / args.angular_speed
+        print(f"[CONFIG] Cylinder sweep: θ {np.degrees(theta_start):.1f}° → "
+              f"{np.degrees(theta_end):.1f}°  ({sweep_duration:.2f}s)")
 
-    # Circle geometry used only when no config file is given
-    angular_speed = args.angular_speed
-    circle_center = np.array([0.4961, 0.0038, 0.0524])   # matches slope_pos default
-    circle_radius = 0.1
+        common_config = ControllerConfig(circle_duration=sweep_duration)
+        common_config.circle_center  = REAL_CYLINDER_CENTER.copy()
+        common_config.circle_radius  = REAL_CYLINDER_RADIUS
+        common_config.size_z         = 0.002
+    else:
+        common_config = ControllerConfig(circle_duration=args.circle_duration)
+        common_config.circle_center  = np.array([0.4961, 0.0038, 0.0524])
+        common_config.size_z         = 0.01
+
+    common_config.angular_speed = args.angular_speed
+    common_config.use_pi        = args.use_pi
+    common_config.euler         = np.array([np.deg2rad(args.slope_angle), 0.0, 0.0])
+    # gravity_compensation stays False — real robot compensates gravity internally
 
     baseline_config = BaselineControllerConfig(force_mag=args.force_desired)
     if args.kp_force is not None:
@@ -126,15 +142,18 @@ def main() -> None:
     if args.ki_force is not None:
         baseline_config.Ki_force = args.ki_force
 
-    q0 = np.array([0.021, 0.6876, -0.0121, -2.2921, -0.0027, 2.9829, 0.7165])
-
-    R_slope = euler_to_rot_matrix(common_config.euler)
-
     # ============================================================
-    # 3. Pinocchio model
+    # 3. Pinocchio model (gravity zeroed — robot handles it)
     # ============================================================
     pino_model = pino.buildModelFromMJCF(robot_cfg.pinocchio_xml_path)
-    pino_data  = pino_model.createData()
+    pino_model.gravity.linear[:] = 0.0
+    pino_data = pino_model.createData()
+
+    # Patch cylinder geometry constants before constructing trajectory
+    if args.cylinder:
+        import src.trajectory as _traj_mod
+        _traj_mod.CYLINDER_CENTER = REAL_CYLINDER_CENTER
+        _traj_mod.CYLINDER_RADIUS = REAL_CYLINDER_RADIUS
 
     robot = None
     try:
@@ -142,7 +161,7 @@ def main() -> None:
         print("BASELINE FORCE-IMPEDANCE CONTROL")
         print("=" * 60)
         print(f"Robot        : {robot_cfg.name.upper()}")
-        print(f"Surface      : slope {args.slope_angle}°")
+        print(f"Surface      : {'cylinder' if args.cylinder else f'slope {args.slope_angle}°'}")
         print(f"Force desired: {args.force_desired} N")
         print(f"PI enabled   : {args.use_pi}")
         print("=" * 60)
@@ -167,22 +186,16 @@ def main() -> None:
         # ============================================================
         # 4. Controller
         # ============================================================
-        if args.config is not None:
-            raw = load_config(args.config)
-            circle_traj = build_trajectory(raw, common_config)
+        if args.cylinder:
+            trajectory = CylinderTrajectory(theta_start, theta_end, args.angular_speed)
         else:
-            circle_traj = CircleTrajectory(
-                center=circle_center,
-                radius=circle_radius,
-                angular_speed=angular_speed,
-                R_slope=R_slope,
-                size_z=common_config.size_z,
-            )
+            trajectory = None
+
         baseline_controller = BaselineController(
             baseline_config, common_config,
             n_joints=robot_cfg.n_joints,
             ee_frame_name=robot_cfg.ee_frame_name,
-            trajectory=circle_traj,
+            trajectory=trajectory,
         )
 
         # ============================================================
@@ -193,28 +206,28 @@ def main() -> None:
         robot_state, duration = active_control.readOnce()
         O_T_EE = np.array(robot_state.O_T_EE).reshape(4, 4).T
 
+        q0 = np.array(robot_state.q)
+
         baseline_controller.starting(
-            0.0, O_T_EE[:3, :3], np.array(robot_state.q),
-            pino_model, pino_data,
+            0.0, O_T_EE[:3, :3], q0, pino_model, pino_data,
         )
         baseline_controller.target_pos = O_T_EE[:3, 3].copy()
 
         # ============================================================
         # 6. Pinocchio warmup (trigger lazy init before real-time loop)
         # ============================================================
-        _warmup_q  = np.array(q0)
         _warmup_dq = np.zeros(robot_cfg.n_joints)
-        pino.forwardKinematics(pino_model, pino_data, _warmup_q, _warmup_dq)
+        pino.forwardKinematics(pino_model, pino_data, q0, _warmup_dq)
         pino.computeJointJacobians(pino_model, pino_data)
         pino.updateFramePlacements(pino_model, pino_data)
         _warmup_frame_id = pino_model.getFrameId(robot_cfg.ee_frame_name)
         pino.getFrameJacobian(pino_model, pino_data, _warmup_frame_id, pino.LOCAL_WORLD_ALIGNED)
-        pino.computeMinverse(pino_model, pino_data, _warmup_q)
-        pino.crba(pino_model, pino_data, _warmup_q)
-        pino.computeGeneralizedGravity(pino_model, pino_data, _warmup_q)
-        pino.computeCoriolisMatrix(pino_model, pino_data, _warmup_q, _warmup_dq)
+        pino.computeMinverse(pino_model, pino_data, q0)
+        pino.crba(pino_model, pino_data, q0)
+        pino.computeGeneralizedGravity(pino_model, pino_data, q0)
+        pino.computeCoriolisMatrix(pino_model, pino_data, q0, _warmup_dq)
         pino.getFrameJacobianTimeVariation(pino_model, pino_data, _warmup_frame_id, pino.LOCAL_WORLD_ALIGNED)
-        del _warmup_q, _warmup_dq, _warmup_frame_id
+        del _warmup_dq, _warmup_frame_id
 
         gc.collect()
         gc.disable()
@@ -224,19 +237,41 @@ def main() -> None:
         print("=" * 60)
 
         hybrid_sim_time = 0.0
-        control_phase = ControlPhase.CIRCLE_DRAWING
+        control_phase   = ControlPhase.CIRCLE_DRAWING
+
+        if not args.cylinder:
+            R_slope = euler_to_rot_matrix(common_config.euler)
 
         # ============================================================
         # 7. Control loop
         # ============================================================
-        
         try:
             while True:
                 robot_state, duration = active_control.readOnce()
+                dt_step = duration.to_sec()
 
                 if control_phase == ControlPhase.CIRCLE_DRAWING:
+                    if not args.cylinder:
+                        elapsed = hybrid_sim_time
+                        if elapsed < common_config.circle_duration:
+                            tp, xd, xdd = generate_circle_trajectory(
+                                elapsed,
+                                common_config.circle_center,
+                                common_config.circle_radius,
+                                common_config.angular_speed,
+                                R_slope,
+                                common_config.size_z,
+                            )
+                            baseline_controller.target_pos        = tp
+                            baseline_controller.x_dot_desired[:]  = xd
+                            baseline_controller.x_ddot_desired[:] = xdd
+                        else:
+                            baseline_controller.x_dot_desired[:]  = 0.0
+                            baseline_controller.x_ddot_desired[:] = 0.0
+                            baseline_controller.is_drawing = False
+
                     tau = baseline_controller.update(hybrid_sim_time, robot_state)
-                    hybrid_sim_time += duration.to_sec()
+                    hybrid_sim_time += dt_step
 
                     if baseline_controller.is_finished():
                         print("\n" + "=" * 60)
@@ -261,7 +296,7 @@ def main() -> None:
             cmd = Torques([0.0] * robot_cfg.n_joints)
             cmd.motion_finished = True
             active_control.writeOnce(cmd)
-        
+
         finally:
             gc.enable()
             gc.collect()
@@ -308,7 +343,7 @@ def main() -> None:
                     print(f"VAR_POSITION_ERROR: {np.var(pos_err):.6f}")
                 else:
                     print("AVG_POSITION_ERROR: nan")
-                    print("VAR_POSITION_ERROR: nan")
+                    print("AVG_POSITION_ERROR: nan")
             else:
                 print("AVG_POSITION_ERROR: nan")
                 print("VAR_POSITION_ERROR: nan")
@@ -320,16 +355,8 @@ def main() -> None:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 timestamped_data_dir = os.path.join(args.data_dir, timestamp)
                 os.makedirs(timestamped_data_dir, exist_ok=True)
-                
-                # Copy config file if provided
-                if args.config is not None and os.path.exists(args.config):
-                    import shutil
-                    config_filename = os.path.basename(args.config)
-                    config_dest = os.path.join(timestamped_data_dir, config_filename)
-                    shutil.copy(args.config, config_dest)
-                    print(f"CONFIG SAVED: {config_dest}")
 
-                actual_vel  = np.gradient(ee_positions,   common_config.dt, axis=0) \
+                actual_vel  = np.gradient(ee_positions,     common_config.dt, axis=0) \
                     if ee_positions.size > 0 else np.empty((0, 3))
                 desired_vel = np.gradient(target_positions, common_config.dt, axis=0) \
                     if target_positions.size > 0 else np.empty((0, 3))
@@ -372,13 +399,28 @@ def main() -> None:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 timestamped_plot_dir = os.path.join(args.plot_dir, timestamp)
                 os.makedirs(timestamped_plot_dir, exist_ok=True)
-                
+
                 print("\n[MAIN] Generating plots...")
-                plot_joint_torques(baseline_controller, "joint_torques",
-                                    common_config.dt, plot_dir=timestamped_plot_dir)
-                plot_ee_positions(baseline_controller, common_config.dt, plot_dir=timestamped_plot_dir)
-                plot_force_error_z(baseline_controller, common_config.dt,
-                                    robot_cfg.name, plot_dir=timestamped_plot_dir)
+                t = np.arange(len(contact_forces)) * common_config.dt
+
+                if args.cylinder and contact_forces.size > 0:
+                    import matplotlib.pyplot as plt
+                    force_proj_full = np.einsum('ij,ij->i', contact_forces, normals_arr)
+                    force_err_full  = force_proj_full - desired_forces[:, 0]
+                    pos_err_full    = np.linalg.norm(ee_positions - target_positions, axis=1) \
+                        if ee_positions.shape == target_positions.shape else np.zeros(len(t))
+                    plot_cylinder_position_tracking(t, ee_positions, target_positions,
+                                                    pos_err_full, save_dir=timestamped_plot_dir)
+                    plot_cylinder_contact_force(t, contact_forces, normals_arr,
+                                                force_proj_full, desired_forces[:, 0],
+                                                force_err_full, save_dir=timestamped_plot_dir)
+                else:
+                    plot_joint_torques(baseline_controller, "joint_torques",
+                                       common_config.dt, plot_dir=timestamped_plot_dir)
+                    plot_ee_positions(baseline_controller, common_config.dt,
+                                      plot_dir=timestamped_plot_dir)
+                    plot_force_error_z(baseline_controller, common_config.dt,
+                                       robot_cfg.name, plot_dir=timestamped_plot_dir)
 
                 import matplotlib.pyplot as plt
                 plt.show()

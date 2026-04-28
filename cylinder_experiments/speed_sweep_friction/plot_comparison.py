@@ -51,10 +51,10 @@ STD_RATIO = 0.3
 METHOD_KEYS = [
     ("Baseline",         "baseline",  "tab:gray",   "x"),
     ("Feedforward",      "ff",        "tab:blue",   "o"),
-    ("Feedforward + PI", "ff_pi",     "tab:purple", "s"),
+    # ("Feedforward + PI", "ff_pi",     "tab:purple", "s"),
     ("PD",               "pd",        "tab:green",  "^"),
     ("HFDC",             "paper",     "tab:orange", "D"),
-    ("HFDC + PI",        "paper_pi",  "tab:red",    "P"),
+    # ("HFDC + PI",        "paper_pi",  "tab:red",    "P"),
 ]
 
 ROBOTS = [
@@ -87,8 +87,33 @@ COMBINED_METRICS = [
     ),
 ]
 
+MAX_METRICS = [
+    dict(
+        col_mean="max_force_error",
+        col_std=None,
+        ylabel="Max |Force Z Error|  (N)",
+        title="Force Z Error  (max)",
+        out_prefix="force_error_max",
+        break_y=3.0,
+        compress=10.0,
+        top_max=20.0,
+        yticks=[0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 5, 8, 11, 14, 17, 20],
+    ),
+    dict(
+        col_mean="max_position_error",
+        col_std=None,
+        ylabel="Max Position Error  (m)",
+        title="Position Error  (max)",
+        out_prefix="position_error_max",
+        break_y=0.020,
+        compress=25.0,
+        top_max=0.50,
+        yticks=[0, 0.004, 0.008, 0.012, 0.016, 0.020, 0.10, 0.20, 0.35, 0.50],
+    ),
+]
 
-def load_csv(results_csv):
+
+def load_csv(results_csv, max_mult=None):
     """Return nested dict: all_data[robot][method] = dict of numpy arrays."""
     raw = {}
     with open(results_csv, newline="") as f:
@@ -97,8 +122,9 @@ def load_csv(results_csv):
             robot  = row["robot"]
             method = row["method"]
             raw.setdefault(robot, {}).setdefault(method, defaultdict(list))
-            for col in ("ee_linear_speed_m_s", "mean_force_error", "std_force_error",
-                        "mean_position_error", "std_position_error"):
+            for col in ("omega_rad_s", "ee_linear_speed_m_s",
+                        "mean_force_error", "max_force_error", "std_force_error",
+                        "mean_position_error", "max_position_error", "std_position_error"):
                 raw[robot][method][col].append(float(row[col]))
 
     all_data = {}
@@ -107,7 +133,11 @@ def load_csv(results_csv):
         for method, cols in methods.items():
             d = {k: np.array(v) for k, v in cols.items()}
             idx = np.argsort(d["ee_linear_speed_m_s"])
-            all_data[robot][method] = {k: v[idx] for k, v in d.items()}
+            d = {k: v[idx] for k, v in d.items()}
+            if max_mult is not None:
+                mask = d["omega_rad_s"] / np.pi <= max_mult + 1e-9
+                d = {k: v[mask] for k, v in d.items()}
+            all_data[robot][method] = d
     return all_data
 
 
@@ -171,13 +201,14 @@ def make_combined_plot(cfg, datasets, out_path):
     for name, data, color, marker in datasets:
         v    = data["ee_linear_speed_m_s"]
         mean = data[col_mean]
-        std  = data[col_std] * STD_RATIO
 
-        lo = np.maximum(mean - std, 0.0)
-        hi = np.minimum(mean + std, top_max)
+        if col_std is not None:
+            std = data[col_std] * STD_RATIO
+            lo  = np.maximum(mean - std, 0.0)
+            hi  = np.minimum(mean + std, top_max)
+            ax.fill_between(v, lo, hi, alpha=_STYLE["fill_alpha"], color=color, linewidth=0)
+
         mean_plot = np.where(mean > top_max, np.nan, mean)
-
-        ax.fill_between(v, lo, hi, alpha=_STYLE["fill_alpha"], color=color, linewidth=0)
         ax.plot(v, mean_plot, marker=marker, color=color, label=name,
                 linewidth=_STYLE["plot_linewidth"], markersize=_STYLE["plot_markersize"],
                 markerfacecolor=color)
@@ -218,13 +249,16 @@ def main():
     )
     parser.add_argument("results_csv", help="Path to results.csv from collect_results.py")
     parser.add_argument("plots_dir",   help="Output directory for plots")
+    parser.add_argument("--max-multiplier", type=float, default=1.0,
+                        help="Only plot data with multiplier (ω/π) ≤ this value (default: 1.0). "
+                             "Pass a large number (e.g. 999) to include all data.")
     args = parser.parse_args()
 
     if not os.path.isfile(args.results_csv):
         print(f"[ERROR] results CSV not found: {args.results_csv}")
         sys.exit(1)
 
-    all_data = load_csv(args.results_csv)
+    all_data = load_csv(args.results_csv, max_mult=args.max_multiplier)
     os.makedirs(args.plots_dir, exist_ok=True)
 
     for robot_key in ROBOTS:
@@ -232,17 +266,17 @@ def main():
             print(f"[SKIP] No data for robot={robot_key}")
             continue
 
-        for cfg in COMBINED_METRICS:
-            datasets = []
-            for label, method_key, color, marker in METHOD_KEYS:
-                if method_key not in all_data[robot_key]:
-                    print(f"[SKIP] {robot_key}/{method_key}: no data")
-                    continue
-                datasets.append((label, all_data[robot_key][method_key], color, marker))
-
-            if not datasets:
+        datasets = []
+        for label, method_key, color, marker in METHOD_KEYS:
+            if method_key not in all_data[robot_key]:
+                print(f"[SKIP] {robot_key}/{method_key}: no data")
                 continue
+            datasets.append((label, all_data[robot_key][method_key], color, marker))
 
+        if not datasets:
+            continue
+
+        for cfg in COMBINED_METRICS + MAX_METRICS:
             out_fname = f"{cfg['out_prefix']}_{robot_key}.png"
             out_path  = os.path.join(args.plots_dir, out_fname)
             make_combined_plot(cfg, datasets, out_path)

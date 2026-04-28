@@ -1,0 +1,140 @@
+[INFO] Multiplier: 3.8×  |  Surface: flat surface
+[LOAD] Baseline             — 10002 timesteps, angular_speed=11.94 rad/s, ee_speed=1.194 m/s
+[LOAD] Feedforward          — 10002 timesteps, angular_speed=11.94 rad/s, ee_speed=1.194 m/s
+[LOAD] Feedforward + PI     — 10002 timesteps, angular_speed=11.94 rad/s, ee_speed=1.194 m/s
+[LOAD] PD                   — 10002 timesteps, angular_speed=11.94 rad/s, ee_speed=1.194 m/s
+[LOAD] HFDC                 — 10002 timesteps, angular_speed=11.94 rad/s, ee_speed=1.194 m/s
+
+Generating plots → /home/nana/wkspace/fork_mj_ctrl/angular_speed_sweep/plots/tracking_speed_3.8
+
+
+  X axis — avg / max |error| (m)
+  Method                       Avg         Max
+  --------------------------------------------
+  Baseline                  0.0057      0.0083
+  Feedforward               0.0052      0.0084
+  Feedforward + PI          0.0050      0.0099
+  PD                        0.0057      0.0116
+  HFDC                      0.0053      0.0103
+
+  Y axis — avg / max |error| (m)
+  Method                       Avg         Max
+  --------------------------------------------
+  Baseline                  0.0015      0.0041
+  Feedforward               0.0026      0.0044
+  Feedforward + PI          0.0036      0.0068
+  PD                        0.0028      0.0059
+  HFDC                      0.0029      0.0050
+
+  Z axis — avg / max |error| (m)
+  Method                       Avg         Max
+  --------------------------------------------
+  Baseline                  0.0029      0.0033
+  Feedforward               0.0062      0.0147
+  Feedforward + PI          0.0030      0.0039
+  PD                        0.0031      0.0039
+  HFDC                      0.0030      0.0038
+
+[PLOT] angular_speed_sweep/plots/tracking_speed_3.8/position_tracking_xyz.png
+Baseline             — avg |error| = 1.368 N, max |error| = 8.000 N
+Feedforward          — avg |error| = 7.330 N, max |error| = 21.533 N
+Feedforward + PI     — avg |error| = 2.573 N, max |error| = 8.000 N
+PD                   — avg |error| = 1.996 N, max |error| = 8.000 N
+HFDC                 — avg |error| = 1.690 N, max |error| = 8.000 N
+[PLOT] angular_speed_sweep/plots/tracking_speed_3.8/force_tracking.png
+
+Done. All plots saved to: /home/nana/wkspace/fork_mj_ctrl/angular_speed_sweep/plots/tracking_speed_3.8
+
+[INFO] Multiplier: 4.4×  |  Surface: flat surface
+[LOAD] Baseline             — 10002 timesteps, angular_speed=13.82 rad/s, ee_speed=1.382 m/s
+[LOAD] Feedforward          — 10002 timesteps, angular_speed=13.82 rad/s, ee_speed=1.382 m/s
+[LOAD] Feedforward + PI     — 10002 timesteps, angular_speed=13.82 rad/s, ee_speed=1.382 m/s
+[LOAD] PD                   — 10002 timesteps, angular_speed=13.82 rad/s, ee_speed=1.382 m/s
+[LOAD] HFDC                 — 10002 timesteps, angular_speed=13.82 rad/s, ee_speed=1.382 m/s
+
+Generating plots → /home/nana/wkspace/fork_mj_ctrl/angular_speed_sweep/plots/tracking_speed_4.4
+
+
+  X axis — avg / max |error| (m)
+  Method                       Avg         Max
+  --------------------------------------------
+  Baseline                  0.0924      0.1954
+  Feedforward               0.0054      0.0123
+  Feedforward + PI          0.0057      0.0320
+  PD                        0.0883      0.4668
+  HFDC                      0.0055      0.0124
+
+  Y axis — avg / max |error| (m)
+  Method                       Avg         Max
+  --------------------------------------------
+  Baseline                  0.0335      0.0700
+  Feedforward               0.0019      0.0063
+  Feedforward + PI          0.0045      0.0112
+  PD                        0.0348      0.2351
+  HFDC                      0.0031      0.0074
+
+  Z axis — avg / max |error| (m)
+  Method                       Avg         Max
+  --------------------------------------------
+  Baseline                  0.0380      0.0824
+  Feedforward               0.0113      0.0269
+  Feedforward + PI          0.0032      0.0071
+  PD                        0.0244      0.2579
+  HFDC                      0.0032      0.0050
+
+[PLOT] angular_speed_sweep/plots/tracking_speed_4.4/position_tracking_xyz.png
+Baseline             — avg |error| = 7.992 N, max |error| = 8.000 N
+Feedforward          — avg |error| = 8.042 N, max |error| = 37.232 N
+Feedforward + PI     — avg |error| = 4.265 N, max |error| = 8.298 N
+PD                   — avg |error| = 7.684 N, max |error| = 8.251 N
+HFDC                 — avg |error| = 3.702 N, max |error| = 8.550 N
+[PLOT] angular_speed_sweep/plots/tracking_speed_4.4/force_tracking.png
+
+Done. All plots saved to: /home/nana/wkspace/fork_mj_ctrl/angular_speed_sweep/plots/tracking_speed_4.4
+
+[INFO] Multiplier: 3.4×  |  Surface: flat surface
+[LOAD] Baseline             — 10002 timesteps, angular_speed=10.68 rad/s, ee_speed=1.068 m/s
+[LOAD] Feedforward          — 10002 timesteps, angular_speed=10.68 rad/s, ee_speed=1.068 m/s
+[LOAD] Feedforward + PI     — 10002 timesteps, angular_speed=10.68 rad/s, ee_speed=1.068 m/s
+[LOAD] PD                   — 10002 timesteps, angular_speed=10.68 rad/s, ee_speed=1.068 m/s
+[LOAD] HFDC                 — 10002 timesteps, angular_speed=10.68 rad/s, ee_speed=1.068 m/s
+
+Generating plots → /home/nana/wkspace/fork_mj_ctrl/angular_speed_sweep/plots/tracking_speed_3.4
+
+
+  X axis — avg / max |error| (m)
+  Method                       Avg         Max
+  --------------------------------------------
+  Baseline                  0.0036      0.0059
+  Feedforward               0.0046      0.0082
+  Feedforward + PI          0.0048      0.0096
+  PD                        0.0048      0.0104
+  HFDC                      0.0048      0.0095
+
+  Y axis — avg / max |error| (m)
+  Method                       Avg         Max
+  --------------------------------------------
+  Baseline                  0.0010      0.0029
+  Feedforward               0.0020      0.0034
+  Feedforward + PI          0.0021      0.0035
+  PD                        0.0016      0.0031
+  HFDC                      0.0021      0.0035
+
+  Z axis — avg / max |error| (m)
+  Method                       Avg         Max
+  --------------------------------------------
+  Baseline                  0.0028      0.0033
+  Feedforward               0.0047      0.0109
+  Feedforward + PI          0.0030      0.0039
+  PD                        0.0031      0.0037
+  HFDC                      0.0029      0.0036
+
+[PLOT] angular_speed_sweep/plots/tracking_speed_3.4/position_tracking_xyz.png
+Baseline             — avg |error| = 1.228 N, max |error| = 8.000 N
+Feedforward          — avg |error| = 5.744 N, max |error| = 16.686 N
+Feedforward + PI     — avg |error| = 1.603 N, max |error| = 4.190 N
+PD                   — avg |error| = 1.263 N, max |error| = 3.851 N
+HFDC                 — avg |error| = 0.691 N, max |error| = 1.820 N
+[PLOT] angular_speed_sweep/plots/tracking_speed_3.4/force_tracking.png
+
+Done. All plots saved to: /home/nana/wkspace/fork_mj_ctrl/angular_speed_sweep/plots/tracking_speed_3.4

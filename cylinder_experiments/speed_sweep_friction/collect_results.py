@@ -35,7 +35,7 @@ def _method_key(m):
     return METHOD_ORDER.index(m) if m in METHOD_ORDER else 99
 
 
-def collect(data_root: str, skip_n: int):
+def collect(data_root: str, skip_n: int, max_mult: float = None):
     rows = []
     missing = []
 
@@ -58,6 +58,9 @@ def collect(data_root: str, skip_n: int):
                     continue
 
                 omega = float(d["angular_speed_rad_s"])
+                if max_mult is not None and omega / np.pi > max_mult + 1e-9:
+                    continue
+
                 if "ee_linear_speed_m_s" in d:
                     ee_speed = float(d["ee_linear_speed_m_s"])
                 else:
@@ -74,8 +77,10 @@ def collect(data_root: str, skip_n: int):
                 rows.append((
                     robot, method, omega, ee_speed,
                     float(np.nanmean(np.abs(force_err))),
+                    float(np.nanmax(np.abs(force_err))),
                     float(np.nanstd(force_err)),
                     float(np.nanmean(pos_err)),
+                    float(np.nanmax(pos_err)),
                     float(np.nanstd(pos_err)),
                 ))
 
@@ -91,6 +96,8 @@ def main():
     parser.add_argument("--output", default=None)
     parser.add_argument("--skip-seconds", type=float, default=1.0)
     parser.add_argument("--dt", type=float, default=0.001)
+    parser.add_argument("--max-multiplier", type=float, default=None,
+                        help="Only include files with multiplier (ω/π) ≤ this value")
     args = parser.parse_args()
 
     if not os.path.isdir(args.data_root):
@@ -102,19 +109,20 @@ def main():
         os.path.join(args.data_root, "..", "results.csv")
     )
 
-    print(f"Scanning {args.data_root}  (skip={args.skip_seconds}s = {skip_n} samples)")
+    print(f"Scanning {args.data_root}  (skip={args.skip_seconds}s = {skip_n} samples, "
+          f"max_mult={args.max_multiplier if args.max_multiplier is not None else 'all'})")
 
-    rows, missing = collect(args.data_root, skip_n)
+    rows, missing = collect(args.data_root, skip_n, max_mult=args.max_multiplier)
 
     os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
     with open(output, "w") as f:
         f.write("robot,method,omega_rad_s,ee_linear_speed_m_s,"
-                "mean_force_error,std_force_error,"
-                "mean_position_error,std_position_error\n")
+                "mean_force_error,max_force_error,std_force_error,"
+                "mean_position_error,max_position_error,std_position_error\n")
         for row in rows:
-            robot, method, omega, ee_speed, mf, sf, mp, sp = row
+            robot, method, omega, ee_speed, mf, xf, sf, mp, xp, sp = row
             f.write(f"{robot},{method},{omega:.4f},{ee_speed:.4f},"
-                    f"{mf:.6f},{sf:.6f},{mp:.6f},{sp:.6f}\n")
+                    f"{mf:.6f},{xf:.6f},{sf:.6f},{mp:.6f},{xp:.6f},{sp:.6f}\n")
 
     print(f"Wrote {len(rows)} rows → {output}")
     if missing:

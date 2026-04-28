@@ -25,7 +25,7 @@ except ImportError:
 
 plt.rcParams.update({
     "font.size": 10,
-    "axes.labelsize": 9,
+    "axes.labelsize": 8,
     "xtick.labelsize": 8,
     "ytick.labelsize": 8,
     "legend.fontsize": 8,
@@ -85,34 +85,36 @@ def main():
 
     ordered = [r for r in ROBOT_ORDER if r in raw] + [r for r in raw if r not in ROBOT_ORDER]
 
-    fig, (ax_force, ax_pos) = plt.subplots(2, 1, figsize=(8, 6), sharex=True)
-    fig.suptitle("Cylinder Surface: Angular Speed Sweep", fontweight="bold")
+    fig, (ax_force, ax_pos) = plt.subplots(1, 2, figsize=(6.5, 2.0))
 
     for robot, color in zip(ordered, COLORS):
-        rows     = raw[robot]
-        v        = np.array([r[0] for r in rows])
-        mf       = np.array([r[1] for r in rows])
-        sf       = np.array([r[2] for r in rows])
-        mp       = np.array([r[3] for r in rows])
-        sp       = np.array([r[4] for r in rows])
-        label    = ROBOT_LABELS.get(robot, robot)
+        rows  = raw[robot]
+        v     = np.array([r[0] for r in rows])
+        mf    = np.array([r[1] for r in rows])
+        sf    = np.array([r[2] for r in rows])
+        mp    = np.array([r[3] for r in rows])
+        sp    = np.array([r[4] for r in rows])
+        label = ROBOT_LABELS.get(robot, robot)
 
         for ax, mean, std in [(ax_force, mf, sf), (ax_pos, mp, sp)]:
             ax.plot(v, mean, "o-", lw=1.5, ms=4, color=color, label=label)
             ax.fill_between(v, mean - std, mean + std, alpha=0.18, color=color)
 
     ax_force.set_ylabel("Mean |Normal Force Error| ± std  (N)")
-    ax_force.grid(True, alpha=0.3)
-    ax_force.legend(loc="upper left")
+    ax_force.set_xlabel("EE Linear Speed  v = 0.1 · ω  (m/s)")
 
     ax_pos.set_ylabel("Mean Position Error ± std  (m)")
     ax_pos.set_xlabel("EE Linear Speed  v = 0.1 · ω  (m/s)")
-    ax_pos.grid(True, alpha=0.3)
 
-    plt.tight_layout()
+    handles, labels = ax_force.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=4,
+               bbox_to_anchor=(0.5, 1.0), frameon=False)
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.82)
     out_path = os.path.join(output_dir, "cylinder_speed_sweep.png")
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=300)
     print(f"[PLOT] → {out_path}")
+    plt.close(fig)
 
 
 if __name__ == "__main__":

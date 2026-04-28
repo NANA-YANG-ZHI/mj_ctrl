@@ -29,7 +29,7 @@ PLOT_SCRIPT="${SCRIPT_DIR}/plot_comparison.py"
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 NUM_WORKERS="${NUM_WORKERS:-10}"
-SKIP_SECONDS="${SKIP_SECONDS:-0.0}"
+SKIP_SECONDS="${SKIP_SECONDS:-1.0}"
 TRAJECTORY="${TRAJECTORY:-2}"
 FORCE_DESIRED="${FORCE_DESIRED:--10.0}"
 

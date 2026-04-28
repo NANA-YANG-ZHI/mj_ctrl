@@ -1,9 +1,13 @@
 # ------------------------------------------------------------------------------
-# Approach + Baseline Force-Impedance Control Script
+# Approach + Impedance Force-Control Script
 #
 # Phase 1: Move end-effector to target surface (CartesianSpacePDController)
-# Phase 2: Baseline full-space control (BaselineController)
-#   tau = J^T*Mx*(x_ddot + Kp*dx + Kd*dxdot) + J^T*(force_mag*n) [+PI] + g
+# Phase 2: Impedance + feedforward force (ImpedanceController)
+#   twist      = [Kpos/dt * dx,  Kori/dt * d_ori]
+#   y          = jac_inv @ Md_inv @ (Kp * twist - Kd * (jac @ dq))
+#   tau_motion = M @ y  +  tau_null
+#   tau_f      = jac.T @ (force_mag * n)  [+ PI]
+#   tau        = tau_motion + tau_f + qfrc_bias
 #
 # Supports slope (flat/angled) and cylinder surface (--cylinder).
 # Supports fr3, kuka, panda, fr3_friction, fr3_jointf, fr3_jointf_surff.
@@ -25,7 +29,7 @@ from src import (
     ControlPhase,
     get_robot_config,
 )
-from src.baseline_controller import BaselineController, BaselineControllerConfig
+from src.impedance_controller import ImpedanceController, ImpedanceControllerConfig
 from src.cylinder_helper import (
     CYLINDER_CENTER, CYLINDER_AXIS, CYLINDER_RADIUS,
     CYLINDER_CONFIG_MAP,
@@ -42,7 +46,7 @@ from mujoco_robot_interface import MujocoRobotInterface, Torques
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Approach then Baseline Force-Impedance Control"
+        description="Approach then Impedance Force-Control"
     )
     parser.add_argument(
         "--robot", type=str, default="fr3",
@@ -106,7 +110,7 @@ def main() -> None:
         help="Save plots after simulation"
     )
     parser.add_argument(
-        "--plot-dir", type=str, default="plots/run_baseline_mujoco",
+        "--plot-dir", type=str, default="plots/run_baseline_impedance_mujoco",
         help="Directory to save plots"
     )
     parser.add_argument(
@@ -128,8 +132,8 @@ def main() -> None:
     # ============================================================
     if args.cylinder:
         robot_cfg = get_robot_config(CYLINDER_CONFIG_MAP[args.robot])
-        theta_start = 0.0 if args.trajectory == 1 else np.radians(-60.0)
-        theta_end   = np.radians(60.0)
+        theta_start = 0.0 if args.trajectory == 1 else np.radians(-75.0)
+        theta_end   = np.radians(75.0)
         sweep_duration = (theta_end - theta_start) / args.angular_speed
         print(f"[CONFIG] Cylinder sweep: θ {np.degrees(theta_start):.1f}° → "
               f"{np.degrees(theta_end):.1f}°  ({sweep_duration:.2f}s)")
@@ -199,25 +203,25 @@ def main() -> None:
         common_config.size_z         = 0.002
         common_config.circle_duration = sweep_duration
 
-    approach_config  = CartesianSpacePDControlConfig()
-    baseline_config  = BaselineControllerConfig(force_mag=args.force_desired)
+    approach_config   = CartesianSpacePDControlConfig()
+    impedance_config  = ImpedanceControllerConfig(force_mag=args.force_desired)
     if args.kp_force is not None:
-        baseline_config.Kp_force = args.kp_force
+        impedance_config.Kp_force = args.kp_force
     if args.ki_force is not None:
-        baseline_config.Ki_force = args.ki_force
+        impedance_config.Ki_force = args.ki_force
 
     q0 = robot_cfg.q0.copy() if args.cylinder else \
         np.array([0.0225, 0.7064, -0.0243, -2.3135, -0.0095, 3.0422, -0.2441])
 
     # ============================================================
-    # 3. Pinocchio model
+    # 3. Pinocchio model  (approach phase only)
     # ============================================================
     pino_model = pino.buildModelFromMJCF(robot_cfg.pinocchio_xml_path)
     pino_data  = pino_model.createData()
 
     try:
         print("\n" + "=" * 60)
-        print("APPROACH + BASELINE FORCE-IMPEDANCE CONTROL")
+        print("APPROACH + IMPEDANCE FORCE-CONTROL")
         print("=" * 60)
         print(f"Robot        : {robot_cfg.name.upper()}")
         print(f"Surface      : {'cylinder' if args.cylinder else f'slope {args.slope_angle}°'}")
@@ -236,10 +240,10 @@ def main() -> None:
             ee_frame_name=robot_cfg.ee_frame_name,
         )
 
-        baseline_controller = BaselineController(
-            baseline_config, common_config,
+        impedance_controller = ImpedanceController(
+            impedance_config, common_config,
             n_joints=robot_cfg.n_joints,
-            ee_frame_name=robot_cfg.ee_frame_name,
+            site_name="attachment_site",
             trajectory=CylinderTrajectory(theta_start, theta_end, args.angular_speed)
                        if args.cylinder else None,
         )
@@ -324,7 +328,7 @@ def main() -> None:
                 current_pos = O_T_EE[:3, 3]
                 current_mat = O_T_EE[:3, :3]
 
-                # ── State machine ────────────────────────────────────────────
+                # ── State machine ─────────────────────────────────────────────
                 if control_phase == ControlPhase.APPROACHING:
                     tau = approach_controller.update(duration, robot_state)
 
@@ -336,18 +340,22 @@ def main() -> None:
                     elif approach_controller.is_target_reached(robot_state):
                         print("\n" + "=" * 60)
                         print(f"CONTACT REACHED at t={approach_controller.time_elapsed:.2f}s!")
-                        print("PHASE 2: BASELINE FORCE-IMPEDANCE CONTROL")
+                        print("PHASE 2: IMPEDANCE FORCE-CONTROL")
                         print("=" * 60 + "\n")
 
                         O_T_EE = np.array(robot_state.O_T_EE).reshape(4, 4).T
-                        baseline_target_rot = O_T_EE[:3, :3]
-                        baseline_q0 = np.array(robot_state.q)
-                        baseline_controller.starting(
-                            hybrid_sim_time, baseline_target_rot, baseline_q0,
-                            pino_model, pino_data,
+                        surface_target_rot = O_T_EE[:3, :3]
+                        surface_q0 = np.array(robot_state.q)
+                        impedance_controller.starting(
+                            hybrid_sim_time,
+                            surface_target_rot,
+                            surface_q0,
+                            mujoco_interface.model,
+                            mujoco_interface.data,
+                            mujoco_interface.site_id,
+                            mujoco_interface.dof_ids,
                         )
-                        # Seed target_pos from current EE; trajectory or run loop will update it
-                        baseline_controller.target_pos = O_T_EE[:3, 3].copy()
+                        impedance_controller.target_pos = O_T_EE[:3, 3].copy()
                         control_phase = ControlPhase.CIRCLE_DRAWING
 
                 elif control_phase == ControlPhase.CIRCLE_DRAWING:
@@ -364,20 +372,20 @@ def main() -> None:
                                 R_slope,
                                 common_config.size_z,
                             )
-                            baseline_controller.target_pos       = tp
-                            baseline_controller.x_dot_desired[:] = xd
-                            baseline_controller.x_ddot_desired[:] = xdd
+                            impedance_controller.target_pos        = tp
+                            impedance_controller.x_dot_desired[:]  = xd
+                            impedance_controller.x_ddot_desired[:] = xdd
                         else:
-                            baseline_controller.x_dot_desired[:]  = 0.0
-                            baseline_controller.x_ddot_desired[:] = 0.0
-                            baseline_controller.is_drawing = False
+                            impedance_controller.x_dot_desired[:]  = 0.0
+                            impedance_controller.x_ddot_desired[:] = 0.0
+                            impedance_controller.is_drawing = False
 
-                    tau = baseline_controller.update(hybrid_sim_time, robot_state)
+                    tau = impedance_controller.update(hybrid_sim_time, robot_state)
                     hybrid_sim_time += common_config.dt
 
-                    if baseline_controller.is_finished():
+                    if impedance_controller.is_finished():
                         print("\n" + "=" * 60)
-                        print(f"BASELINE CONTROL FINISHED at t={hybrid_sim_time:.2f}s!")
+                        print(f"IMPEDANCE CONTROL FINISHED at t={hybrid_sim_time:.2f}s!")
                         print("=" * 60)
                         control_phase = ControlPhase.STOPPED
 
@@ -413,16 +421,16 @@ def main() -> None:
         # ============================================================
         skip_samples = int(args.skip_seconds / common_config.dt)
 
-        contact_forces = np.array(baseline_controller.contact_forces) \
-            if baseline_controller.contact_forces else np.empty((0, 3))
-        desired_forces = np.array(baseline_controller.desired_forces) \
-            if baseline_controller.desired_forces else np.empty((0, 1))
-        normals_arr    = np.array(baseline_controller.normals) \
-            if baseline_controller.normals else np.empty((0, 3))
-        ee_positions   = np.array(baseline_controller.ee_positions) \
-            if baseline_controller.ee_positions else np.empty((0, 3))
-        target_positions = np.array(baseline_controller.target_positions) \
-            if baseline_controller.target_positions else np.empty((0, 3))
+        contact_forces   = np.array(impedance_controller.contact_forces) \
+            if impedance_controller.contact_forces else np.empty((0, 3))
+        desired_forces   = np.array(impedance_controller.desired_forces) \
+            if impedance_controller.desired_forces else np.empty((0, 1))
+        normals_arr      = np.array(impedance_controller.normals) \
+            if impedance_controller.normals else np.empty((0, 3))
+        ee_positions     = np.array(impedance_controller.ee_positions) \
+            if impedance_controller.ee_positions else np.empty((0, 3))
+        target_positions = np.array(impedance_controller.target_positions) \
+            if impedance_controller.target_positions else np.empty((0, 3))
 
         if contact_forces.size > 0 and normals_arr.size > 0:
             cf_ss  = contact_forces[skip_samples:]
@@ -461,7 +469,7 @@ def main() -> None:
         if args.save_data and args.data_dir:
             os.makedirs(args.data_dir, exist_ok=True)
 
-            actual_vel  = np.gradient(ee_positions,   common_config.dt, axis=0) \
+            actual_vel  = np.gradient(ee_positions,     common_config.dt, axis=0) \
                 if ee_positions.size > 0 else np.empty((0, 3))
             desired_vel = np.gradient(target_positions, common_config.dt, axis=0) \
                 if target_positions.size > 0 else np.empty((0, 3))
@@ -515,19 +523,19 @@ def main() -> None:
                                             force_proj_full, desired_forces[:, 0],
                                             force_err_full, save_dir=plot_dir)
             else:
-                plot_joint_torques(baseline_controller, "joint_torques",
+                plot_joint_torques(impedance_controller, "joint_torques",
                                    common_config.dt, plot_dir=plot_dir)
-                plot_ee_positions(baseline_controller, common_config.dt, plot_dir=plot_dir)
-                plot_force_error_z(baseline_controller, common_config.dt,
+                plot_ee_positions(impedance_controller, common_config.dt, plot_dir=plot_dir)
+                plot_force_error_z(impedance_controller, common_config.dt,
                                    robot_cfg.name, plot_dir=plot_dir)
 
             if not args.headless:
                 import matplotlib.pyplot as plt
                 plt.show()
 
-        print("\n[MAIN] Baseline control finished")
+        print("\n[MAIN] Impedance control finished")
         print(f"Approach time : {approach_controller.time_elapsed:.2f}s")
-        print(f"Baseline time : {hybrid_sim_time:.2f}s")
+        print(f"Surface time  : {hybrid_sim_time:.2f}s")
 
     except Exception as e:
         print(f"\nError: {e}")

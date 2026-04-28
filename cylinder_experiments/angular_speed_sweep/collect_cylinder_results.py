@@ -52,7 +52,8 @@ def collect(data_root: str, skip_seconds: float, dt: float):
                 continue
 
             omega    = float(d["angular_speed_rad_s"])
-            ee_speed = float(d["ee_linear_speed_m_s"])
+            ee_speed = float(d["ee_linear_speed_m_s"]) if "ee_linear_speed_m_s" in d \
+                       else omega * 0.1  # cylinder radius = 0.1 m
 
             force_err = d["force_error"][skip_n:]
             pos_err   = d["position_error"][skip_n:]

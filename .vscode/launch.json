@@ -2,6 +2,26 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "run_baseline_mujoco_cylinder",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_baseline_mujoco.py",
+      "args": [
+        "--robot", "fr3_friction",
+        "--cylinder",
+        "--trajectory", "1",
+        "--force-desired", "-10",
+        "--angular-speed", "1.6",
+        "--save-plots"
+      ],
+      "console": "integratedTerminal",
+      "python": "C:\\Users\\11452\\miniconda3\\envs\\hybrid_ctrl\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    {
       "name": "run_approach_then_hybrid_cylinder",
       "type": "debugpy",
       "request": "launch",
@@ -31,7 +51,7 @@
         "--save-plots",
         "--use-pi",
         "--slope-angle", "0",
-        "--robot", "fr3_friction"
+        "--robot", "fr3"
       ],
       "console": "integratedTerminal",
       "python": "C:\\Users\\11452\\miniconda3\\envs\\hybrid_ctrl\\python.exe",

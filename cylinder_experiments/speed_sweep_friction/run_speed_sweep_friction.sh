@@ -36,7 +36,8 @@ FORCE_DESIRED="${FORCE_DESIRED:--10.0}"
 ROBOTS=(fr3_friction fr3_jointf_surff)
 
 # method_name : script_type ("baseline"|"hybrid") : force_method : use_pi (0|1)
-METHODS=(
+# Set ONLY_BASELINE=1 to rerun only the baseline method.
+ALL_METHODS=(
     "baseline:baseline:baseline:0"
     "ff:hybrid:feedforward:0"
     "ff_pi:hybrid:feedforward:1"
@@ -44,6 +45,11 @@ METHODS=(
     "paper:hybrid:paper:0"
     "paper_pi:hybrid:paper:1"
 )
+if [ "${ONLY_BASELINE:-0}" = "1" ]; then
+    METHODS=("baseline:baseline:baseline:0")
+else
+    METHODS=("${ALL_METHODS[@]}")
+fi
 
 OUTPUT_DIR="${SCRIPT_DIR}/sweep_friction_results"
 DATA_BASE="${OUTPUT_DIR}/data"
