@@ -80,31 +80,28 @@ def plot_position_xyz(datasets, coeff, out_dir):
     sk = int(SKIP_S / DT)
 
     for axis_idx, axis_label in enumerate(AXES_LABELS):
-        print(f"\n  {axis_label} axis — avg / max |error| (m)")
+        print(f"\n  {axis_label} axis — avg / max error (m)")
         for name, data, color, ls in datasets:
-            pe = np.abs(data["actual_positions"][sk:, axis_idx]
-                        - data["desired_positions"][sk:, axis_idx])
+            pe = (data["actual_positions"][sk:, axis_idx]
+                  - data["desired_positions"][sk:, axis_idx])
             print(f"    {name:<35s}  avg={np.mean(pe):.4f}  max={np.max(pe):.4f}")
 
     fig, axes = plt.subplots(
-        3, 1, sharex=True, figsize=(3.25, 3.012),
+        3, 1, sharex=True, figsize=(3.25, 2.008),
         gridspec_kw={"height_ratios": [1, 1, 1]},
     )
 
     for axis_idx, ax in enumerate(axes):
         lbl = AXES_LABELS[axis_idx]
-        desired_plotted = False
         for name, data, color, ls in datasets:
-            n = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
-            t = np.arange(n) * DT
-            ax.plot(t, data["actual_positions"][:n, axis_idx],
-                    color=color, linestyle=ls, linewidth=1.0, label=name, alpha=0.85)
-            if not desired_plotted:
-                ax.plot(t, data["desired_positions"][:n, axis_idx],
-                        color="black", linestyle=":", linewidth=1.0,
-                        label="Desired", alpha=0.7)
-                desired_plotted = True
-        ax.set_ylabel(f"{lbl} (m)")
+            n  = min(data["actual_positions"].shape[0], int(PLOT_DURATION_S / DT))
+            t  = np.arange(n) * DT
+            pe = (data["actual_positions"][:n, axis_idx]
+                  - data["desired_positions"][:n, axis_idx])
+            ax.plot(t, pe, color=color, linestyle=ls, linewidth=1.0,
+                    label=name, alpha=0.85)
+        ax.axhline(0, color="gray", linestyle="--", linewidth=0.6, alpha=0.5)
+        ax.set_ylabel(f"{lbl} err (m)")
         if axis_idx == 0:
             ax.legend(loc="upper right", ncol=2)
 
@@ -119,7 +116,7 @@ def plot_position_xyz(datasets, coeff, out_dir):
 
 def plot_force_tracking(datasets, coeff, out_dir):
     sk = int(SKIP_S / DT)
-    fig, ax = plt.subplots(figsize=(3.25, 3))
+    fig, ax = plt.subplots(figsize=(3.25, 2.0))
 
     for name, data, color, ls in datasets:
         fe  = data["force_error"][:int(PLOT_DURATION_S / DT)]

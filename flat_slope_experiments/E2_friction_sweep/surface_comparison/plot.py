@@ -34,16 +34,20 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_ROOT  = os.path.join(SCRIPT_DIR, "..", "data", "surface_comparison")
 PLOTS_DIR  = os.path.join(SCRIPT_DIR, "plots")
 
-CONDITIONS = [
-    ("flat_frictionless",    "Flat\nfrictionless"),
-    ("flat_friction_0.7",    "Flat\nμ=0.7"),
-    ("slope30_frictionless", "Slope 30°\nfrictionless"),
-    ("slope30_friction_0.7", "Slope 30°\nμ=0.7"),
+# (flat_cond, slope_cond, x_label)
+CONDITION_PAIRS = [
+    ("flat_frictionless",  "slope30_frictionless",  "Frictionless"),
+    ("flat_friction_0.7",  "slope30_friction_0.7",  "μ=0.7"),
+]
+
+SURFACES = [
+    ("Flat",      "tab:blue"),
+    ("Slope 30°", "tab:orange"),
 ]
 
 METHODS = [
-    ("paper",    "HFDC",      "tab:blue"),
-    # ("paper_pi", "HFDC + PI", "tab:orange"),
+    ("paper",    "HFDC"),
+    # ("paper_pi", "HFDC + PI"),
 ]
 
 METRICS = [
@@ -73,50 +77,55 @@ def load_npz_mean_std(data_dir, npz_key):
 
 
 def make_bar_chart(cfg):
-    n_cond   = len(CONDITIONS)
-    n_method = len(METHODS)
+    n_pairs  = len(CONDITION_PAIRS)
+    n_series = len(METHODS) * len(SURFACES)
     width    = 0.35
-    offsets  = np.linspace(-(n_method - 1) * width / 2,
-                            (n_method - 1) * width / 2,
-                            n_method)
+    offsets  = np.linspace(-(n_series - 1) * width / 2,
+                            (n_series - 1) * width / 2,
+                            n_series)
 
     fig, ax = plt.subplots()
-    x = np.arange(n_cond)
+    x = np.arange(n_pairs)
 
-    for m_idx, (method_key, method_label, color) in enumerate(METHODS):
-        means, stds = [], []
-        for cond_key, _ in CONDITIONS:
-            data_dir = os.path.join(DATA_ROOT, method_key, cond_key)
-            mean, std = load_npz_mean_std(data_dir, cfg["npz_key"])
-            means.append(mean)
-            stds.append(std)
+    series_idx = 0
+    for method_key, method_label in METHODS:
+        for surf_label, color in SURFACES:
+            means, stds = [], []
+            for flat_cond, slope_cond, _ in CONDITION_PAIRS:
+                cond     = flat_cond if surf_label == "Flat" else slope_cond
+                data_dir = os.path.join(DATA_ROOT, method_key, cond)
+                mean, std = load_npz_mean_std(data_dir, cfg["npz_key"])
+                means.append(mean)
+                stds.append(std)
 
-        means = np.array(means)
-        stds  = np.array(stds)
-        valid = ~np.isnan(means)
+            means = np.array(means)
+            stds  = np.array(stds)
+            valid = ~np.isnan(means)
+            bar_label = f"{method_label} {surf_label}" if len(METHODS) > 1 else surf_label
 
-        bars = ax.bar(
-            x[valid] + offsets[m_idx], means[valid],
-            width=width * 0.9,
-            yerr=stds[valid],
-            capsize=3,
-            color=color,
-            alpha=0.85,
-            label=method_label,
-            error_kw=dict(elinewidth=0.8, capthick=0.8),
-        )
-
-        for bar, mean_val, std_val in zip(bars, means[valid], stds[valid]):
-            top = bar.get_height() + (std_val if not np.isnan(std_val) else 0)
-            ax.text(
-                bar.get_x() + bar.get_width() / 2,
-                top + ax.get_ylim()[1] * 0.01,
-                f"{mean_val:.3f}",
-                ha="center", va="bottom", fontsize=6,
+            bars = ax.bar(
+                x[valid] + offsets[series_idx], means[valid],
+                width=width * 0.9,
+                yerr=stds[valid],
+                capsize=3,
+                color=color,
+                alpha=0.85,
+                label=bar_label,
+                error_kw=dict(elinewidth=0.8, capthick=0.8),
             )
 
+            for bar, mean_val, std_val in zip(bars, means[valid], stds[valid]):
+                top = bar.get_height() + (std_val if not np.isnan(std_val) else 0)
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    top + ax.get_ylim()[1] * 0.01,
+                    f"{mean_val:.3f}",
+                    ha="center", va="bottom", fontsize=6,
+                )
+            series_idx += 1
+
     ax.set_xticks(x)
-    ax.set_xticklabels([label for _, label in CONDITIONS])
+    ax.set_xticklabels([label for *_, label in CONDITION_PAIRS])
     ax.set_ylabel(cfg["ylabel"])
     ax.legend(loc="upper left", framealpha=0.85)
     ax.set_ylim(bottom=0)
