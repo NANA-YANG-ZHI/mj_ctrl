@@ -3,12 +3,22 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-python "$SCRIPT_DIR/plot_comparison.py" \
-    --data-dir "$SCRIPT_DIR/data/fr3_jointf_surff_cylinder" \
-    --plot-dir "$SCRIPT_DIR/plots/fr3_jointf_surff_cylinder"
+ROBOT="fr3_jointf_surff"
+SPEEDS=("0.1" "0.5" "1.0")
 
-echo ""
+for mult in "${SPEEDS[@]}"; do
+    data_dir="$SCRIPT_DIR/data/${ROBOT}_cylinder/${mult}x"
+    plot_dir="$SCRIPT_DIR/plots/${ROBOT}_cylinder/${mult}x"
+
+    echo "Plotting ${ROBOT} at ${mult}π rad/s..."
+    python "$SCRIPT_DIR/plot_comparison.py" \
+        --data-dir "$data_dir" \
+        --plot-dir "$plot_dir"
+
+    echo " Done. Plot saved to: $plot_dir/compensation_comparison.png"
+    echo ""
+done
+
 echo "=========================================================="
-echo " Done. Plot saved to:"
-echo "   $SCRIPT_DIR/plots/fr3_jointf_surff_cylinder/compensation_comparison.png"
+echo " All plots finished."
 echo "=========================================================="

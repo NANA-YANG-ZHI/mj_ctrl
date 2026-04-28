@@ -3,20 +3,30 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "=========================================================="
-echo " Cylinder — fr3_friction, omega=3.2 rad/s, trajectory 2"
-echo "=========================================================="
+ROBOT="fr3_friction"
+SPEEDS=("0.1" "0.5" "1.0")
 
-python "$SCRIPT_DIR/run_experiments.py" \
-    --robot fr3_friction \
-    --angular-speed 3.2 \
-    --trajectory 2 \
-    --headless \
-    --circle-duration 10.0 \
-    --data-dir "$SCRIPT_DIR/data/fr3_friction_cylinder"
+for mult in "${SPEEDS[@]}"; do
+    omega=$(python3 -c "import math; print(math.pi * ${mult})")
+    data_dir="$SCRIPT_DIR/data/${ROBOT}_cylinder/${mult}x"
 
-echo ""
+    echo "=========================================================="
+    echo " Cylinder — ${ROBOT}, omega=${mult}π rad/s, trajectory 2"
+    echo "=========================================================="
+
+    python "$SCRIPT_DIR/run_experiments.py" \
+        --robot "$ROBOT" \
+        --angular-speed "$omega" \
+        --trajectory 2 \
+        --headless \
+        --circle-duration 10.0 \
+        --data-dir "$data_dir"
+
+    echo ""
+    echo " Done. Data saved to: $data_dir"
+    echo ""
+done
+
 echo "=========================================================="
-echo " Done. Data saved to:"
-echo "   $SCRIPT_DIR/data/fr3_friction_cylinder/"
+echo " All speeds finished."
 echo "=========================================================="
