@@ -43,7 +43,7 @@ DATA_ROOT  = os.path.join(SCRIPT_DIR, "..", "data")
 PLOTS_DIR  = os.path.join(SCRIPT_DIR, "plots")
 
 METHOD_KEYS = [
-    # ("Baseline",         "baseline",       "tab:gray",   "x"),
+    ("Baseline",         "baseline",       "tab:gray",   "x"),
     ("Feedforward",      "feedforward",    "tab:blue",   "o"),
     ("Feedforward + PI", "feedforward_pi", "tab:purple", "s"),
     ("PD",               "pd",             "tab:green",  "^"),

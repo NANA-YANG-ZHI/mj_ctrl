@@ -41,7 +41,7 @@ SKIP_S         = 1.0
 PLOT_DURATION_S = 2.0
 
 METHOD_KEYS = [
-    # ("Baseline",         "baseline",       "tab:gray",   "-",  "x"),
+    ("Baseline",         "baseline",       "tab:gray",   "-",  "x"),
     ("Feedforward",      "feedforward",    "tab:blue",   "-",  "o"),
     ("Feedforward + PI", "feedforward_pi", "tab:purple", "-",  "s"),
     ("PD",               "pd",             "tab:green",  "-",  "^"),
