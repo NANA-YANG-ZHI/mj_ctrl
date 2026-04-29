@@ -15,9 +15,22 @@ Usage
 
 import argparse
 import os
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+
+class _Tee:
+    """Write to both a file and the original stdout simultaneously."""
+    def __init__(self, fh, stream):
+        self._fh, self._stream = fh, stream
+    def write(self, data):
+        self._fh.write(data)
+        self._stream.write(data)
+    def flush(self):
+        self._fh.flush()
+        self._stream.flush()
 
 try:
     from tueplots import bundles
@@ -140,23 +153,30 @@ def main():
     for mult in args.multiplier:
         slope_suffix = "_slope30" if args.slope else ""
         out_dir = os.path.join(PLOTS_DIR, f"tracking_speed_{mult}{slope_suffix}")
+        os.makedirs(out_dir, exist_ok=True)
 
-        print(f"\n[MULT] {mult}×")
-        datasets = []
-        for name, key, color, ls, marker in METHOD_KEYS:
+        log_path = os.path.join(out_dir, "metrics.log")
+        with open(log_path, "w") as log_fh:
+            sys.stdout = _Tee(log_fh, sys.__stdout__)
             try:
-                d = load_npz(key, mult, args.slope)
-                datasets.append((name, d, color, ls, marker))
-                print(f"  [LOAD] {name}")
-            except FileNotFoundError as e:
-                print(f"  [SKIP] {e}")
+                print(f"\n[MULT] {mult}×  surface={surface_label}")
+                datasets = []
+                for name, key, color, ls, marker in METHOD_KEYS:
+                    try:
+                        d = load_npz(key, mult, args.slope)
+                        datasets.append((name, d, color, ls, marker))
+                        print(f"  [LOAD] {name}")
+                    except FileNotFoundError as e:
+                        print(f"  [SKIP] {e}")
 
-        if not datasets:
-            print("  No data loaded, skipping.")
-            continue
-
-        plot_position_xyz(datasets, mult, out_dir)
-        plot_force_tracking(datasets, mult, out_dir)
+                if not datasets:
+                    print("  No data loaded, skipping.")
+                else:
+                    plot_position_xyz(datasets, mult, out_dir)
+                    plot_force_tracking(datasets, mult, out_dir)
+                    print(f"[LOG]  {log_path}")
+            finally:
+                sys.stdout = sys.__stdout__
 
 
 if __name__ == "__main__":
