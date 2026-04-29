@@ -46,6 +46,7 @@ run_one() {
         --robot            fr3_friction \
         --surface-friction "${MU}" \
         --angular-speed    "${ANGULAR_SPEED}" \
+        --slope-angle      0.0 \
         --force-desired    "${FORCE_DESIRED}" \
         --multiplier       "${MU}" \
         --skip-seconds     "${SKIP_SECONDS}" \
