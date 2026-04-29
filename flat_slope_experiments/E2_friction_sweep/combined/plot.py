@@ -41,6 +41,7 @@ FORCE_SKIP_SAMPLES = int(1.0 / DT)
 STD_RATIO = 1.0
 
 METHOD_KEYS = [
+    ("Baseline",  "baseline", "tab:gray",   "x"),
     ("HFDC",      "paper",    "tab:blue",   "o"),
     # ("HFDC + PI", "paper_pi", "tab:orange", "s"),
 ]
