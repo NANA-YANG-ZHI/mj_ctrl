@@ -53,11 +53,14 @@ AXES_LABELS = ["X", "Y", "Z"]
 
 def load_npz(method_key, multiplier, slope):
     surface = "slope30" if slope else "flat"
-    fname   = f"data_{multiplier}_all.npz" if slope else f"data_{multiplier}.npz"
-    path = os.path.join(DATA_ROOT, surface, method_key, fname)
-    if not os.path.isfile(path):
-        raise FileNotFoundError(path)
-    return np.load(path)
+    data_dir = os.path.join(DATA_ROOT, surface, method_key)
+    # Hybrid controller saves _all.npz; baseline saves plain .npz
+    candidates = [f"data_{multiplier}_all.npz", f"data_{multiplier}.npz"] if slope else [f"data_{multiplier}.npz"]
+    for fname in candidates:
+        path = os.path.join(data_dir, fname)
+        if os.path.isfile(path):
+            return np.load(path)
+    raise FileNotFoundError(os.path.join(data_dir, candidates[0]))
 
 
 def plot_position_xyz(datasets, multiplier, out_dir):
