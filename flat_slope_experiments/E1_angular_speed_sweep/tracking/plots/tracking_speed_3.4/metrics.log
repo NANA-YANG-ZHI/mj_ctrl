@@ -1,0 +1,36 @@
+
+[MULT] 3.4×  surface=flat
+  [LOAD] Baseline
+  [LOAD] Feedforward
+  [LOAD] Feedforward + PI
+  [LOAD] PD
+  [LOAD] HFDC
+
+  X axis — avg / max error (m)
+    Baseline              avg=-0.0036  max=-0.0008
+    Feedforward           avg=-0.0044  max=0.0013
+    Feedforward + PI      avg=-0.0048  max=0.0004
+    PD                    avg=-0.0048  max=-0.0008
+    HFDC                  avg=-0.0048  max=0.0003
+
+  Y axis — avg / max error (m)
+    Baseline              avg=0.0010  max=0.0029
+    Feedforward           avg=0.0020  max=0.0034
+    Feedforward + PI      avg=0.0021  max=0.0035
+    PD                    avg=0.0016  max=0.0031
+    HFDC                  avg=0.0021  max=0.0035
+
+  Z axis — avg / max error (m)
+    Baseline              avg=0.0028  max=0.0033
+    Feedforward           avg=0.0047  max=0.0109
+    Feedforward + PI      avg=0.0030  max=0.0039
+    PD                    avg=0.0031  max=0.0037
+    HFDC                  avg=0.0029  max=0.0036
+[PLOT] /home/nana/wkspace/fork_mj_ctrl/flat_slope_experiments/E1_angular_speed_sweep/tracking/plots/tracking_speed_3.4/position_tracking_xyz.png
+  Baseline              avg=1.228 N  max=8.000 N
+  Feedforward           avg=5.744 N  max=16.686 N
+  Feedforward + PI      avg=1.603 N  max=4.190 N
+  PD                    avg=1.263 N  max=3.851 N
+  HFDC                  avg=0.691 N  max=1.820 N
+[PLOT] /home/nana/wkspace/fork_mj_ctrl/flat_slope_experiments/E1_angular_speed_sweep/tracking/plots/tracking_speed_3.4/force_tracking.png
+[LOG]  /home/nana/wkspace/fork_mj_ctrl/flat_slope_experiments/E1_angular_speed_sweep/tracking/plots/tracking_speed_3.4/metrics.log
