@@ -1,0 +1,36 @@
+
+[MULT] 2.0×  surface=slope30
+  [LOAD] Baseline
+  [LOAD] Feedforward
+  [LOAD] Feedforward + PI
+  [LOAD] PD
+  [LOAD] HFDC
+
+  X axis — avg / var / max error (m)
+    Baseline              avg=-0.0002  var=0.000001  max=0.0019
+    Feedforward           avg=-0.0015  var=0.000002  max=0.0008
+    Feedforward + PI      avg=-0.0016  var=0.000002  max=0.0007
+    PD                    avg=-0.0014  var=0.000004  max=0.0016
+    HFDC                  avg=-0.0016  var=0.000002  max=0.0007
+
+  Y axis — avg / var / max error (m)
+    Baseline              avg=-0.0012  var=0.000001  max=0.0002
+    Feedforward           avg=-0.0012  var=0.000000  max=-0.0003
+    Feedforward + PI      avg=-0.0012  var=0.000000  max=-0.0002
+    PD                    avg=-0.0013  var=0.000000  max=-0.0005
+    HFDC                  avg=-0.0012  var=0.000000  max=-0.0001
+
+  Z axis — avg / var / max error (m)
+    Baseline              avg=0.0029  var=0.000000  max=0.0038
+    Feedforward           avg=0.0032  var=0.000000  max=0.0043
+    Feedforward + PI      avg=0.0031  var=0.000000  max=0.0040
+    PD                    avg=0.0033  var=0.000000  max=0.0038
+    HFDC                  avg=0.0031  var=0.000000  max=0.0039
+[PLOT] C:\Users\11452\wkspace\fork_mj_ctrl\flat_slope_experiments\E1_angular_speed_sweep\tracking\plots\tracking_speed_2.0_slope30\position_tracking_xyz.png
+  Baseline              avg=0.227 N  var=0.0607  max=0.583 N
+  Feedforward           avg=1.308 N  var=2.9358  max=3.285 N
+  Feedforward + PI      avg=0.413 N  var=0.2854  max=1.093 N
+  PD                    avg=1.355 N  var=0.3341  max=2.143 N
+  HFDC                  avg=0.226 N  var=0.0729  max=0.567 N
+[PLOT] C:\Users\11452\wkspace\fork_mj_ctrl\flat_slope_experiments\E1_angular_speed_sweep\tracking\plots\tracking_speed_2.0_slope30\force_tracking.png
+[LOG]  C:\Users\11452\wkspace\fork_mj_ctrl\flat_slope_experiments\E1_angular_speed_sweep\tracking\plots\tracking_speed_2.0_slope30\metrics.log

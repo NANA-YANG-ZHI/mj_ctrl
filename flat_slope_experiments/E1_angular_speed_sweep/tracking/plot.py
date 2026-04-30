@@ -80,11 +80,11 @@ def plot_position_xyz(datasets, multiplier, out_dir):
     sk = int(SKIP_S / DT)
 
     for axis_idx, axis_label in enumerate(AXES_LABELS):
-        print(f"\n  {axis_label} axis — avg / max error (m)")
+        print(f"\n  {axis_label} axis — avg / var / max error (m)")
         for name, data, color, ls, _ in datasets:
             pe = (data["actual_positions"][sk:, axis_idx]
                   - data["desired_positions"][sk:, axis_idx])
-            print(f"    {name:<20s}  avg={np.mean(pe):.4f}  max={np.max(pe):.4f}")
+            print(f"    {name:<20s}  avg={np.mean(pe):.4f}  var={np.var(pe):.6f}  max={np.max(pe):.4f}")
 
     fig, axes = plt.subplots(
         3, 1, sharex=True, figsize=(3.25, 2.008),
@@ -119,13 +119,15 @@ def plot_force_tracking(datasets, multiplier, out_dir):
     fig, ax = plt.subplots(figsize=(3.25, 2.008))
 
     for name, data, color, ls, _ in datasets:
-        fe = data["force_error"][:int(PLOT_DURATION_S / DT)]
-        n  = len(fe)
-        t  = np.arange(n) * DT
-        avg = np.mean(np.abs(fe[sk:])) if n > sk else np.mean(np.abs(fe))
-        max_err = np.max(np.abs(fe[sk:])) if n > sk else np.max(np.abs(fe))
-        print(f"  {name:<20s}  avg={avg:.3f} N  max={max_err:.3f} N")
-        ax.plot(t, fe, color=color, linestyle=ls, linewidth=0.8, alpha=0.80, label=name)
+        fe_full = data["force_error"][sk:]   # full trajectory from SKIP_S for stats
+        fe_plot = data["force_error"][:int(PLOT_DURATION_S / DT)]
+        n = len(fe_plot)
+        t = np.arange(n) * DT
+        avg     = np.mean(np.abs(fe_full)) if len(fe_full) > 0 else float("nan")
+        var     = np.var(fe_full)          if len(fe_full) > 0 else float("nan")
+        max_err = np.max(np.abs(fe_full))  if len(fe_full) > 0 else float("nan")
+        print(f"  {name:<20s}  avg={avg:.3f} N  var={var:.4f}  max={max_err:.3f} N")
+        ax.plot(t, fe_plot, color=color, linestyle=ls, linewidth=0.8, alpha=0.80, label=name)
 
     ax.axhline(0, color="gray", linestyle="--", linewidth=0.9, alpha=0.6)
     ax.set_xlabel("Time (s)")

@@ -49,7 +49,7 @@ _STYLE = {
 STD_RATIO = 0.3
 
 METHOD_KEYS = [
-    ("SUP",              "baseline",  "tab:gray",   "x"),
+    ("baseline",         "baseline",  "tab:gray",   "x"),
     ("FF",               "ff",        "tab:blue",   "o"),
     # ("Feedforward + PI", "ff_pi",     "tab:purple", "s"),
     ("PD",               "pd",        "tab:green",  "^"),

@@ -16,6 +16,7 @@ Usage
 """
 
 import argparse
+import csv
 import glob
 import os
 import re
@@ -156,6 +157,30 @@ def _annotate_outliers(ax, datasets, col, top_max):
                     markersize=_STYLE["outlier_markersize"], zorder=5, clip_on=False)
 
 
+def save_csv(datasets, slope_angle):
+    suffix = "" if slope_angle == 0.0 else f"_slope{slope_angle:g}"
+    out = os.path.join(PLOTS_DIR, f"speed_sweep_metrics{suffix}.csv")
+    os.makedirs(PLOTS_DIR, exist_ok=True)
+    with open(out, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "method", "ee_linear_speed_m_s",
+            "avg_force_z_error", "var_force_z_error",
+            "avg_position_error", "var_position_error",
+        ])
+        for name, data, _, _ in datasets:
+            for i in range(len(data["ee_linear_speed_m_s"])):
+                writer.writerow([
+                    name,
+                    data["ee_linear_speed_m_s"][i],
+                    data["avg_force_z_error"][i],
+                    data["var_force_z_error"][i],
+                    data["avg_position_error"][i],
+                    data["var_position_error"][i],
+                ])
+    print(f"[CSV]  speed_sweep_metrics{suffix}.csv")
+
+
 def make_combined_plot(cfg, datasets):
     col_mean = cfg["col_mean"]
     col_var  = cfg["col_var"]
@@ -228,6 +253,7 @@ def main():
         print("No data found.")
         return
 
+    save_csv(datasets, slope_angle)
     for cfg in build_combined_metrics(slope_angle):
         make_combined_plot(cfg, datasets)
 

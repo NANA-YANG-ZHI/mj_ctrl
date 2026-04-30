@@ -57,7 +57,7 @@ DT              = 0.001
 CYLINDER_RADIUS = 0.1  # m
 
 METHOD_KEYS = [
-    ("SUP",              "baseline",  "tab:gray",   "o"),
+    ("baseline",         "baseline",  "tab:gray",   "o"),
     ("FF",               "ff",        "tab:blue",   "o"),
     ("Feedforward + PI", "ff_pi",     "tab:purple", "s"),
     ("PD",               "pd",        "tab:green",  "^"),
